@@ -12,9 +12,18 @@ extern "C" {
 #endif
 
 typedef enum {
-    FLEX_ICON_BOLT = 0,
-    FLEX_ICON_CHECK,
-    FLEX_ICON_CROSS,
+    FLEX_ICON_BOLT = 0,     /**< carga */
+    FLEX_ICON_CHECK,        /**< completa / correcto */
+    FLEX_ICON_CROSS,        /**< sin batería / error */
+    FLEX_ICON_GEAR,         /**< Ajustes */
+    FLEX_ICON_SUN,          /**< brillo, Pantalla */
+    FLEX_ICON_WIFI,
+    FLEX_ICON_BLUETOOTH,
+    FLEX_ICON_CHEVRON_LEFT, /**< volver */
+    FLEX_ICON_CHEVRON_RIGHT,/**< abre una pantalla */
+    FLEX_ICON_INFO,         /**< Acerca de */
+    FLEX_ICON_PULSE,        /**< Diagnóstico */
+    FLEX_ICON_CLOCK,        /**< hora */
     FLEX_ICON_COUNT_
 } flex_icon_t;
 
@@ -24,6 +33,8 @@ void flex_icon_draw(lv_layer_t *layer, flex_icon_t icon, const lv_area_t *box, l
 /** Objeto LVGL de size x size que dibuja el icono (sin hijos ni imágenes). */
 lv_obj_t *flex_icon_create(lv_obj_t *parent, flex_icon_t icon, int32_t size, uint32_t rgb);
 void flex_icon_set_color(lv_obj_t *obj, uint32_t rgb);
+/** Cambia el glifo (solo invalida si cambia). */
+void flex_icon_set(lv_obj_t *obj, flex_icon_t icon);
 
 #ifdef __cplusplus
 }

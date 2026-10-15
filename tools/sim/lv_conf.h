@@ -2,7 +2,10 @@
 #ifndef LV_CONF_H
 #define LV_CONF_H
 #define LV_COLOR_DEPTH 16
-#define LV_USE_STDLIB_MALLOC LV_STDLIB_CLIB
+/* Asignador propio de LVGL (solo en el PC) para poder medir fugas con
+ * lv_mem_monitor(). El firmware usa el de la libc (CONFIG_LV_USE_CLIB_MALLOC). */
+#define LV_USE_STDLIB_MALLOC LV_STDLIB_BUILTIN
+#define LV_MEM_SIZE (2U * 1024U * 1024U)
 #define LV_USE_STDLIB_STRING LV_STDLIB_CLIB
 #define LV_USE_STDLIB_SPRINTF LV_STDLIB_CLIB
 #define LV_USE_OS LV_OS_NONE

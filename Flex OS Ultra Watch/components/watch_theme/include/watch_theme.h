@@ -11,6 +11,7 @@
 
 #include <stdbool.h>
 #include "lvgl.h"
+#include "flex_icons.h"
 #include "flex_tokens.h"
 
 #ifdef __cplusplus
@@ -65,6 +66,43 @@ void watch_theme_glass_set_min_tint(lv_obj_t *card, lv_opa_t min_mix);
 
 /** Etiqueta con fuente y color de la paleta. */
 lv_obj_t *watch_theme_label(lv_obj_t *parent, const lv_font_t *font, uint32_t rgb, const char *text);
+
+/* ---- Componentes (F3.1) -------------------------------------------------
+ * Todos los controles pulsables reaccionan al toque mientras el dedo está
+ * encima (LV_STATE_PRESSED: el tinte se aclara) sin animaciones ni
+ * desenfoque. LV_STATE_CHECKED = activo (acento). LV_STATE_DISABLED = sin
+ * función todavía: se ve apagado y LVGL no le entrega toques. */
+
+/**
+ * Botón de vidrio: tarjeta de watch_theme_glass_card() pulsable. Quien la
+ * crea escucha LV_EVENT_CLICKED.
+ */
+lv_obj_t *watch_theme_glass_button(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h);
+
+/** Fondo plano de página (FLEX_C_PAGE) para las pantallas de lista. */
+void watch_theme_page(lv_obj_t *screen);
+
+/**
+ * Cabecera estándar de FLEX_HDR_H px: zona "volver" de FLEX_HDR_ZONE px con
+ * el chevron centrado y el título a continuación, recortado con "..." antes
+ * del borde. back_cb recibe LV_EVENT_CLICKED de la zona (NULL = sin zona).
+ */
+lv_obj_t *watch_theme_header(lv_obj_t *parent, const char *title, lv_event_cb_t back_cb, void *user_data);
+
+/** Lista vertical con desplazamiento bajo la cabecera (hasta el borde inferior). */
+lv_obj_t *watch_theme_list(lv_obj_t *parent);
+
+/**
+ * Fila de lista de FLEX_ROW_H px: icono en color de acento, título, valor a
+ * la derecha (NULL = sin valor) y chevron si abre otra pantalla. Pulsable:
+ * quien la crea escucha LV_EVENT_CLICKED. Una fila sin función se marca con
+ * watch_theme_row_set_pending().
+ */
+lv_obj_t *watch_theme_list_row(lv_obj_t *parent, flex_icon_t icon, uint32_t accent, const char *title,
+                               const char *value, bool chevron);
+void watch_theme_row_set_value(lv_obj_t *row, const char *value);
+/** Marca la fila como no disponible: apagada, sin toque y con el valor "Pendiente". */
+void watch_theme_row_set_pending(lv_obj_t *row);
 
 #ifdef __cplusplus
 }

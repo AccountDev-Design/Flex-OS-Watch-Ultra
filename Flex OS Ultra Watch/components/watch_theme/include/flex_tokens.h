@@ -40,6 +40,12 @@
 #define FLEX_C_BLACK     0x000000
 #define FLEX_C_WHITE     0xFFFFFF
 
+/* Acentos de las categorías de Ajustes (AppSettings.h:413-416, SET_ACCENT) */
+#define FLEX_C_CAT_BLUE   0x4678EB   /* General, Sistema, Acerca de */
+#define FLEX_C_CAT_SUN    0xF0AA32   /* Pantalla */
+#define FLEX_C_CAT_GREEN  0x50BE6E   /* Batería */
+#define FLEX_C_CAT_NET    0x3C96EB   /* Red e Internet */
+
 /* ---- Tema "AMOLED" (oscuro, plano, fondo Onyx): por defecto en el reloj -- */
 #define FLEX_C_ACCENT       0x788CFF
 #define FLEX_C_ACCENT_LIGHT 0xB4C4FF
@@ -62,6 +68,14 @@
 #define FLEX_GLASS_EDGE_WEAK    104
 #define FLEX_GLASS_EDGE_HI      0xCDD6E4
 #define FLEX_GLASS_EDGE_LO      0x161C28
+/* Estados de los controles de vidrio. Activo = acento con la mezcla de
+ * qpMixAcc() (QuickPanelGlass.h:154). Pulsado: la referencia responde con un
+ * destello blanco (Widgets.h:593); aquí, para no animar nada por cada toque,
+ * el tinte se aclara mientras el dedo está encima. */
+#define FLEX_GLASS_ACTIVE_MIX   178
+#define FLEX_C_GLASS_PRESSED    0x56607E
+#define FLEX_GLASS_PRESSED_MIX  170
+#define FLEX_GLASS_DISABLED_MIX 26
 
 /* ---- Geometría del reloj (px del panel de 410x502) ------------------- */
 #define FLEX_SCREEN_W        410
@@ -73,8 +87,25 @@
 #define FLEX_STATUS_H        48
 #define FLEX_RADIUS_CARD     26   /* tarjeta grande del panel rápido (QuickPanel.h:105) */
 #define FLEX_RADIUS_MODULE   20
+#define FLEX_RADIUS_ROW      16   /* tarjeta de fila de Ajustes (AppSettings.h:431) */
 /* Zona táctil mínima: 44 px a 217 ppi (QuickPanel.h:117) ~ 5 mm -> 64 px a 315 ppi */
 #define FLEX_TOUCH_MIN       64
+
+/* Cabecera estándar (AppFramework.h:399-405): zona de "volver" a la
+ * izquierda y título después de ella. Allí la zona mide 56 (>= 44 a 217 ppi);
+ * aquí FLEX_TOUCH_MIN. La banda total mide lo mismo que allí: 76 px. */
+#define FLEX_HDR_ZONE        FLEX_TOUCH_MIN
+#define FLEX_HDR_X           8
+#define FLEX_HDR_GAP         8
+#define FLEX_HDR_H           (FLEX_SAFE_TOP + FLEX_HDR_ZONE)
+
+/* Filas de lista (Ajustes): 66 px + 8 de separación en la referencia. Aquí
+ * 72 (por encima de la zona táctil mínima) para que quepan 5 filas bajo la
+ * cabecera en 502 px. */
+#define FLEX_LIST_X          16
+#define FLEX_ROW_H           72
+#define FLEX_ROW_GAP         8
+#define FLEX_ROW_ICON        32
 
 /* ---- Movimiento (ms) -------------------------------------------------- */
 #define FLEX_ANIM_APP_OPEN_MS   210

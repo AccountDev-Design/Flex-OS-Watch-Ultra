@@ -17,7 +17,7 @@ CFLAGS := -std=gnu11 -O1 -g -Wall -DLV_CONF_INCLUDE_SIMPLE -DLV_LVGL_H_INCLUDE_S
           -I$(FW)/components/watch_power/include -I$(FW)/components/watch_diag/include
 
 LVGL_SRC := $(shell find $(LVGL_DIR)/src -name '*.c')
-APP_SRC := sim_main.c \
+APP_SRC := $(wildcard sim_*.c) \
            $(wildcard $(FW)/components/watch_ui/*.c) \
            $(wildcard $(FW)/components/watch_theme/*.c) \
            $(wildcard $(FW)/components/watch_theme/fonts/*.c) \
@@ -34,7 +34,7 @@ $(BUILD)/lvgl/%.o: $(LVGL_DIR)/%.c lv_conf.h
 	@$(CC) $(CFLAGS) -w -c $< -o $@
 
 APP_HDR := $(wildcard $(FW)/components/*/include/*.h) $(wildcard $(FW)/components/watch_ui/*.h) \
-           $(wildcard stubs/*.h stubs/*/*.h) lv_conf.h
+           $(wildcard stubs/*.h stubs/*/*.h) sim.h lv_conf.h
 
 $(BUILD)/sim: $(APP_SRC) $(APP_HDR) $(LVGL_OBJ)
 	@echo "LD $@"

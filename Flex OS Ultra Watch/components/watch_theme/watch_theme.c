@@ -3,6 +3,7 @@
  */
 #include "watch_theme.h"
 
+#include <string.h>
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "flex_glass_math.h"
@@ -13,7 +14,15 @@ static const char *TAG = "watch_theme";
 static lv_style_t s_card;
 static lv_style_t s_sheen;
 static lv_grad_dsc_t s_sheen_grad;
+static lv_style_t s_pressed;
+static lv_style_t s_checked;
+static lv_style_t s_disabled;
+static lv_style_t s_row;
+static lv_style_t s_list;
 static bool s_inited;
+
+/* Hijos de una fila, en este orden (watch_theme_list_row) */
+enum { ROW_ICON = 0, ROW_TITLE, ROW_VALUE };
 
 static uint16_t *s_wall_px;
 static lv_image_dsc_t s_wall_dsc;
@@ -71,7 +80,54 @@ void watch_theme_init(void)
     lv_style_set_border_opa(&s_sheen, FLEX_GLASS_EDGE_STRONG);
     lv_style_set_pad_all(&s_sheen, 0);
 
+    /* Estados de los controles (ver FLEX_GLASS_* en flex_tokens.h). */
+    lv_style_init(&s_pressed);
+    lv_style_set_bg_color(&s_pressed, flex_color(FLEX_C_GLASS_PRESSED));
+    lv_style_set_bg_opa(&s_pressed, FLEX_GLASS_PRESSED_MIX);
+    lv_style_init(&s_checked);
+    lv_style_set_bg_color(&s_checked, flex_color(FLEX_C_ACCENT));
+    lv_style_set_bg_opa(&s_checked, FLEX_GLASS_ACTIVE_MIX);
+    lv_style_init(&s_disabled);
+    lv_style_set_bg_opa(&s_disabled, FLEX_GLASS_DISABLED_MIX);
+    lv_style_set_border_opa(&s_disabled, FLEX_GLASS_EDGE_WEAK / 2);
+
+    /* Fila: vidrio plano sobre el fondo de página (drawGlassCardFlat de la
+     * referencia), sin capa de brillo: una lista con desplazamiento redibuja
+     * las filas en cada cuadro y así cada una es un solo rectángulo. */
+    lv_style_init(&s_row);
+    lv_style_set_bg_color(&s_row, flex_color(FLEX_C_GLASS));
+    lv_style_set_bg_opa(&s_row, flex_glass_tint_mix((uint32_t)flex_glass_luma565(rgb_to_565(FLEX_C_PAGE)), 1,
+                                                    rgb_to_565(FLEX_C_GLASS)));
+    lv_style_set_radius(&s_row, FLEX_RADIUS_ROW);
+    lv_style_set_border_width(&s_row, 1);
+    lv_style_set_border_side(&s_row, LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_LEFT);
+    lv_style_set_border_color(&s_row, flex_color(FLEX_GLASS_EDGE_HI));
+    lv_style_set_border_opa(&s_row, FLEX_GLASS_EDGE_WEAK);
+    lv_style_set_pad_left(&s_row, 16);
+    lv_style_set_pad_right(&s_row, 14);
+    lv_style_set_pad_column(&s_row, 14);
+    lv_style_set_layout(&s_row, LV_LAYOUT_FLEX);
+    lv_style_set_flex_flow(&s_row, LV_FLEX_FLOW_ROW);
+    lv_style_set_flex_cross_place(&s_row, LV_FLEX_ALIGN_CENTER);
+    lv_style_set_flex_track_place(&s_row, LV_FLEX_ALIGN_CENTER);
+
+    lv_style_init(&s_list);
+    lv_style_set_pad_left(&s_list, FLEX_LIST_X);
+    lv_style_set_pad_right(&s_list, FLEX_LIST_X);
+    lv_style_set_pad_top(&s_list, 4);
+    lv_style_set_pad_bottom(&s_list, 28);
+    lv_style_set_pad_row(&s_list, FLEX_ROW_GAP);
+    lv_style_set_layout(&s_list, LV_LAYOUT_FLEX);
+    lv_style_set_flex_flow(&s_list, LV_FLEX_FLOW_COLUMN);
+
     s_inited = true;
+}
+
+static void add_states(lv_obj_t *obj)
+{
+    lv_obj_add_style(obj, &s_pressed, LV_STATE_PRESSED);
+    lv_obj_add_style(obj, &s_checked, LV_STATE_CHECKED);
+    lv_obj_add_style(obj, &s_disabled, LV_STATE_DISABLED);
 }
 
 bool watch_theme_apply_background(lv_obj_t *screen)
@@ -149,4 +205,119 @@ lv_obj_t *watch_theme_label(lv_obj_t *parent, const lv_font_t *font, uint32_t rg
     lv_obj_set_style_text_color(l, flex_color(rgb), 0);
     lv_label_set_text(l, text);
     return l;
+}
+
+lv_obj_t *watch_theme_glass_button(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    lv_obj_t *b = watch_theme_glass_card(parent, x, y, w, h);
+    lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);
+    add_states(b);
+    return b;
+}
+
+void watch_theme_page(lv_obj_t *screen)
+{
+    lv_obj_set_style_bg_color(screen, flex_color(FLEX_C_PAGE), 0);
+    lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
+}
+
+lv_obj_t *watch_theme_header(lv_obj_t *parent, const char *title, lv_event_cb_t back_cb, void *user_data)
+{
+    lv_obj_t *hdr = lv_obj_create(parent);
+    lv_obj_remove_style_all(hdr);
+    lv_obj_set_size(hdr, FLEX_SCREEN_W, FLEX_HDR_H);
+    lv_obj_set_pos(hdr, 0, 0);
+    lv_obj_remove_flag(hdr, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+
+    int32_t tx = FLEX_SAFE_X;
+    if (back_cb) {
+        /* Zona táctil completa con el glifo centrado (AppFramework.h:394):
+         * el dedo acierta aunque no toque el chevron. */
+        lv_obj_t *zone = lv_obj_create(hdr);
+        lv_obj_remove_style_all(zone);
+        lv_obj_set_size(zone, FLEX_HDR_ZONE, FLEX_HDR_ZONE);
+        lv_obj_set_pos(zone, FLEX_HDR_X, FLEX_SAFE_TOP);
+        lv_obj_set_style_radius(zone, FLEX_HDR_ZONE / 2, 0);
+        lv_obj_add_style(zone, &s_pressed, LV_STATE_PRESSED);
+        lv_obj_remove_flag(zone, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(zone, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(zone, back_cb, LV_EVENT_CLICKED, user_data);
+        lv_obj_t *chev = flex_icon_create(zone, FLEX_ICON_CHEVRON_LEFT, 26, FLEX_C_TXT);
+        lv_obj_center(chev);
+        tx = FLEX_HDR_X + FLEX_HDR_ZONE + FLEX_HDR_GAP;
+    }
+    if (title) {
+        lv_obj_t *l = watch_theme_label(hdr, FLEX_FONT_TITLE, FLEX_C_TXT, title);
+        lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_DOTS);
+        lv_obj_set_width(l, FLEX_SCREEN_W - tx - FLEX_SAFE_X);
+        lv_obj_set_pos(l, tx, FLEX_SAFE_TOP + (FLEX_HDR_ZONE - lv_font_get_line_height(FLEX_FONT_TITLE)) / 2);
+    }
+    return hdr;
+}
+
+lv_obj_t *watch_theme_list(lv_obj_t *parent)
+{
+    lv_obj_t *list = lv_obj_create(parent);
+    lv_obj_remove_style_all(list);
+    lv_obj_add_style(list, &s_list, 0);
+    lv_obj_set_pos(list, 0, FLEX_HDR_H);
+    lv_obj_set_size(list, FLEX_SCREEN_W, FLEX_SCREEN_H - FLEX_HDR_H);
+    lv_obj_set_scroll_dir(list, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_remove_flag(list, LV_OBJ_FLAG_CLICKABLE);
+    return list;
+}
+
+lv_obj_t *watch_theme_list_row(lv_obj_t *parent, flex_icon_t icon, uint32_t accent, const char *title,
+                               const char *value, bool chevron)
+{
+    lv_obj_t *row = lv_obj_create(parent);
+    lv_obj_remove_style_all(row);
+    lv_obj_add_style(row, &s_row, 0);
+    add_states(row);
+    lv_obj_set_size(row, LV_PCT(100), FLEX_ROW_H);
+    lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+
+    flex_icon_create(row, icon, FLEX_ROW_ICON, accent); /* ROW_ICON */
+
+    lv_obj_t *t = watch_theme_label(row, FLEX_FONT_BODY, FLEX_C_TXT, title ? title : ""); /* ROW_TITLE */
+    lv_label_set_long_mode(t, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_flex_grow(t, 1);
+
+    lv_obj_t *v = watch_theme_label(row, FLEX_FONT_SMALL, FLEX_C_TXT2, value ? value : ""); /* ROW_VALUE */
+    lv_label_set_long_mode(v, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_style_max_width(v, 170, 0);
+    if (!value) {
+        lv_obj_add_flag(v, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    if (chevron) {
+        flex_icon_create(row, FLEX_ICON_CHEVRON_RIGHT, 18, FLEX_C_MUTE);
+    }
+    return row;
+}
+
+void watch_theme_row_set_value(lv_obj_t *row, const char *value)
+{
+    lv_obj_t *v = lv_obj_get_child(row, ROW_VALUE);
+    if (!v) {
+        return;
+    }
+    if (!value) {
+        lv_obj_add_flag(v, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    if (strcmp(lv_label_get_text(v), value) != 0) {
+        lv_label_set_text(v, value);
+    }
+    lv_obj_remove_flag(v, LV_OBJ_FLAG_HIDDEN);
+}
+
+void watch_theme_row_set_pending(lv_obj_t *row)
+{
+    lv_obj_add_state(row, LV_STATE_DISABLED);
+    flex_icon_set_color(lv_obj_get_child(row, ROW_ICON), FLEX_C_MUTE);
+    lv_obj_set_style_text_color(lv_obj_get_child(row, ROW_TITLE), flex_color(FLEX_C_MUTE), 0);
+    watch_theme_row_set_value(row, "Pendiente");
 }
