@@ -12,8 +12,6 @@
 static const char *TAG = "watch_theme";
 
 static lv_style_t s_card;
-static lv_style_t s_sheen;
-static lv_grad_dsc_t s_sheen_grad;
 static lv_style_t s_pressed;
 static lv_style_t s_checked;
 static lv_style_t s_disabled;
@@ -28,6 +26,13 @@ enum { ROW_ICON = 0, ROW_TITLE, ROW_VALUE };
 
 static uint16_t *s_wall_px;
 static lv_image_dsc_t s_wall_dsc;
+static flex_wall_t s_wall = FLEX_WALL_BLACK;
+static lv_opa_t s_flat_mix; /* tinte del vidrio sobre el negro de la página */
+
+static lv_color_t mix(uint32_t fg, uint32_t bg, uint8_t a)
+{
+    return lv_color_hex(flex_mix_rgb(fg, bg, a));
+}
 
 static uint16_t rgb_to_565(uint32_t rgb)
 {
@@ -40,72 +45,58 @@ void watch_theme_init(void)
         return;
     }
 
-    /* Tarjeta: tinte "glass" (el alfa se calcula por tarjeta con la mezcla
-     * adaptativa), radio de tarjeta y reflejo claro arriba/izquierda con el
-     * peso fuerte del material (luz desde arriba a la izquierda). */
+    /* Vidrio sobre negro AMOLED. El fondo de página es negro puro y
+     * conocido, así que el tinte adaptativo (glassTintMix de la referencia)
+     * se precalcula una vez: las superficies son OPACAS y LVGL no mezcla
+     * píxel a píxel en cada cuadro (las pantallas de lista y el panel rápido
+     * se redibujan enteros al desplazarse o al seguir el dedo). Los bordes de
+     * luz arriba/izquierda también se precalculan sobre la superficie. La capa
+     * de brillo con degradado (glassShadeRow) desaparece: sobre negro apenas
+     * se distinguía y era la parte más cara de cada tarjeta. */
+    s_flat_mix =
+        flex_glass_tint_mix((uint32_t)flex_glass_luma565(rgb_to_565(FLEX_C_PAGE)), 1, rgb_to_565(FLEX_C_GLASS));
+    const uint32_t surf = flex_mix_rgb(FLEX_C_GLASS, FLEX_C_PAGE, s_flat_mix);
+    const lv_color_t edge_weak = mix(FLEX_GLASS_EDGE_HI, surf, FLEX_GLASS_EDGE_WEAK);
+    const lv_color_t edge_strong = mix(FLEX_GLASS_EDGE_HI, surf, FLEX_GLASS_EDGE_STRONG);
+
+    /* Tarjeta: radio de tarjeta y reflejo claro arriba/izquierda con el peso
+     * fuerte del material (luz desde arriba a la izquierda). */
     lv_style_init(&s_card);
-    lv_style_set_bg_color(&s_card, flex_color(FLEX_C_GLASS));
-    lv_style_set_bg_opa(&s_card, FLEX_GLASS_TINT_BASE);
+    lv_style_set_bg_color(&s_card, lv_color_hex(surf));
+    lv_style_set_bg_opa(&s_card, LV_OPA_COVER);
     lv_style_set_radius(&s_card, FLEX_RADIUS_CARD);
     lv_style_set_border_width(&s_card, 1);
     lv_style_set_border_side(&s_card, LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_LEFT);
-    lv_style_set_border_color(&s_card, flex_color(FLEX_GLASS_EDGE_HI));
-    lv_style_set_border_opa(&s_card, FLEX_GLASS_EDGE_STRONG);
+    lv_style_set_border_color(&s_card, edge_strong);
+    lv_style_set_border_opa(&s_card, LV_OPA_COVER);
     lv_style_set_pad_all(&s_card, 18);
     lv_style_set_pad_row(&s_card, 4);
 
-    /* Capa de brillo y sombra por filas, como glassShadeRow(): blanco con
-     * alfa SPECULAR en la fila 0 que cae a 0 al 45 %, y negro desde 0 al 45 %
-     * hasta SHADE abajo. Más la sombra del borde abajo/derecha. */
-    s_sheen_grad.dir = LV_GRAD_DIR_VER;
-    s_sheen_grad.stops_count = 4;
-    s_sheen_grad.stops[0].color = flex_color(FLEX_C_WHITE);
-    s_sheen_grad.stops[0].opa = FLEX_GLASS_SPECULAR;
-    s_sheen_grad.stops[0].frac = 0;
-    s_sheen_grad.stops[1].color = flex_color(FLEX_C_WHITE);
-    s_sheen_grad.stops[1].opa = LV_OPA_TRANSP;
-    s_sheen_grad.stops[1].frac = 115; /* 45 % */
-    s_sheen_grad.stops[2].color = flex_color(FLEX_C_BLACK);
-    s_sheen_grad.stops[2].opa = LV_OPA_TRANSP;
-    s_sheen_grad.stops[2].frac = 116;
-    s_sheen_grad.stops[3].color = flex_color(FLEX_C_BLACK);
-    s_sheen_grad.stops[3].opa = FLEX_GLASS_SHADE;
-    s_sheen_grad.stops[3].frac = 255;
-
-    lv_style_init(&s_sheen);
-    lv_style_set_bg_opa(&s_sheen, LV_OPA_COVER);
-    lv_style_set_bg_grad(&s_sheen, &s_sheen_grad);
-    lv_style_set_radius(&s_sheen, FLEX_RADIUS_CARD);
-    lv_style_set_border_width(&s_sheen, 1);
-    lv_style_set_border_side(&s_sheen, LV_BORDER_SIDE_BOTTOM | LV_BORDER_SIDE_RIGHT);
-    lv_style_set_border_color(&s_sheen, flex_color(FLEX_GLASS_EDGE_LO));
-    lv_style_set_border_opa(&s_sheen, FLEX_GLASS_EDGE_STRONG);
-    lv_style_set_pad_all(&s_sheen, 0);
-
-    /* Estados de los controles (ver FLEX_GLASS_* en flex_tokens.h). */
+    /* Estados de los controles (ver FLEX_GLASS_* en flex_tokens.h), también
+     * precalculados sobre negro. */
     lv_style_init(&s_pressed);
-    lv_style_set_bg_color(&s_pressed, flex_color(FLEX_C_GLASS_PRESSED));
-    lv_style_set_bg_opa(&s_pressed, FLEX_GLASS_PRESSED_MIX);
+    lv_style_set_bg_color(&s_pressed, mix(FLEX_C_GLASS_PRESSED, FLEX_C_PAGE, FLEX_GLASS_PRESSED_MIX));
+    lv_style_set_bg_opa(&s_pressed, LV_OPA_COVER);
     lv_style_init(&s_checked);
-    lv_style_set_bg_color(&s_checked, flex_color(FLEX_C_ACCENT));
-    lv_style_set_bg_opa(&s_checked, FLEX_GLASS_ACTIVE_MIX);
+    lv_style_set_bg_color(&s_checked, mix(FLEX_C_ACCENT, FLEX_C_PAGE, FLEX_GLASS_ACTIVE_MIX));
+    lv_style_set_bg_opa(&s_checked, LV_OPA_COVER);
     lv_style_init(&s_disabled);
-    lv_style_set_bg_opa(&s_disabled, FLEX_GLASS_DISABLED_MIX);
-    lv_style_set_border_opa(&s_disabled, FLEX_GLASS_EDGE_WEAK / 2);
+    const uint32_t dis = flex_mix_rgb(FLEX_C_GLASS, FLEX_C_PAGE, FLEX_GLASS_DISABLED_MIX);
+    lv_style_set_bg_color(&s_disabled, lv_color_hex(dis));
+    lv_style_set_bg_opa(&s_disabled, LV_OPA_COVER);
+    lv_style_set_border_color(&s_disabled, mix(FLEX_GLASS_EDGE_HI, dis, FLEX_GLASS_EDGE_WEAK / 2));
 
     /* Fila: vidrio plano sobre el fondo de página (drawGlassCardFlat de la
      * referencia), sin capa de brillo: una lista con desplazamiento redibuja
      * las filas en cada cuadro y así cada una es un solo rectángulo. */
-    const lv_opa_t flat_mix =
-        flex_glass_tint_mix((uint32_t)flex_glass_luma565(rgb_to_565(FLEX_C_PAGE)), 1, rgb_to_565(FLEX_C_GLASS));
     lv_style_init(&s_row);
-    lv_style_set_bg_color(&s_row, flex_color(FLEX_C_GLASS));
-    lv_style_set_bg_opa(&s_row, flat_mix);
+    lv_style_set_bg_color(&s_row, lv_color_hex(surf));
+    lv_style_set_bg_opa(&s_row, LV_OPA_COVER);
     lv_style_set_radius(&s_row, FLEX_RADIUS_ROW);
     lv_style_set_border_width(&s_row, 1);
     lv_style_set_border_side(&s_row, LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_LEFT);
-    lv_style_set_border_color(&s_row, flex_color(FLEX_GLASS_EDGE_HI));
-    lv_style_set_border_opa(&s_row, FLEX_GLASS_EDGE_WEAK);
+    lv_style_set_border_color(&s_row, edge_weak);
+    lv_style_set_border_opa(&s_row, LV_OPA_COVER);
     lv_style_set_pad_left(&s_row, 16);
     lv_style_set_pad_right(&s_row, 14);
     lv_style_set_pad_column(&s_row, 14);
@@ -117,19 +108,19 @@ void watch_theme_init(void)
     /* Mosaico del panel rápido: el mismo vidrio plano que las filas, con el
      * radio de las tarjetas grandes del panel (QuickPanel.h:105). */
     lv_style_init(&s_tile);
-    lv_style_set_bg_color(&s_tile, flex_color(FLEX_C_GLASS));
-    lv_style_set_bg_opa(&s_tile, flat_mix);
+    lv_style_set_bg_color(&s_tile, lv_color_hex(surf));
+    lv_style_set_bg_opa(&s_tile, LV_OPA_COVER);
     lv_style_set_radius(&s_tile, FLEX_RADIUS_CARD);
     lv_style_set_border_width(&s_tile, 1);
     lv_style_set_border_side(&s_tile, LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_LEFT);
-    lv_style_set_border_color(&s_tile, flex_color(FLEX_GLASS_EDGE_HI));
-    lv_style_set_border_opa(&s_tile, FLEX_GLASS_EDGE_WEAK);
+    lv_style_set_border_color(&s_tile, edge_weak);
+    lv_style_set_border_opa(&s_tile, LV_OPA_COVER);
     lv_style_set_pad_all(&s_tile, 16);
 
     /* Fila de información: el mismo vidrio que las filas, más baja. */
     lv_style_init(&s_info);
-    lv_style_set_bg_color(&s_info, flex_color(FLEX_C_GLASS));
-    lv_style_set_bg_opa(&s_info, flat_mix);
+    lv_style_set_bg_color(&s_info, lv_color_hex(surf));
+    lv_style_set_bg_opa(&s_info, LV_OPA_COVER);
     lv_style_set_radius(&s_info, FLEX_RADIUS_ROW);
     lv_style_set_pad_left(&s_info, 16);
     lv_style_set_pad_right(&s_info, 16);
@@ -158,29 +149,51 @@ static void add_states(lv_obj_t *obj)
     lv_obj_add_style(obj, &s_disabled, LV_STATE_DISABLED);
 }
 
+void watch_theme_set_wallpaper(flex_wall_t w)
+{
+    s_wall = w;
+}
+
+flex_wall_t watch_theme_get_wallpaper(void)
+{
+    return s_wall;
+}
+
+static bool ensure_onyx(void)
+{
+    if (s_wall_px) {
+        return true;
+    }
+    const size_t bytes = (size_t)FLEX_SCREEN_W * FLEX_SCREEN_H * sizeof(uint16_t);
+    s_wall_px = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_wall_px) {
+        ESP_LOGW(TAG, "sin PSRAM para el fondo Onyx (%u B): fondo negro", (unsigned)bytes);
+        return false;
+    }
+    flex_wallpaper_onyx(s_wall_px, FLEX_SCREEN_W, FLEX_SCREEN_H);
+    s_wall_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+    s_wall_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
+    s_wall_dsc.header.w = FLEX_SCREEN_W;
+    s_wall_dsc.header.h = FLEX_SCREEN_H;
+    s_wall_dsc.header.stride = FLEX_SCREEN_W * sizeof(uint16_t);
+    s_wall_dsc.data_size = bytes;
+    s_wall_dsc.data = (const uint8_t *)s_wall_px;
+    ESP_LOGI(TAG, "fondo Onyx generado en PSRAM (%u B)", (unsigned)bytes);
+    return true;
+}
+
+static bool onyx_active(void)
+{
+    return s_wall == FLEX_WALL_ONYX && s_wall_px;
+}
+
 bool watch_theme_apply_background(lv_obj_t *screen)
 {
     lv_obj_set_style_bg_color(screen, flex_color(FLEX_C_BLACK), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
-
-    if (!s_wall_px) {
-        const size_t bytes = (size_t)FLEX_SCREEN_W * FLEX_SCREEN_H * sizeof(uint16_t);
-        s_wall_px = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (!s_wall_px) {
-            ESP_LOGW(TAG, "sin PSRAM para el fondo (%u B): fondo negro liso", (unsigned)bytes);
-            return false;
-        }
-        flex_wallpaper_onyx(s_wall_px, FLEX_SCREEN_W, FLEX_SCREEN_H);
-        s_wall_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
-        s_wall_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
-        s_wall_dsc.header.w = FLEX_SCREEN_W;
-        s_wall_dsc.header.h = FLEX_SCREEN_H;
-        s_wall_dsc.header.stride = FLEX_SCREEN_W * sizeof(uint16_t);
-        s_wall_dsc.data_size = bytes;
-        s_wall_dsc.data = (const uint8_t *)s_wall_px;
-        ESP_LOGI(TAG, "fondo Onyx generado en PSRAM (%u B)", (unsigned)bytes);
+    if (s_wall != FLEX_WALL_ONYX || !ensure_onyx()) {
+        return false;
     }
-
     lv_obj_t *img = lv_image_create(screen);
     lv_image_set_src(img, &s_wall_dsc);
     lv_obj_set_pos(img, 0, 0);
@@ -198,32 +211,32 @@ lv_obj_t *watch_theme_glass_card(lv_obj_t *parent, int32_t x, int32_t y, int32_t
     lv_obj_set_size(card, w, h);
     lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
-    /* Tinte adaptativo según la luma real del fondo que queda debajo. */
-    uint32_t sum = 0;
-    int n = 0;
-    if (s_wall_px) {
+    if (onyx_active()) {
+        /* Sobre Onyx: vidrio translúcido con el tinte adaptativo según la
+         * luma real del fondo que queda debajo (glassTintMix). */
+        uint32_t sum = 0;
+        int n = 0;
         flex_glass_region_luma(s_wall_px, FLEX_SCREEN_W, FLEX_SCREEN_H, x, y, w, h, &sum, &n);
-    } else {
-        n = 1; /* fondo negro liso: luma 0 */
+        lv_obj_set_style_bg_color(card, flex_color(FLEX_C_GLASS), 0);
+        lv_obj_set_style_bg_opa(card, flex_glass_tint_mix(sum, n, rgb_to_565(FLEX_C_GLASS)), 0);
+        lv_obj_set_style_border_color(card, flex_color(FLEX_GLASS_EDGE_HI), 0);
+        lv_obj_set_style_border_opa(card, FLEX_GLASS_EDGE_STRONG, 0);
     }
-    const uint8_t mix = flex_glass_tint_mix(sum, n, rgb_to_565(FLEX_C_GLASS));
-    lv_obj_set_style_bg_opa(card, mix, 0);
-
-    /* La capa de brillo cubre la tarjeta entera, fuera del relleno. */
-    lv_obj_t *sheen = lv_obj_create(card);
-    lv_obj_remove_style_all(sheen);
-    lv_obj_add_style(sheen, &s_sheen, 0);
-    lv_obj_add_flag(sheen, LV_OBJ_FLAG_IGNORE_LAYOUT | LV_OBJ_FLAG_FLOATING);
-    lv_obj_remove_flag(sheen, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_size(sheen, w, h);
-    lv_obj_set_pos(sheen, -lv_obj_get_style_pad_left(card, 0), -lv_obj_get_style_pad_top(card, 0));
     return card;
 }
 
 void watch_theme_glass_set_min_tint(lv_obj_t *card, lv_opa_t min_mix)
 {
-    if (lv_obj_get_style_bg_opa(card, 0) < min_mix) {
-        lv_obj_set_style_bg_opa(card, min_mix, 0);
+    if (lv_obj_get_style_bg_opa(card, 0) < LV_OPA_COVER) {
+        /* translúcida (Onyx): sube el alfa */
+        if (lv_obj_get_style_bg_opa(card, 0) < min_mix) {
+            lv_obj_set_style_bg_opa(card, min_mix, 0);
+        }
+        return;
+    }
+    /* opaca (negro): el mismo vidrio con un tinte mayor, como superficie elevada */
+    if (min_mix > s_flat_mix) {
+        lv_obj_set_style_bg_color(card, mix(FLEX_C_GLASS, FLEX_C_PAGE, min_mix), 0);
     }
 }
 

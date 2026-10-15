@@ -32,6 +32,7 @@ int ui_power_listener_count(void);
 /** Reproduce la animación una vez (si ya hay una en curso, no hace nada). */
 void ui_charge_anim_play(int percent);
 bool ui_charge_anim_active(void);
+lv_obj_t *ui_charge_anim_obj(void);
 
 /* ---- ui_banner: aviso emergente de vidrio (lv_layer_top) ---- */
 
@@ -61,6 +62,11 @@ int ui_nav_depth(void);
 bool ui_nav_busy(void);
 lv_obj_t *ui_nav_top(void);
 lv_obj_t *ui_nav_screen(void);
+/** Página i de la pila (0 = raíz) o NULL. */
+lv_obj_t *ui_nav_page(int i);
+/** Padre de las capas globales opacas a pantalla completa (panel rápido,
+ * animación de carga): la pantalla de navegación, encima de las páginas. */
+lv_obj_t *ui_overlay_parent(void);
 
 /* ---- Páginas ---- */
 

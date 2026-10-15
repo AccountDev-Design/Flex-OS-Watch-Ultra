@@ -46,3 +46,13 @@ void flex_glass_region_luma(const uint16_t *buf, int w, int h, int x, int y, int
         }
     }
 }
+
+uint32_t flex_mix_rgb(uint32_t fg, uint32_t bg, uint8_t a)
+{
+    uint32_t out = 0;
+    for (int sh = 0; sh <= 16; sh += 8) {
+        const uint32_t f = (fg >> sh) & 0xFF, b = (bg >> sh) & 0xFF;
+        out |= ((f * a + b * (255u - a) + 127u) / 255u) << sh;
+    }
+    return out;
+}

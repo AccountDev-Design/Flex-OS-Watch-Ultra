@@ -250,6 +250,10 @@ bool ui_nav_push_opts(ui_page_create_t create, bool edge_gesture)
     if (edge_gesture) {
         add_edge(page);
     }
+    /* Las páginas van debajo de las capas globales (panel rápido, animación
+     * de carga), que son hijas de la misma pantalla para que LVGL no dibuje
+     * lo que tapan. */
+    lv_obj_move_to_index(page, s_nav.depth);
     s_nav.pages[s_nav.depth++] = page;
     animate(NAV_PUSHING, FLEX_SCREEN_W, 0, FLEX_ANIM_APP_OPEN_MS);
     return true;
@@ -311,4 +315,17 @@ lv_obj_t *ui_nav_top(void)
 lv_obj_t *ui_nav_screen(void)
 {
     return s_nav.screen;
+}
+
+lv_obj_t *ui_nav_page(int i)
+{
+    return (i >= 0 && i < s_nav.depth) ? s_nav.pages[i] : NULL;
+}
+
+lv_obj_t *ui_overlay_parent(void)
+{
+    /* LVGL 9.5 no tiene en cuenta lv_layer_top() al decidir qué está tapado:
+     * una capa opaca a pantalla completa ahí no evita dibujar la esfera
+     * debajo. Como hija de la pantalla sí (lv_refr_get_top_obj). */
+    return s_nav.screen ? s_nav.screen : lv_layer_top();
 }

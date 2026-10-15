@@ -20,6 +20,14 @@ int flex_glass_luma565(uint16_t c);
 /** Mezcla de tinte (alfa 0..255) para un panel cuyo fondo suma luma_sum en n muestras. */
 uint8_t flex_glass_tint_mix(uint32_t luma_sum, int n, uint16_t tint565);
 
+/**
+ * Color resultante de pintar fg con alfa a (0..255) sobre bg (0xRRGGBB), con
+ * redondeo. Sirve para precalcular superficies OPACAS cuando el fondo es
+ * conocido (negro AMOLED): mismo aspecto que el vidrio translúcido, sin mezcla
+ * por píxel en cada cuadro.
+ */
+uint32_t flex_mix_rgb(uint32_t fg, uint32_t bg, uint8_t a);
+
 /** Suma la luma del rectángulo (x, y, rw, rh) de un búfer RGB565 de ancho w (1 de cada 4 px). */
 void flex_glass_region_luma(const uint16_t *buf, int w, int h, int x, int y, int rw, int rh,
                             uint32_t *sum, int *n);

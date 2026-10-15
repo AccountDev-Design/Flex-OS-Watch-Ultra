@@ -60,6 +60,9 @@ static void start_out(uint32_t delay_ms)
     lv_anim_set_values(&a, B_Y, -(B_H + 12));
     lv_anim_set_duration(&a, T_OUT_MS);
     lv_anim_set_delay(&a, delay_ms);
+    /* Sin early_apply: LVGL 9 aplicaría ya la posición inicial de la salida
+     * (y = B_Y) y el aviso aparecería de golpe antes de entrar deslizando. */
+    lv_anim_set_early_apply(&a, false);
     lv_anim_set_path_cb(&a, lv_anim_path_ease_in);
     lv_anim_set_completed_cb(&a, out_done_cb);
     lv_anim_start(&a);
@@ -82,11 +85,6 @@ static void build(void)
     watch_theme_glass_set_min_tint(card, FLEX_GLASS_MIN_MIX_BANNER);
     lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(card, tap_cb, LV_EVENT_CLICKED, NULL);
-    /* la capa de brillo hereda el radio de la tarjeta */
-    lv_obj_t *sheen = lv_obj_get_child(card, 0);
-    if (sheen) {
-        lv_obj_set_style_radius(sheen, B_RADIUS, 0);
-    }
 
     s_b.icon = flex_battery_icon_create(card, 44, 22);
     lv_obj_align(s_b.icon, LV_ALIGN_LEFT_MID, 0, 0);

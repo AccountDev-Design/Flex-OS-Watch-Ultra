@@ -20,7 +20,10 @@
 #pragma once
 
 /* ---- Paleta oscura (0xRRGGBB) ---------------------------------------- */
-#define FLEX_C_PAGE      0x12141C
+/* Fondo de página: NEGRO PURO. En un AMOLED cada píxel negro está apagado:
+ * es el fondo que menos consume y el que pidió el usuario para el modo oscuro
+ * (2026-10-15). La referencia usa 0x12141C (gris muy oscuro) en pantallas LCD. */
+#define FLEX_C_PAGE      0x000000
 #define FLEX_C_SURF      0x222632
 #define FLEX_C_SURF2     0x303648
 #define FLEX_C_GLASS     0x303648

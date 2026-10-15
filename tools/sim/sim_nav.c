@@ -45,11 +45,12 @@ static void expect_rest(int depth, const char *when)
     EXPECT(top && lv_obj_get_x(top) == 0 && !hidden(top), "%s: la pagina de arriba no esta en su sitio", when);
     lv_obj_t *scr = ui_nav_screen();
     int visible = 0;
-    for (uint32_t i = 0; i < lv_obj_get_child_count(scr); i++) {
-        visible += !hidden(lv_obj_get_child(scr, (int32_t)i));
+    for (int i = 0; i < ui_nav_depth(); i++) {
+        visible += !hidden(ui_nav_page(i));
     }
     EXPECT(visible == 1, "%s: %d paginas visibles", when, visible);
-    EXPECT((int)lv_obj_get_child_count(scr) == depth, "%s: %u paginas en la pantalla", when,
+    const int overlays = ui_qp_active() + ui_charge_anim_active();
+    EXPECT((int)lv_obj_get_child_count(scr) == depth + overlays, "%s: %u hijos en la pantalla", when,
            (unsigned)lv_obj_get_child_count(scr));
 }
 

@@ -20,7 +20,17 @@ void sim_suite_power(const char *out)
     sim_save(out, "b1_cargando");
 
     sim_scenario(12, 3640, BATT_STATE_DISCHARGING, BATT_LEVEL_LOW, false);
-    sim_run(1200);
+    /* El aviso entra deslizando desde arriba: en sus primeros milisegundos
+     * todavía está fuera de la pantalla (no aparece de golpe en su sitio). */
+    int t_banner = 0;
+    while (t_banner < 300 && !ui_banner_active()) {
+        sim_run(5);
+        t_banner += 5;
+    }
+    lv_obj_t *banner = lv_obj_get_child(lv_layer_top(), -1);
+    EXPECT(banner && lv_obj_get_y(banner) < 0, "el aviso aparecio de golpe en y = %d (sin deslizar)",
+           banner ? (int)lv_obj_get_y(banner) : -999);
+    sim_run(1200 - t_banner);
     sim_save(out, "b1_baja");
     /* B2-5: aviso de batería baja visible y que se va solo (~4,6 s) */
     EXPECT(ui_banner_active(), "el aviso de bateria baja no se mostro");
@@ -73,6 +83,12 @@ void sim_suite_power(const char *out)
         waited += 5;
     }
     EXPECT(waited <= 110, "la animacion de carga tardo %d ms en empezar", waited);
+    /* Entrada sin destello: en su primer cuadro el contenido aún es casi
+     * transparente (antes la salida programada lo ponía opaco de golpe). */
+    lv_obj_t *cargando = ui_charge_anim_obj() ? sim_find_label(ui_charge_anim_obj(), "Cargando") : NULL;
+    EXPECT(cargando && lv_obj_get_style_text_opa(cargando, 0) < LV_OPA_50,
+           "la animacion de carga empieza opaca (opa %d): destello",
+           cargando ? (int)lv_obj_get_style_text_opa(cargando, 0) : -1);
     sim_run(1200 - waited);
     sim_save(out, "b2_animacion_carga");
     EXPECT(ui_charge_anim_active(), "la animacion de carga no se mostro");
@@ -80,6 +96,7 @@ void sim_suite_power(const char *out)
     EXPECT(!ui_charge_anim_active(), "la animacion sigue activa a los 3,8 s");
     EXPECT(lv_anim_count_running() == 0, "%u animaciones vivas", (unsigned)lv_anim_count_running());
     EXPECT(lv_obj_get_child_count(lv_layer_top()) == 0, "quedan objetos en layer_top");
+    EXPECT(lv_obj_get_child_count(ui_nav_screen()) == (uint32_t)ui_nav_depth(), "quedan capas sobre las paginas");
     /* Sin evento nuevo no se repite */
     sim_run(1200);
     EXPECT(!ui_charge_anim_active(), "la animacion se repitio sin evento");

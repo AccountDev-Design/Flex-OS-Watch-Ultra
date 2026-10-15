@@ -1,11 +1,14 @@
 /*
  * watch_theme — identidad visual de Flex OS Ultra en LVGL 9 para el reloj.
  *
- * "Liquid Glass" en B1 = tinte + brillo superior + sombra inferior + bordes
- * claro/oscuro, sobre el fondo Onyx ya generado. NO hay desenfoque: sobre un
- * fondo casi negro un desenfoque no cambiaría la imagen y costaría CPU. Cuando
- * existan fondos con detalle se añadirá el fondo pre-desenfocado una sola vez
- * (nunca desenfoque por cuadro). Ver docs/B1-ARRANQUE.md.
+ * Modo oscuro AMOLED: fondo negro puro (#000000) en la esfera, las páginas y
+ * el panel rápido. "Liquid Glass" sobre negro = superficie con el tinte
+ * adaptativo de la referencia PRECALCULADA y opaca, más el borde de luz
+ * arriba/izquierda. Sin desenfoque, sin capas translúcidas a pantalla
+ * completa y sin degradados: cada cuadro solo rellena colores sólidos y
+ * dibuja texto (ver docs/B4-CALIDAD.md). El fondo Onyx de la referencia sigue
+ * disponible (watch_theme_set_wallpaper) y con él las tarjetas vuelven a ser
+ * translúcidas.
  */
 #pragma once
 
@@ -40,16 +43,33 @@ static inline lv_color_t flex_color(uint32_t rgb)
 void watch_theme_init(void);
 
 /**
- * Crea el fondo Onyx a pantalla completa como imagen RGB565 en PSRAM
- * (generada una sola vez). Si no hay memoria, deja el fondo negro liso.
- * @return true si se generó la imagen.
+ * Fondo de las pantallas principales (esfera):
+ *  - FLEX_WALL_BLACK (por defecto): negro puro AMOLED. Sin imagen: no se lee
+ *    nada de la PSRAM al dibujar y los píxeles quedan apagados.
+ *  - FLEX_WALL_ONYX: el fondo Onyx de la referencia (negro con halo azul),
+ *    imagen RGB565 de 411 KB en PSRAM generada una vez.
+ */
+typedef enum {
+    FLEX_WALL_BLACK = 0,
+    FLEX_WALL_ONYX,
+} flex_wall_t;
+
+void watch_theme_set_wallpaper(flex_wall_t w);
+flex_wall_t watch_theme_get_wallpaper(void);
+
+/**
+ * Pone el fondo actual en screen (color negro y, con Onyx, la imagen).
+ * Las tarjetas de vidrio creadas después usan el modo correspondiente.
+ * @return true si se puso la imagen Onyx.
  */
 bool watch_theme_apply_background(lv_obj_t *screen);
 
 /**
  * Crea una tarjeta de vidrio (rol CARD) en (x, y) de tamaño w x h, en
- * coordenadas de pantalla. El alfa del tinte se calcula con la mezcla
- * adaptativa de Flex OS Ultra a partir del fondo que queda debajo.
+ * coordenadas de pantalla. El tinte es el de la mezcla adaptativa de Flex OS
+ * Ultra: sobre negro (por defecto) se precalcula y la tarjeta es OPACA (sin
+ * mezcla por píxel); sobre Onyx es translúcida y se calcula con la luma real
+ * del fondo que queda debajo.
  */
 lv_obj_t *watch_theme_glass_card(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h);
 

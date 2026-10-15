@@ -15,8 +15,9 @@
  * cierra. Al soltar, la cortina termina de abrirse o vuelve, con la
  * duración que corresponde a lo que falta (base 210/190 ms).
  *
- * El panel vive en lv_layer_top() mientras se ve y se borra al cerrarse
- * (con él, su temporizador y sus animaciones).
+ * El panel es hijo de la pantalla de navegación, encima de las páginas
+ * (ui_overlay_parent: así LVGL no dibuja la parte de la esfera que tapa), y
+ * se borra al cerrarse (con él, su temporizador y sus animaciones).
  */
 #include "ui_internal.h"
 
@@ -224,7 +225,7 @@ static void build(void)
     s_qp.last_state = -1;
     s_qp.last_level = -1;
 
-    lv_obj_t *root = lv_obj_create(lv_layer_top());
+    lv_obj_t *root = lv_obj_create(ui_overlay_parent());
     lv_obj_remove_style_all(root);
     lv_obj_set_size(root, QP_W, QP_H);
     lv_obj_set_pos(root, 0, -QP_H);
@@ -234,7 +235,14 @@ static void build(void)
      * previa). Opaco, además, LVGL deja de dibujar la esfera bajo el panel. */
     lv_obj_set_style_bg_color(root, flex_color(FLEX_C_PAGE), 0);
     lv_obj_set_style_bg_opa(root, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(root, FLEX_RADIUS_CARD, 0);
+    /* Sin radio: un rectángulo opaco que cubre la pantalla entera permite a
+     * LVGL no dibujar la esfera debajo (con radio, las esquinas obligaban a
+     * redibujarla en cada cuadro). Una línea abajo marca el borde mientras
+     * baja siguiendo al dedo. */
+    lv_obj_set_style_border_width(root, 2, 0);
+    lv_obj_set_style_border_side(root, LV_BORDER_SIDE_BOTTOM, 0);
+    lv_obj_set_style_border_color(root, flex_color(FLEX_C_DIVIDER), 0);
+    lv_obj_set_style_border_opa(root, LV_OPA_COVER, 0);
     lv_obj_remove_flag(root, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(root, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK);
     lv_obj_add_event_cb(root, close_drag_cb, LV_EVENT_PRESSED, NULL);

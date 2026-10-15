@@ -3,6 +3,7 @@
  */
 #include <string.h>
 
+#include "flex_glass_math.h"
 #include "test_util.h"
 
 #include "flex_batt_style.h"
@@ -191,8 +192,22 @@ static void test_formats(void)
     CHECK(strcmp(ui_time_state_text(WATCH_TIME_STARTING), "Leyendo…") == 0);
 }
 
+static void test_mix(void)
+{
+    CHECK_EQ(flex_mix_rgb(0xFFFFFF, 0x000000, 255), 0xFFFFFF);
+    CHECK_EQ(flex_mix_rgb(0xFFFFFF, 0x000000, 0), 0x000000);
+    CHECK_EQ(flex_mix_rgb(0x123456, 0xABCDEF, 255), 0x123456);
+    CHECK_EQ(flex_mix_rgb(0x123456, 0xABCDEF, 0), 0xABCDEF);
+    CHECK_EQ(flex_mix_rgb(0xFF0000, 0x0000FF, 128), 0x80007F); /* redondeo por canal */
+    /* vidrio de la paleta sobre negro con el tinte de las filas (56) */
+    CHECK_EQ(flex_mix_rgb(0x303648, 0x000000, 56), 0x0B0C10);
+    /* nunca se sale del rango de un canal */
+    CHECK_EQ(flex_mix_rgb(0xFFFFFF, 0xFFFFFF, 77), 0xFFFFFF);
+}
+
 void test_ui_all(void)
 {
+    test_mix();
     test_formats();
     test_brightness();
     test_face_time();

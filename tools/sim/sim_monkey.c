@@ -82,19 +82,24 @@ static void check_rest(int step)
     EXPECT(depth >= 1 && depth <= 6, "%s: profundidad %d", where, depth);
     lv_obj_t *scr = ui_nav_screen();
     int visible = 0;
-    for (uint32_t i = 0; i < lv_obj_get_child_count(scr); i++) {
-        visible += !lv_obj_has_flag(lv_obj_get_child(scr, (int32_t)i), LV_OBJ_FLAG_HIDDEN);
+    for (int i = 0; i < depth; i++) {
+        visible += !lv_obj_has_flag(ui_nav_page(i), LV_OBJ_FLAG_HIDDEN);
     }
     EXPECT(visible == 1, "%s: %d paginas visibles", where, visible);
-    EXPECT((int)lv_obj_get_child_count(scr) == depth, "%s: %u paginas para profundidad %d", where,
+    const int overlays = ui_qp_active() + ui_charge_anim_active();
+    EXPECT((int)lv_obj_get_child_count(scr) == depth + overlays, "%s: %u hijos para profundidad %d", where,
            (unsigned)lv_obj_get_child_count(scr), depth);
+    /* las capas globales siempre encima de las páginas */
+    for (int i = 0; i < depth; i++) {
+        EXPECT(lv_obj_get_index(ui_nav_page(i)) == i, "%s: la pagina %d no esta en su sitio", where, i);
+    }
     EXPECT(lv_obj_get_x(ui_nav_top()) == 0, "%s: pagina desplazada (x = %d)", where, (int)lv_obj_get_x(ui_nav_top()));
     EXPECT(!ui_qp_active() || ui_qp_is_open(), "%s: panel rapido a medias", where);
     EXPECT(!ui_qp_active() || depth == 1, "%s: panel rapido sobre la profundidad %d", where, depth);
     if (!ui_banner_active() && !ui_charge_anim_active()) {
         EXPECT(lv_anim_count_running() == 0, "%s: %u animaciones vivas", where, (unsigned)lv_anim_count_running());
     }
-    if (sim_missing_glyphs(ui_nav_top(), where) + sim_missing_glyphs(lv_layer_top(), where) != 0) {
+    if (sim_missing_glyphs(ui_nav_screen(), where) + sim_missing_glyphs(lv_layer_top(), where) != 0) {
         EXPECT(0, "%s: textos sin glifo", where);
     }
 }
@@ -117,9 +122,11 @@ static void overlays_during_nav(const char *out)
     sim_power.track.charge_events = s_charge_events;
     sim_run(800);
     EXPECT(ui_banner_active(), "superposiciones: el aviso no aparecio con el panel abierto");
+    /* El aviso vive en lv_layer_top(), que LVGL dibuja siempre encima de la
+     * pantalla (y del panel, que es hija de ella). */
     lv_obj_t *top = lv_layer_top();
-    const uint32_t n = lv_obj_get_child_count(top);
-    EXPECT(n == 2 && lv_obj_get_child(top, 0) == ui_qp_obj(), "superposiciones: el aviso no esta encima del panel");
+    EXPECT(lv_obj_get_child_count(top) == 1 && ui_qp_obj() && lv_obj_get_screen(ui_qp_obj()) == ui_nav_screen(),
+           "superposiciones: el aviso no esta encima del panel");
     sim_check_glyphs(top, "aviso sobre el panel");
     sim_save(out, "f3_aviso_sobre_panel");
     sim_tap(205, 58); /* toque en el aviso: se cierra */
@@ -140,7 +147,7 @@ static void overlays_during_nav(const char *out)
     sim_power.track.charge_events = ++s_charge_events;
     sim_run(700);
     EXPECT(ui_charge_anim_active(), "superposiciones: no hubo animacion de carga sobre la pagina");
-    sim_check_glyphs(lv_layer_top(), "animacion de carga");
+    sim_check_glyphs(ui_charge_anim_obj(), "animacion de carga");
     sim_save(out, "f3_carga_sobre_pagina");
     sim_tap(205, 251); /* un toque la cierra */
     sim_run(400);
@@ -152,7 +159,9 @@ static void overlays_during_nav(const char *out)
     sim_scenario(84, 4085, BATT_STATE_DISCHARGING, BATT_LEVEL_NORMAL, false);
     sim_power.track.charge_events = s_charge_events;
     sim_run(6000);
-    EXPECT(ui_nav_depth() == 1 && lv_obj_get_child_count(lv_layer_top()) == 0, "superposiciones: no queda limpio");
+    EXPECT(ui_nav_depth() == 1 && lv_obj_get_child_count(lv_layer_top()) == 0 && !ui_charge_anim_active() &&
+               !ui_qp_active(),
+           "superposiciones: no queda limpio");
 }
 
 void sim_suite_monkey(const char *out)

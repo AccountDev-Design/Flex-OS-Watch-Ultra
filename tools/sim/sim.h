@@ -82,5 +82,6 @@ void sim_suite_nav(const char *out);
 void sim_suite_qp(const char *out);
 void sim_suite_settings(const char *out);
 void sim_suite_monkey(const char *out);
+void sim_suite_bench(const char *out);
 void sim_suite_theme(const char *out);
 void sim_suite_face(const char *out);
