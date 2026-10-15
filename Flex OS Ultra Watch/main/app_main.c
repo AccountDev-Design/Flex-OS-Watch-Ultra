@@ -25,6 +25,12 @@
 
 static const char *TAG = "flex_watch";
 
+/* Brillo para la interfaz (sin guardar en NVS hasta F4.1). */
+static bool ui_brightness_set(int percent)
+{
+    return watch_display_set_brightness(percent) == ESP_OK;
+}
+
 void app_main(void)
 {
     const esp_app_desc_t *app = esp_app_get_description();
@@ -44,6 +50,8 @@ void app_main(void)
     }
 
     watch_ui_boot_info_t boot = {0};
+    boot.brightness_get = watch_display_get_brightness;
+    boot.brightness_set = ui_brightness_set;
 
     lv_indev_t *indev = NULL;
     esp_err_t err = watch_touch_start(disp, &indev);

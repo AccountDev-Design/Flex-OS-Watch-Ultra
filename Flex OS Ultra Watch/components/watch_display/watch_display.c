@@ -31,6 +31,7 @@ static const char *TAG = "watch_display";
 #define DEFAULT_BRIGHTNESS 70
 
 static watch_display_info_t s_info;
+static int s_brightness = -1;
 
 /* El CO5300 solo acepta ventanas que empiezan en coordenada par y terminan en
  * impar (mismo criterio que rounder_event_cb del BSP oficial). Con 410x502 los
@@ -150,7 +151,16 @@ esp_err_t watch_display_set_brightness(int percent)
     } else if (percent > 100) {
         percent = 100;
     }
-    return bsp_display_brightness_set(percent);
+    const esp_err_t err = bsp_display_brightness_set(percent);
+    if (err == ESP_OK) {
+        s_brightness = percent;
+    }
+    return err;
+}
+
+int watch_display_get_brightness(void)
+{
+    return s_brightness;
 }
 
 void watch_display_get_info(watch_display_info_t *out)

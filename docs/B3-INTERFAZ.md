@@ -10,7 +10,7 @@ físicas de la tabla final.
 | **B3-1** | Identidad consolidada: 9 iconos vectoriales nuevos, estados de los controles de vidrio (pulsado, activo, no disponible), cabecera estándar, lista y fila de Ajustes | implementado · compilado · pruebas en la vista previa · prueba física pendiente |
 | **B3-2** | Servicio de hora en solo lectura (RTC PCF85063) y esfera del reloj | implementado · compilado · pruebas en PC y en la vista previa · prueba física pendiente |
 | **B3-3** | Navegación: pila de páginas, transiciones 210/190 ms, volver (botón y gesto desde el borde), arranque con splash | implementado · compilado · pruebas en PC y en la vista previa · prueba física tras B3-5 |
-| B3-4 | Panel rápido (solo controles con función real) | pendiente |
+| **B3-4** | Panel rápido (solo controles con función real) y raíz de Ajustes | implementado · compilado · pruebas en PC y en la vista previa · prueba física pendiente |
 | B3-5 | Ajustes: Pantalla, Batería, Diagnóstico, Acerca de | pendiente |
 | B3-6 | Pruebas de integración en la vista previa (gestos, fugas, animaciones) | pendiente |
 
@@ -204,3 +204,56 @@ Los componentes aparecerán en pantalla con B3-4 y B3-5. Estas pruebas se harán
 | T30 | Arranque | encender o reiniciar mirando la pantalla | Sin destello blanco ni basura. "Flex OS" aparece sobre negro y la esfera entra en cuanto arranca (sin pantalla congelada) |
 | T31 | Abrir y volver (tras B3-5) | abrir Ajustes y una categoría; volver con el botón | Transiciones suaves de ~0,2 s, sin parpadeos; la página de debajo se mueve menos (paralaje) |
 | T32 | Gesto volver (tras B3-5) | arrastrar desde el borde izquierdo: corto y lento, largo, y rápido | Corto y lento vuelve a su sitio; largo o rápido vuelve a la página anterior. Un desplazamiento vertical de la lista no navega |
+
+## B3-4. Panel rápido y raíz de Ajustes
+
+### Criterios de aceptación
+
+| # | Criterio | Cómo se comprueba |
+|---|---|---|
+| P1 | Se abre arrastrando hacia abajo desde la franja superior de la esfera (64 px, marcada con un asa); la cortina **sigue al dedo** y al soltar se completa o vuelve | vista previa: posición durante el arrastre; arrastre corto cancelado |
+| P2 | Un toque o un arrastre horizontal en la franja no abren nada | vista previa |
+| P3 | Solo controles con función real | vista previa: los mosaicos pendientes no hacen nada |
+| P4 | Brillo real: mínimo 10 %, como mucho un comando al panel cada 60 ms al arrastrar y siempre el valor final; nunca se reenvía el mismo valor; sin control de brillo dice "No disponible" | `tests/host` y vista previa |
+| P5 | Retorno fiable a la esfera: arrastrar hacia arriba en el panel o tocar el asa inferior; desde Ajustes, "volver" | vista previa |
+| P6 | Ajustes: cierra el panel (190 ms) y después abre la página (210 ms) | vista previa |
+| P7 | Al cerrarse no queda nada: ni objetos en `lv_layer_top`, ni animaciones, ni temporizadores, ni memoria | 20 ciclos abrir/cerrar con arrastre y asa: mismos bloques y temporizadores |
+
+**Contenido de P3:**
+
+| Control | Comportamiento |
+|---|---|
+| Brillo | Real |
+| Batería | % y estado reales, con el mismo indicador que la esfera |
+| Ajustes | Abre la página |
+| Wi-Fi y Bluetooth | "Pendiente" (F5), apagados y sin toque |
+
+### Decisiones
+
+- **Velo opaco.** La referencia deja pasar algo del fondo porque detrás hay un fondo desenfocado. Aquí no se desenfoca (coste).
+  - Con 245/255 la esfera se leía como un fantasma a través de los controles (vista previa, +8 niveles sobre el negro).
+  - Opaco no hay fantasma y LVGL deja de dibujar la esfera bajo el panel abierto.
+- **Brillo.**
+  - El valor inicial es el que tiene la pantalla (70 % al arrancar). No se guarda hasta F4.1 (NVS): tras reiniciar vuelve al 70 %.
+  - La interfaz recibe el control de brillo por `watch_ui_boot_info_t` (`brightness_get/set`), así que la vista previa lo sustituye y F4.1 podrá añadir la persistencia sin tocar la interfaz.
+  - El 10 % mínimo evita una pantalla que parezca apagada a plena luz sin forma visible de recuperarla.
+- **Raíz de Ajustes.** Diagnóstico ya funciona; Pantalla, Batería y Acerca de llegan en B3-5 y hasta entonces están marcadas "Pendiente".
+
+### Comprobado en el PC
+
+- **`tests/host`:** 541 comprobaciones, 0 fallos (+14 del brillo: límites, ritmo de envío, valor final y vuelta del reloj).
+- **`tools/sim`:** panel rápido y Ajustes: 0 fallos.
+  - 181 → 181 bloques de LVGL y los mismos temporizadores tras 20 ciclos.
+  - Vistas previas: `docs/img/f3_panel_arrastre.png`, `f3_panel.png` y `f3_ajustes.png`.
+- **Firmware completo:** sin avisos.
+  - App: 871 520 B.
+  - DIRAM: 87 247 B.
+
+### Pruebas en el reloj
+
+| # | Prueba | Cómo | Resultado esperado |
+|---|---|---|---|
+| T33 | Abrir el panel | arrastrar hacia abajo desde el borde superior de la esfera, despacio y luego rápido | El panel sigue al dedo; al soltar se abre del todo o vuelve; un toque arriba no lo abre |
+| T34 | Brillo | arrastrar el control de brillo de un extremo a otro | El brillo cambia con suavidad mientras se arrastra; no baja del 10 %; el registro serie no muestra errores |
+| T35 | Pendientes | tocar Wi-Fi y Bluetooth | No hacen nada; se ven apagados con "Pendiente" |
+| T36 | Cerrar y Ajustes | cerrar arrastrando hacia arriba y con el asa; abrir Ajustes > Diagnóstico y volver dos veces | Siempre se vuelve a la esfera; sin pantallas congeladas |

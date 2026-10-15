@@ -82,3 +82,19 @@ void ui_face_time(watch_time_state_t state, const wt_datetime_t *dt, ui_face_tim
     }
     out->key = -1 - (int64_t)state; /* negativo: no choca con una hora válida */
 }
+
+int ui_brightness_clamp(int percent)
+{
+    if (percent < UI_BRIGHT_MIN) {
+        return UI_BRIGHT_MIN;
+    }
+    return percent > UI_BRIGHT_MAX ? UI_BRIGHT_MAX : percent;
+}
+
+bool ui_brightness_should_apply(int value, int applied, uint32_t last_ms, uint32_t now_ms, bool final)
+{
+    if (value == applied) {
+        return false;
+    }
+    return final || (uint32_t)(now_ms - last_ms) >= UI_BRIGHT_APPLY_MS;
+}

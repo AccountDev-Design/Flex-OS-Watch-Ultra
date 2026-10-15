@@ -19,6 +19,10 @@ typedef struct {
     bool touch_ok;
     bool power_ok;
     watch_flash_report_t flash;
+    /* Brillo de la pantalla (lo aporta watch_display). NULL = sin control:
+     * el panel rápido lo muestra como no disponible. */
+    int (*brightness_get)(void);        /**< 0..100, o < 0 si se desconoce */
+    bool (*brightness_set)(int percent); /**< true si se aplicó */
 } watch_ui_boot_info_t;
 
 /**

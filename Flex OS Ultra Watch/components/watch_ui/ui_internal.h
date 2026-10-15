@@ -61,5 +61,19 @@ lv_obj_t *ui_face_create(lv_obj_t *parent);
 /** Diagnóstico (antigua pantalla de inicio de B1). NULL si ya existe una. */
 lv_obj_t *ui_diag_create(lv_obj_t *parent);
 
+/** Raíz de Ajustes. */
+lv_obj_t *ui_settings_create(lv_obj_t *parent);
+
+/* ---- Panel rápido (ui_qp) ---- */
+
+/** Añade a la esfera la franja superior que abre el panel al arrastrar. */
+void ui_qp_attach(lv_obj_t *face_page);
+void ui_qp_open(void);
+void ui_qp_close(void);
+bool ui_qp_is_open(void);
+/** El panel existe (abierto, abriéndose, arrastrándose o cerrándose). */
+bool ui_qp_active(void);
+lv_obj_t *ui_qp_obj(void);
+
 /** Splash de arranque activo (watch_ui_boot_splash). */
 bool ui_splash_active(void);

@@ -134,8 +134,32 @@ static void test_face_time(void)
     CHECK(strcmp(t.time, "--:--") == 0);
 }
 
+static void test_brightness(void)
+{
+    CHECK_EQ(ui_brightness_clamp(-5), UI_BRIGHT_MIN);
+    CHECK_EQ(ui_brightness_clamp(0), UI_BRIGHT_MIN);
+    CHECK_EQ(ui_brightness_clamp(9), UI_BRIGHT_MIN);
+    CHECK_EQ(ui_brightness_clamp(10), 10);
+    CHECK_EQ(ui_brightness_clamp(70), 70);
+    CHECK_EQ(ui_brightness_clamp(100), 100);
+    CHECK_EQ(ui_brightness_clamp(250), UI_BRIGHT_MAX);
+
+    /* Mismo valor: nunca se reenvía. */
+    CHECK(!ui_brightness_should_apply(70, 70, 0, 1000, false));
+    CHECK(!ui_brightness_should_apply(70, 70, 0, 1000, true));
+    /* Durante el arrastre: como mucho cada 60 ms. */
+    CHECK(!ui_brightness_should_apply(71, 70, 1000, 1059, false));
+    CHECK(ui_brightness_should_apply(71, 70, 1000, 1060, false));
+    /* Al soltar: siempre el valor final. */
+    CHECK(ui_brightness_should_apply(71, 70, 1000, 1001, true));
+    /* El reloj de milisegundos da la vuelta. */
+    CHECK(ui_brightness_should_apply(50, 40, 0xFFFFFFF0u, 0x30u, false));
+    CHECK(!ui_brightness_should_apply(50, 40, 0xFFFFFFF0u, 0x10u, false));
+}
+
 void test_ui_all(void)
 {
+    test_brightness();
     test_face_time();
     test_batt_kind();
     test_batt_style();

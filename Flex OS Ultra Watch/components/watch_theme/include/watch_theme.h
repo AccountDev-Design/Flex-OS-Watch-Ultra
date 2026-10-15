@@ -79,6 +79,13 @@ lv_obj_t *watch_theme_label(lv_obj_t *parent, const lv_font_t *font, uint32_t rg
  */
 lv_obj_t *watch_theme_glass_button(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h);
 
+/**
+ * Mosaico del panel rápido: vidrio plano (como las filas) con el radio de las
+ * tarjetas grandes, pulsable y con los tres estados. Sin disposición: quien
+ * lo crea coloca su contenido.
+ */
+lv_obj_t *watch_theme_tile(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h);
+
 /** Fondo plano de página (FLEX_C_PAGE) para las pantallas de lista. */
 void watch_theme_page(lv_obj_t *screen);
 

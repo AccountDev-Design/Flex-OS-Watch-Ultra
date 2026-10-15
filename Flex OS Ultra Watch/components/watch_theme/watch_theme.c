@@ -18,6 +18,7 @@ static lv_style_t s_pressed;
 static lv_style_t s_checked;
 static lv_style_t s_disabled;
 static lv_style_t s_row;
+static lv_style_t s_tile;
 static lv_style_t s_list;
 static bool s_inited;
 
@@ -94,10 +95,11 @@ void watch_theme_init(void)
     /* Fila: vidrio plano sobre el fondo de página (drawGlassCardFlat de la
      * referencia), sin capa de brillo: una lista con desplazamiento redibuja
      * las filas en cada cuadro y así cada una es un solo rectángulo. */
+    const lv_opa_t flat_mix =
+        flex_glass_tint_mix((uint32_t)flex_glass_luma565(rgb_to_565(FLEX_C_PAGE)), 1, rgb_to_565(FLEX_C_GLASS));
     lv_style_init(&s_row);
     lv_style_set_bg_color(&s_row, flex_color(FLEX_C_GLASS));
-    lv_style_set_bg_opa(&s_row, flex_glass_tint_mix((uint32_t)flex_glass_luma565(rgb_to_565(FLEX_C_PAGE)), 1,
-                                                    rgb_to_565(FLEX_C_GLASS)));
+    lv_style_set_bg_opa(&s_row, flat_mix);
     lv_style_set_radius(&s_row, FLEX_RADIUS_ROW);
     lv_style_set_border_width(&s_row, 1);
     lv_style_set_border_side(&s_row, LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_LEFT);
@@ -110,6 +112,18 @@ void watch_theme_init(void)
     lv_style_set_flex_flow(&s_row, LV_FLEX_FLOW_ROW);
     lv_style_set_flex_cross_place(&s_row, LV_FLEX_ALIGN_CENTER);
     lv_style_set_flex_track_place(&s_row, LV_FLEX_ALIGN_CENTER);
+
+    /* Mosaico del panel rápido: el mismo vidrio plano que las filas, con el
+     * radio de las tarjetas grandes del panel (QuickPanel.h:105). */
+    lv_style_init(&s_tile);
+    lv_style_set_bg_color(&s_tile, flex_color(FLEX_C_GLASS));
+    lv_style_set_bg_opa(&s_tile, flat_mix);
+    lv_style_set_radius(&s_tile, FLEX_RADIUS_CARD);
+    lv_style_set_border_width(&s_tile, 1);
+    lv_style_set_border_side(&s_tile, LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_LEFT);
+    lv_style_set_border_color(&s_tile, flex_color(FLEX_GLASS_EDGE_HI));
+    lv_style_set_border_opa(&s_tile, FLEX_GLASS_EDGE_WEAK);
+    lv_style_set_pad_all(&s_tile, 16);
 
     lv_style_init(&s_list);
     lv_style_set_pad_left(&s_list, FLEX_LIST_X);
@@ -162,6 +176,7 @@ bool watch_theme_apply_background(lv_obj_t *screen)
 
 lv_obj_t *watch_theme_glass_card(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h)
 {
+    watch_theme_init();
     lv_obj_t *card = lv_obj_create(parent);
     lv_obj_remove_style_all(card);
     lv_obj_add_style(card, &s_card, 0);
@@ -209,6 +224,7 @@ lv_obj_t *watch_theme_label(lv_obj_t *parent, const lv_font_t *font, uint32_t rg
 
 lv_obj_t *watch_theme_glass_button(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h)
 {
+    watch_theme_init();
     lv_obj_t *b = watch_theme_glass_card(parent, x, y, w, h);
     lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);
     add_states(b);
@@ -223,6 +239,7 @@ void watch_theme_page(lv_obj_t *screen)
 
 lv_obj_t *watch_theme_header(lv_obj_t *parent, const char *title, lv_event_cb_t back_cb, void *user_data)
 {
+    watch_theme_init();
     lv_obj_t *hdr = lv_obj_create(parent);
     lv_obj_remove_style_all(hdr);
     lv_obj_set_size(hdr, FLEX_SCREEN_W, FLEX_HDR_H);
@@ -257,6 +274,7 @@ lv_obj_t *watch_theme_header(lv_obj_t *parent, const char *title, lv_event_cb_t 
 
 lv_obj_t *watch_theme_list(lv_obj_t *parent)
 {
+    watch_theme_init();
     lv_obj_t *list = lv_obj_create(parent);
     lv_obj_remove_style_all(list);
     lv_obj_add_style(list, &s_list, 0);
@@ -271,6 +289,7 @@ lv_obj_t *watch_theme_list(lv_obj_t *parent)
 lv_obj_t *watch_theme_list_row(lv_obj_t *parent, flex_icon_t icon, uint32_t accent, const char *title,
                                const char *value, bool chevron)
 {
+    watch_theme_init();
     lv_obj_t *row = lv_obj_create(parent);
     lv_obj_remove_style_all(row);
     lv_obj_add_style(row, &s_row, 0);
@@ -320,4 +339,18 @@ void watch_theme_row_set_pending(lv_obj_t *row)
     flex_icon_set_color(lv_obj_get_child(row, ROW_ICON), FLEX_C_MUTE);
     lv_obj_set_style_text_color(lv_obj_get_child(row, ROW_TITLE), flex_color(FLEX_C_MUTE), 0);
     watch_theme_row_set_value(row, "Pendiente");
+}
+
+lv_obj_t *watch_theme_tile(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    watch_theme_init();
+    lv_obj_t *t = lv_obj_create(parent);
+    lv_obj_remove_style_all(t);
+    lv_obj_add_style(t, &s_tile, 0);
+    add_states(t);
+    lv_obj_set_pos(t, x, y);
+    lv_obj_set_size(t, w, h);
+    lv_obj_remove_flag(t, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(t, LV_OBJ_FLAG_CLICKABLE);
+    return t;
 }

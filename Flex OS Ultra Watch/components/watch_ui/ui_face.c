@@ -131,6 +131,9 @@ lv_obj_t *ui_face_create(lv_obj_t *parent)
     lv_label_set_long_mode(f->batt_state, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_align(f->batt_state, LV_ALIGN_BOTTOM_LEFT, BICON_W + 16, 4);
 
+    /* Arrastrar hacia abajo desde arriba abre el panel rápido. */
+    ui_qp_attach(scr);
+
     f->timer = lv_timer_create(tick_cb, FACE_TICK_MS, f);
     lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, f);
     update_time(f);

@@ -48,6 +48,9 @@ void watch_display_unlock(void);
 /** Brillo 0..100 % mediante el comando DCS 0x51 del panel (vía BSP). */
 esp_err_t watch_display_set_brightness(int percent);
 
+/** Último brillo aplicado con éxito (0..100), o -1 si nunca se aplicó. No se guarda (F4.1). */
+int watch_display_get_brightness(void);
+
 void watch_display_get_info(watch_display_info_t *out);
 
 #ifdef __cplusplus

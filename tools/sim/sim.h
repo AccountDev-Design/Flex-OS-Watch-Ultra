@@ -58,6 +58,12 @@ lv_obj_t *sim_find_label(lv_obj_t *obj, const char *text);
 /** Número de temporizadores de LVGL vivos. */
 int sim_timer_count(void);
 
+/* Brillo simulado: valor aplicado y comandos enviados al "panel". */
+extern int sim_brightness;
+extern int sim_brightness_calls;
+int sim_brightness_get(void);
+bool sim_brightness_set(int percent);
+
 /** Memoria de LVGL en uso (asignador propio del simulador). Varía con la
  * fragmentación: para buscar fugas se usa sim_mem_blocks(). */
 size_t sim_mem_used(void);
@@ -68,5 +74,6 @@ uint32_t sim_mem_blocks(void);
 void sim_suite_boot(const char *out);
 void sim_suite_power(const char *out);
 void sim_suite_nav(const char *out);
+void sim_suite_qp(const char *out);
 void sim_suite_theme(const char *out);
 void sim_suite_face(const char *out);

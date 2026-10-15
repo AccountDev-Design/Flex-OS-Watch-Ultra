@@ -35,6 +35,8 @@ void sim_suite_boot(const char *out)
     boot.power_ok = true;
     boot.flash.configured_size = 32u * 1024 * 1024;
     boot.flash.verdict = FLASH_PROBE_UPPER_DISTINCT;
+    boot.brightness_get = sim_brightness_get;
+    boot.brightness_set = sim_brightness_set;
     watch_ui_home_create(&boot);
     EXPECT(lv_screen_active() == splash, "la esfera corto el splash sin transicion");
     sim_run(SIM_SPLASH_OUT_MAX_MS);

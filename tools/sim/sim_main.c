@@ -119,6 +119,21 @@ uint32_t sim_mem_blocks(void)
     return m.used_cnt;
 }
 
+int sim_brightness = 70;
+int sim_brightness_calls;
+
+int sim_brightness_get(void)
+{
+    return sim_brightness;
+}
+
+bool sim_brightness_set(int percent)
+{
+    sim_brightness = percent;
+    sim_brightness_calls++;
+    return true;
+}
+
 uint32_t sim_flush_count(void)
 {
     return s_flushes;
@@ -210,6 +225,7 @@ int main(int argc, char **argv)
     sim_suite_power(out);
     sim_suite_face(out);
     sim_suite_nav(out);
+    sim_suite_qp(out);
 
     printf("%s (%d fallos)\n", sim_fails ? "FALLOS" : "TODO OK", sim_fails);
     return sim_fails ? 1 : 0;
