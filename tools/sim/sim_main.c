@@ -59,7 +59,7 @@ static void scenario(int pct, int mv, batt_state_t st, batt_level_t lv, bool vbu
     s_sim.raw.batt_present = (st != BATT_STATE_NO_BATTERY && st != BATT_STATE_UNKNOWN);
     s_sim.raw.vbat_adc_enabled = true;
     s_sim.raw.gauge_enabled = true;
-    s_sim.raw.vbus_in = vbus;
+    s_sim.raw.vbus_present = vbus;
     s_sim.track.state = st;
     s_sim.track.level = lv;
     s_sim.track.percent = pct;

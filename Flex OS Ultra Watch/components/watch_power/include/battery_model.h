@@ -1,21 +1,27 @@
 /*
  * battery_model — lógica PURA de batería (sin ESP-IDF; se prueba en el PC).
  *
- * Interpreta los registros del AXP2101 tal y como lo hace el código oficial
- * (ejemplo 01_AXP2101 de Waveshare + XPowersLib, MIT, Lewis He):
+ * Registros del AXP2101 según su datasheet (X-Powers, cap. 6.13.2), contrastado
+ * con el código oficial (ejemplo 01_AXP2101 de Waveshare + XPowersLib, MIT):
  *
- *   0x00 STATUS1 bit5  VBUS correcto              (isVbusGood)
- *                bit3  batería presente           (isBatteryConnect)
- *   0x01 STATUS2 [7:5] sentido de la corriente: 0 reposo, 1 carga, 2 descarga
- *                bit3  0 = VBUS conectado (junto con VBUS correcto, isVbusIn)
- *                [2:0] etapa del cargador: 0 goteo, 1 precarga, 2 corriente
- *                      constante, 3 tensión constante, 4 terminada, 5 parada
+ *   0x00 PMU status1  bit5 VBUS good · bit4 BATFET · bit3 batería presente ·
+ *                     bit1 regulación térmica · bit0 límite de corriente de entrada
+ *   0x01 PMU status2  [6:5] sentido de la corriente: 00 reposo, 01 carga, 10 descarga
+ *                     (bit7 reservado) · bit3 VINDPM (la entrada cae y el PMU
+ *                     reduce su consumo; NO indica USB desconectado) ·
+ *                     [2:0] etapa del cargador: 0 goteo, 1 precarga, 2 corriente
+ *                     constante, 3 tensión constante, 4 terminada, 5 sin carga
  *   0x03 identificador del chip = 0x4A
- *   0x18 bit3  medidor de carga (fuel gauge) activo (enableGauge)
- *   0x30 bit0  medida de VBAT en el ADC activa       (enableBattVoltageMeasure)
- *        bit1  medida del pin TS activa              (el oficial la desactiva)
- *   0x34/0x35  VBAT en mV: ((0x34 & 0x1F) << 8) | 0x35  (getBattVoltage)
- *   0xA4       porcentaje del fuel gauge              (getBatteryPercent)
+ *   0x18 bit3 fuel gauge activo · bit2 carga de la pila de botón · bit1 cargador
+ *        de la batería habilitado
+ *   0x30 canales del ADC: bit0 VBAT · bit1 pin TS
+ *   0x34/0x35 VBAT: 14 bits, 1 mV/LSB = ((0x34 & 0x3F) << 8) | 0x35
+ *             (leer primero el byte alto)
+ *   0xA4 porcentaje del fuel gauge
+ *
+ * Diferencia con XPowersLib: su isVbusIn() exige además REG01 bit3 == 0, lo
+ * que marcaría "sin USB" un USB conectado pero en VINDPM. Aquí la presencia de
+ * USB es VBUS good (REG00 bit5) y VINDPM se informa aparte.
  *
  * Nada aquí escribe en el chip.
  */
@@ -34,13 +40,21 @@ extern "C" {
 #define AXP2101_REG_STATUS1    0x00
 #define AXP2101_REG_STATUS2    0x01
 #define AXP2101_REG_CHIP_ID    0x03
+#define AXP2101_REG_VINDPM     0x15
+#define AXP2101_REG_IIN_LIM    0x16
 #define AXP2101_REG_GAUGE_CTRL 0x18
 #define AXP2101_REG_ADC_CTRL   0x30
 #define AXP2101_REG_VBAT_H     0x34
 #define AXP2101_REG_VBAT_L     0x35
+#define AXP2101_REG_TS_CTRL    0x50
+#define AXP2101_REG_IPRECHG    0x61
+#define AXP2101_REG_ICC        0x62
+#define AXP2101_REG_ITERM      0x63
+#define AXP2101_REG_CV         0x64
+#define AXP2101_REG_BAT_DET    0x68
 #define AXP2101_REG_PERCENT    0xA4
 
-/** Copia cruda de los registros leídos en una muestra. */
+/** Copia cruda de los registros leídos en una muestra periódica. */
 typedef struct {
     uint8_t status1;
     uint8_t status2;
@@ -73,10 +87,13 @@ typedef enum {
 typedef struct {
     bool chip_ok;
     bool batt_present;
-    bool vbus_good;
-    bool vbus_in;
+    bool vbus_present;     /**< VBUS good (REG00 bit5): hay alimentación externa válida */
+    bool vindpm;           /**< REG01 bit3: entrada en VINDPM (fuente débil o muy cargada) */
+    bool input_limited;    /**< REG00 bit0: en el límite de corriente de entrada */
+    bool thermal_reg;      /**< REG00 bit1: regulación térmica */
     axp_dir_t dir;
     axp_chg_stage_t stage;
+    bool charger_enabled;  /**< REG18 bit1 */
     bool vbat_adc_enabled;
     bool ts_adc_enabled;
     bool gauge_enabled;
@@ -90,13 +107,51 @@ typedef struct {
 
 void axp2101_decode(const axp2101_regs_t *r, axp2101_status_t *out);
 
-/** Estado de alimentación. */
+/* ---- Configuración del cargador (solo lectura, diagnóstico) ------------ */
+
+/** Registros de configuración leídos (nunca se escriben). */
+typedef struct {
+    uint8_t vindpm;     /* 0x15 */
+    uint8_t iin_lim;    /* 0x16 */
+    uint8_t gauge_ctrl; /* 0x18 */
+    uint8_t adc_ctrl;   /* 0x30 */
+    uint8_t ts_ctrl;    /* 0x50 */
+    uint8_t iprechg;    /* 0x61 */
+    uint8_t icc;        /* 0x62 */
+    uint8_t iterm;      /* 0x63 */
+    uint8_t cv;         /* 0x64 */
+    uint8_t bat_det;    /* 0x68 */
+} axp2101_cfg_regs_t;
+
+/** Configuración decodificada según las tablas del datasheet. -1 = reservado. */
+typedef struct {
+    int vindpm_mv;            /**< 3880 + 80*N */
+    int input_limit_ma;       /**< 100/500/900/1000/1500/2000 */
+    int precharge_ma;         /**< 25*N, N <= 8 */
+    int charge_ma;            /**< 25*N si N <= 8; 200 + 100*(N-8) si 8 < N <= 16 */
+    int term_ma;              /**< 25*N, N <= 8 */
+    bool term_enabled;
+    int cv_mv;                /**< 4000/4100/4200/4350/4400 */
+    bool charger_enabled;     /**< REG18 bit1 */
+    bool button_cell_charge;  /**< REG18 bit2 (pila de respaldo del RTC) */
+    bool gauge_enabled;       /**< REG18 bit3 */
+    bool vbat_adc_enabled;    /**< REG30 bit0 */
+    bool ts_adc_enabled;      /**< REG30 bit1 */
+    bool ts_affects_charger;  /**< REG50 bit4 == 0: el pin TS actúa como sensor de temperatura del cargador */
+    uint8_t ts_current_mode;  /**< REG50 [3:2]: 0 apagada, 1 con el canal TS, 2 solo midiendo TS, 3 siempre */
+    bool batt_detect_enabled; /**< REG68 bit0 */
+} axp2101_cfg_t;
+
+void axp2101_decode_cfg(const axp2101_cfg_regs_t *r, axp2101_cfg_t *out);
+
+/* ---- Estado de alimentación --------------------------------------------- */
+
 typedef enum {
     BATT_STATE_UNKNOWN = 0,   /**< sin lectura válida del chip */
     BATT_STATE_NO_BATTERY,    /**< el AXP2101 no detecta batería */
     BATT_STATE_DISCHARGING,   /**< funcionando con batería */
-    BATT_STATE_CHARGING,      /**< carga activa confirmada por el cargador */
-    BATT_STATE_FULL,          /**< el cargador indica carga terminada (VBUS presente) */
+    BATT_STATE_CHARGING,      /**< carga activa: corriente hacia la batería y etapa 0-3 */
+    BATT_STATE_FULL,          /**< el cargador indica carga terminada con VBUS presente */
     BATT_STATE_EXTERNAL_IDLE, /**< VBUS presente sin carga activa ni terminada */
 } batt_state_t;
 
@@ -120,8 +175,12 @@ typedef enum {
 /** Siguiente nivel con histéresis: empeorar es inmediato, mejorar exige el umbral de salida. */
 batt_level_t batt_level_next(batt_level_t cur, int pct);
 
-/** Muestras iguales seguidas necesarias para confirmar un cambio de estado. */
+/** Muestras iguales seguidas para confirmar un cambio de estado. */
 #define BATT_CONFIRM_SAMPLES 2
+/** Muestras seguidas para SALIR de "cargando": al final de la tensión
+ *  constante la corriente cae hacia cero y el sentido puede oscilar entre
+ *  carga y reposo; sin esta histéresis el estado parpadearía. */
+#define BATT_CHARGING_EXIT_SAMPLES 3
 
 /** Seguimiento filtrado entre muestras. */
 typedef struct {
@@ -131,6 +190,7 @@ typedef struct {
     int vbat_mv;              /**< VBAT filtrada (-1 = no disponible) */
     batt_level_t level;
     bool charging_started;    /**< true solo en la muestra que confirma CHARGING */
+    uint32_t charge_events;   /**< inicios de carga confirmados (para detectarlos aunque se sondee tarde) */
     uint32_t invalid_samples; /**< lecturas descartadas por implausibles */
 
     /* estado interno */

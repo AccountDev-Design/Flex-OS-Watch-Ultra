@@ -125,7 +125,7 @@ static void update_battery(void)
     const batt_level_t lv = have ? snap.track.level : BATT_LEVEL_UNKNOWN;
     const int pct = have ? snap.track.percent : -1;
     const int vbat = have ? snap.track.vbat_mv : -1;
-    const int vbus = have ? (int)snap.raw.vbus_in : -1;
+    const int vbus = have ? (int)snap.raw.vbus_present : -1;
 
     if (pct == s_home.last_pct && (int)st == s_home.last_state && (int)lv == s_home.last_level &&
         vbat == s_home.last_vbat && vbus == s_home.last_vbus) {

@@ -19,9 +19,10 @@ Detalles, archivos generados y avisos: [`Flex OS Ultra Watch/README.md`](Flex%20
 
 ## Estado
 
-- B1 "Arranque verificable": compilado, flasheado y con una prueba inicial correcta en el reloj (según el usuario).
-- Faltan los registros de las pruebas T1-T13.
-- Progreso y criterio de avance: [docs/PROGRESO.md](docs/PROGRESO.md)
+**Progreso global: 18 %**, del que un 7 % está verificado en el reloj.
+
+- Referencia única: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Ahí están el plan completo, los pesos, las decisiones pendientes y el historial.
+- En curso: B2-1, auditoría de batería ([docs/B2-ENERGIA.md](docs/B2-ENERGIA.md)).
 
 ## Estructura del repositorio
 
@@ -42,7 +43,8 @@ Ninguna escribe dentro de la carpeta del firmware.
 
 ## Documentación
 
+- [docs/ROADMAP.md](docs/ROADMAP.md): hoja de ruta y progreso global
+- [docs/B2-ENERGIA.md](docs/B2-ENERGIA.md): batería y energía (B2)
 - [docs/B1-ARRANQUE.md](docs/B1-ARRANQUE.md): contenido de B1, dependencias, pruebas físicas
 - [docs/FLASH-32MB.md](docs/FLASH-32MB.md): capacidad, acceso y tabla de particiones de 32 MB
-- [docs/PROGRESO.md](docs/PROGRESO.md): progreso
 - [docs/AUDITORIA-FASE0.md](docs/AUDITORIA-FASE0.md): auditoría inicial

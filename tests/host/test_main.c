@@ -25,9 +25,9 @@ static axp2101_regs_t regs_base(void)
     axp2101_regs_t r = {0};
     r.chip_id = 0x4A;
     r.status1 = 0x08;      /* bit3 batería */
-    r.status2 = 0x48;      /* dir=2 descarga, bit3=1 (sin VBUS), etapa 0 */
+    r.status2 = 0x40;      /* dir=2 descarga, sin VINDPM, etapa 0 */
     r.adc_ctrl = 0x01;     /* VBAT */
-    r.gauge_ctrl = 0x08;   /* gauge */
+    r.gauge_ctrl = 0x0A;   /* gauge (bit3) + cargador habilitado (bit1), valores de POR */
     r.vbat_h = 0x0F;       /* 0x0F<<8 | 0xA0 = 4000 mV */
     r.vbat_l = 0xA0;
     r.percent = 80;
@@ -48,27 +48,60 @@ static void test_decode(void)
     axp2101_decode(&r, &s);
     CHECK(s.chip_ok);
     CHECK(s.batt_present);
-    CHECK(s.vbus_good);
-    CHECK(s.vbus_in);
+    CHECK(s.vbus_present);
+    CHECK(!s.vindpm);
+    CHECK(s.charger_enabled);
     CHECK_EQ(s.dir, AXP_DIR_CHARGE);
     CHECK_EQ(s.stage, AXP_CHG_CC);
     CHECK_EQ(s.vbat_mv, 4122);
     CHECK_EQ(s.percent, 85);
     CHECK_EQ(batt_classify(&s), BATT_STATE_CHARGING);
 
-    /* Los 3 bits altos de 0x34 no forman parte de VBAT */
-    r.vbat_h = 0xE0 | 0x0F;
+    /* 0x34 [7:6] son bits de depuración (ch_dbg_en), no VBAT */
+    r.vbat_h = 0xC0 | 0x0F;
     r.vbat_l = 0xA0;
     axp2101_decode(&r, &s);
     CHECK_EQ(s.vbat_mv, 4000);
+    /* VBAT es de 14 bits: 0x34 bit5 = 8192 mV (fuera de rango para una LiPo) */
+    r.vbat_h = 0x20 | 0x0F;
+    axp2101_decode(&r, &s);
+    CHECK_EQ(s.vbat_mv, -1);
 
-    /* VBUS correcto pero bit3 de STATUS2 a 1: no cuenta como conectado */
+    /* Datasheet: REG01 bit3 es VINDPM, NO "sin USB". USB presente = VBUS good. */
     r = regs_base();
     r.status1 = 0x28;
     r.status2 = 0x08 | 0x05;
     axp2101_decode(&r, &s);
-    CHECK(s.vbus_good);
-    CHECK(!s.vbus_in);
+    CHECK(s.vbus_present);
+    CHECK(s.vindpm);
+    CHECK_EQ(batt_classify(&s), BATT_STATE_EXTERNAL_IDLE);
+
+    /* Cargando con la entrada en VINDPM: sigue siendo carga activa */
+    r.status2 = 0x20 | 0x08 | 0x02;
+    axp2101_decode(&r, &s);
+    CHECK(s.vindpm);
+    CHECK_EQ(batt_classify(&s), BATT_STATE_CHARGING);
+
+    /* REG01 bit7 reservado: no altera el sentido de la corriente */
+    r.status2 = 0x80 | 0x20 | 0x02;
+    axp2101_decode(&r, &s);
+    CHECK_EQ(s.dir, AXP_DIR_CHARGE);
+    /* Sentido 11 (reservado) -> OTHER, nunca "cargando" */
+    r.status2 = 0x60 | 0x02;
+    axp2101_decode(&r, &s);
+    CHECK_EQ(s.dir, AXP_DIR_OTHER);
+    CHECK_EQ(batt_classify(&s), BATT_STATE_EXTERNAL_IDLE);
+
+    /* Banderas de REG00 */
+    r = regs_base();
+    r.status1 = 0x08 | 0x02 | 0x01;
+    axp2101_decode(&r, &s);
+    CHECK(s.thermal_reg);
+    CHECK(s.input_limited);
+    /* Cargador deshabilitado en REG18 bit1 */
+    r.gauge_ctrl = 0x08;
+    axp2101_decode(&r, &s);
+    CHECK(!s.charger_enabled);
 
     /* ADC de VBAT apagado -> VBAT no disponible (no se activa: solo lectura) */
     r = regs_base();
@@ -145,7 +178,7 @@ static void test_classify(void)
 
     /* Sin VBUS y en reposo -> descarga (la batería alimenta el sistema) */
     r.status1 = 0x08;
-    r.status2 = 0x08;
+    r.status2 = 0x00;
     axp2101_decode(&r, &s);
     CHECK_EQ(batt_classify(&s), BATT_STATE_DISCHARGING);
 }
@@ -235,6 +268,159 @@ static void test_tracker(void)
     CHECK_EQ(f.level, BATT_LEVEL_UNKNOWN);
 }
 
+
+static void test_cfg_decode(void)
+{
+    /* Valores por defecto (POR) del datasheet */
+    axp2101_cfg_regs_t r = {0};
+    r.vindpm = 0x06;
+    r.iin_lim = 0x04;
+    r.gauge_ctrl = 0x0A;
+    r.adc_ctrl = 0x03;
+    r.ts_ctrl = 0x02;
+    r.iprechg = 0x05;
+    r.icc = 0x0A;
+    r.iterm = 0x15;
+    r.cv = 0x03;
+    r.bat_det = 0x01;
+    axp2101_cfg_t c;
+    axp2101_decode_cfg(&r, &c);
+    CHECK_EQ(c.vindpm_mv, 4360);
+    CHECK_EQ(c.input_limit_ma, 1500);
+    CHECK_EQ(c.precharge_ma, 125);
+    CHECK_EQ(c.charge_ma, 400);
+    CHECK_EQ(c.term_ma, 125);
+    CHECK(c.term_enabled);
+    CHECK_EQ(c.cv_mv, 4200);
+    CHECK(c.charger_enabled);
+    CHECK(c.gauge_enabled);
+    CHECK(!c.button_cell_charge);
+    CHECK(c.vbat_adc_enabled);
+    CHECK(c.ts_adc_enabled);
+    CHECK(c.ts_affects_charger);
+    CHECK_EQ(c.ts_current_mode, 0);
+    CHECK(c.batt_detect_enabled);
+
+    /* Tabla de ICC (REG62): 25*N hasta 200 mA, luego +100 mA por paso */
+    const struct { uint8_t raw; int ma; } icc[] = {
+        {0x00, 0}, {0x04, 100}, {0x08, 200}, {0x09, 300}, {0x0A, 400},
+        {0x0B, 500}, {0x10, 1000}, {0x11, -1}, {0xE9, 300},
+    };
+    for (size_t i = 0; i < sizeof(icc) / sizeof(icc[0]); i++) {
+        r.icc = icc[i].raw;
+        axp2101_decode_cfg(&r, &c);
+        CHECK_EQ(c.charge_ma, icc[i].ma);
+    }
+    /* CV (REG64): 000 y 11x reservados */
+    const struct { uint8_t raw; int mv; } cv[] = {
+        {0x00, -1}, {0x01, 4000}, {0x02, 4100}, {0x04, 4350}, {0x05, 4400}, {0x06, -1}, {0x07, -1},
+    };
+    for (size_t i = 0; i < sizeof(cv) / sizeof(cv[0]); i++) {
+        r.cv = cv[i].raw;
+        axp2101_decode_cfg(&r, &c);
+        CHECK_EQ(c.cv_mv, cv[i].mv);
+    }
+    /* Límite de entrada (REG16): 110/111 reservados; VINDPM 3.88 V + 80 mV*N */
+    r.iin_lim = 0x06;
+    r.vindpm = 0x0F;
+    r.iterm = 0x0F;      /* N=15 reservado, terminación desactivada */
+    r.iprechg = 0x09;    /* reservado */
+    r.ts_ctrl = 0x10 | 0x0C;  /* TS no afecta al cargador, fuente siempre encendida */
+    r.gauge_ctrl = 0x04; /* solo la carga de la pila de botón */
+    axp2101_decode_cfg(&r, &c);
+    CHECK_EQ(c.input_limit_ma, -1);
+    CHECK_EQ(c.vindpm_mv, 5080);
+    CHECK_EQ(c.term_ma, -1);
+    CHECK(!c.term_enabled);
+    CHECK_EQ(c.precharge_ma, -1);
+    CHECK(!c.ts_affects_charger);
+    CHECK_EQ(c.ts_current_mode, 3);
+    CHECK(!c.charger_enabled);
+    CHECK(c.button_cell_charge);
+    CHECK(!c.gauge_enabled);
+}
+
+/* Muestras: D descarga, C cargando (CC), E USB sin carga activa, F carga terminada */
+static axp2101_regs_t mk(char kind, int pct)
+{
+    axp2101_regs_t r = regs_base();
+    r.percent = (uint8_t)pct;
+    switch (kind) {
+    case 'C': r.status1 = 0x28; r.status2 = 0x22; break;
+    case 'V': r.status1 = 0x28; r.status2 = 0x23; break; /* tensión constante */
+    case 'E': r.status1 = 0x28; r.status2 = 0x03; break; /* CV con corriente ~0: sentido "reposo" */
+    case 'F': r.status1 = 0x28; r.status2 = 0x04; break;
+    default:  r.status1 = 0x08; r.status2 = 0x40; break;
+    }
+    return r;
+}
+
+static void test_transitions(void)
+{
+    batt_tracker_t t;
+    batt_tracker_init(&t);
+    feed(&t, mk('D', 50));
+    feed(&t, mk('D', 50));
+    CHECK_EQ(t.state, BATT_STATE_DISCHARGING);
+    CHECK_EQ(t.charge_events, 0);
+
+    /* Enchufar: confirmado en la 2.ª muestra, un solo evento */
+    feed(&t, mk('C', 50));
+    feed(&t, mk('C', 51));
+    CHECK_EQ(t.state, BATT_STATE_CHARGING);
+    CHECK_EQ(t.charge_events, 1);
+
+    /* Final de la tensión constante: el sentido oscila entre carga y reposo.
+     * Con menos de 3 muestras seguidas de "reposo" NO se sale de "cargando",
+     * y por tanto no se repite el evento de inicio de carga. */
+    const char flicker[] = "VEVEEVEEV";
+    for (const char *k = flicker; *k; k++) {
+        feed(&t, mk(*k, 97));
+        CHECK_EQ(t.state, BATT_STATE_CHARGING);
+    }
+    CHECK_EQ(t.charge_events, 1);
+    /* 3 seguidas: ahora sí, "externa sin carga" */
+    feed(&t, mk('E', 98));
+    feed(&t, mk('E', 98));
+    CHECK_EQ(t.state, BATT_STATE_CHARGING);
+    feed(&t, mk('E', 98));
+    CHECK_EQ(t.state, BATT_STATE_EXTERNAL_IDLE);
+    CHECK_EQ(t.percent, 98);
+
+    /* El cargador indica terminada -> "carga completa" con 2 muestras */
+    feed(&t, mk('F', 99));
+    feed(&t, mk('F', 100));
+    CHECK_EQ(t.state, BATT_STATE_FULL);
+    CHECK_EQ(t.percent, 100);
+    CHECK_EQ(t.charge_events, 1);
+
+    /* Desenchufar: inequívoco (sin VBUS), 2 muestras; el % se toma de nuevo */
+    feed(&t, mk('D', 98));
+    feed(&t, mk('D', 98));
+    CHECK_EQ(t.state, BATT_STATE_DISCHARGING);
+    CHECK_EQ(t.percent, 98);
+    feed(&t, mk('D', 99));   /* en descarga no sube */
+    CHECK_EQ(t.percent, 98);
+
+    /* De "cargando" a desenchufado: 2 muestras, no 3 */
+    feed(&t, mk('C', 90));
+    feed(&t, mk('C', 90));
+    CHECK_EQ(t.state, BATT_STATE_CHARGING);
+    CHECK_EQ(t.charge_events, 2);
+    feed(&t, mk('D', 90));
+    feed(&t, mk('D', 90));
+    CHECK_EQ(t.state, BATT_STATE_DISCHARGING);
+
+    /* "Cargando" -> "carga completa" directo también con 2 muestras */
+    feed(&t, mk('C', 99));
+    feed(&t, mk('C', 99));
+    CHECK_EQ(t.charge_events, 3);
+    feed(&t, mk('F', 100));
+    feed(&t, mk('F', 100));
+    CHECK_EQ(t.state, BATT_STATE_FULL);
+    CHECK_EQ(t.charge_events, 3);
+}
+
 static void test_levels(void)
 {
     batt_level_t l = BATT_LEVEL_UNKNOWN;
@@ -313,6 +499,8 @@ int main(void)
     test_classify();
     test_tracker();
     test_levels();
+    test_cfg_decode();
+    test_transitions();
     test_flash_probe();
     test_glass();
     test_wallpaper();

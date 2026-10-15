@@ -166,7 +166,7 @@ Cada fase cuenta el **50 % al compilar y pasar las pruebas de PC**, y el **100 %
 | F6 Navegador remoto (FBP/1) | 8 | 0 |
 | F7 OTA firmado + rollback | 7 | 0 |
 | F8 Account/Cloud opcional, consumo y estabilidad | 10 | 0 |
-| **Global** | 100 | **4 %** (estado vigente en `docs/PROGRESO.md`) |
+| **Global** | 100 | **4 %** (estado vigente en `docs/ROADMAP.md`) |
 
 ## 8. Próximo bloque: B1 "Arranque verificable"
 

@@ -28,6 +28,29 @@ En VS Code, abre **esta carpeta** como espacio de trabajo (no la raíz del repos
 >
 > Si aparece un error de rutas, renombra la carpeta sin espacios (por ejemplo `git mv "Flex OS Ultra Watch" Flex-OS-Ultra-Watch`) y avísame. El proyecto no depende del nombre de la carpeta.
 
+## `dependencies.lock`: conservar la resolución que funciona
+
+Comprobado en el código del gestor de componentes de ESP-IDF 5.5.5 (`idf_component_manager/dependencies.py:121-181`) y con una prueba real:
+- **Mover el proyecto de carpeta no invalida el *lock*.** El `manifest_hash` depende del contenido de los `idf_component.yml`, no de la ruta. Un proyecto movido con su *lock* lo conserva byte a byte.
+- Solo se vuelven a resolver las dependencias si cambia un `idf_component.yml`, el *target*, la versión de IDF o las dependencias directas.
+- **Nunca** ejecutes `idf.py update-dependencies` (fuerza la resolución).
+
+Si compilaste B1 en la raíz del repositorio antes de la reorganización, **identifica antes de borrar nada**. Desde la raíz:
+
+```bash
+git status --short --ignored
+# Restos del proyecto anterior en la raíz: dependencies.lock, build/, managed_components/, sdkconfig
+# Del proyecto actual: los mismos nombres dentro de "Flex OS Ultra Watch/"
+```
+
+1. **Solo existe `./dependencies.lock`:** muévelo (no lo copies) a `Flex OS Ultra Watch/` antes de compilar allí.
+2. **Existen los dos:** compáralos con `git diff --no-index dependencies.lock "Flex OS Ultra Watch/dependencies.lock"`.
+   - Si no hay salida, son idénticos: conserva el de la carpeta.
+   - Si difieren, conserva el que corresponde a la compilación que flasheaste por última vez (mira la fecha de cada `build/flex_os_watch_ultra.bin`). Renombra el otro a `dependencies.lock.b1-raiz` y envíame los dos.
+3. Sube `Flex OS Ultra Watch/dependencies.lock` al repositorio.
+4. **`sdkconfig`:** si nunca usaste `menuconfig`, los dos salen de `sdkconfig.defaults`; compruébalo con `git diff --no-index`.
+5. **`build/` y `managed_components/` de la raíz:** se regeneran solos. Bórralos solo **después** de compilar y flashear correctamente desde la carpeta nueva.
+
 ## Qué produce la compilación (`build/`)
 
 | Archivo | Qué es | Offset |

@@ -11,22 +11,25 @@ void axp2101_decode(const axp2101_regs_t *r, axp2101_status_t *out)
     memset(out, 0, sizeof(*out));
     out->chip_ok = (r->chip_id == AXP2101_CHIP_ID_VALUE);
     out->batt_present = (r->status1 >> 3) & 1;
-    out->vbus_good = (r->status1 >> 5) & 1;
-    out->vbus_in = out->vbus_good && (((r->status2 >> 3) & 1) == 0);
+    out->vbus_present = (r->status1 >> 5) & 1;
+    out->thermal_reg = (r->status1 >> 1) & 1;
+    out->input_limited = r->status1 & 1;
+    out->vindpm = (r->status2 >> 3) & 1;
 
-    const uint8_t dir = (r->status2 >> 5) & 0x07;
-    out->dir = (dir <= AXP_DIR_DISCHARGE) ? (axp_dir_t)dir : AXP_DIR_OTHER;
+    /* [6:5]; el bit 7 está reservado */
+    out->dir = (axp_dir_t)((r->status2 >> 5) & 0x03);
 
     const uint8_t stage = r->status2 & 0x07;
     out->stage = (stage <= AXP_CHG_STOPPED) ? (axp_chg_stage_t)stage : AXP_CHG_UNKNOWN;
 
+    out->charger_enabled = (r->gauge_ctrl >> 1) & 1;
+    out->gauge_enabled = (r->gauge_ctrl >> 3) & 1;
     out->vbat_adc_enabled = r->adc_ctrl & 0x01;
     out->ts_adc_enabled = (r->adc_ctrl >> 1) & 1;
-    out->gauge_enabled = (r->gauge_ctrl >> 3) & 1;
 
     out->vbat_mv = -1;
     if (out->batt_present && out->vbat_adc_enabled) {
-        const int mv = ((r->vbat_h & 0x1F) << 8) | r->vbat_l;
+        const int mv = ((r->vbat_h & 0x3F) << 8) | r->vbat_l;
         if (mv >= BATT_VBAT_MIN_MV && mv <= BATT_VBAT_MAX_MV) {
             out->vbat_mv = mv;
         }
@@ -36,6 +39,42 @@ void axp2101_decode(const axp2101_regs_t *r, axp2101_status_t *out)
     if (out->batt_present && out->gauge_enabled && r->percent <= 100) {
         out->percent = r->percent;
     }
+}
+
+void axp2101_decode_cfg(const axp2101_cfg_regs_t *r, axp2101_cfg_t *out)
+{
+    static const int kIinLimMa[8] = {100, 500, 900, 1000, 1500, 2000, -1, -1};
+    static const int kCvMv[8] = {-1, 4000, 4100, 4200, 4350, 4400, -1, -1};
+
+    memset(out, 0, sizeof(*out));
+    out->vindpm_mv = 3880 + 80 * (r->vindpm & 0x0F);
+    out->input_limit_ma = kIinLimMa[r->iin_lim & 0x07];
+
+    const int pre = r->iprechg & 0x0F;
+    out->precharge_ma = (pre <= 8) ? 25 * pre : -1;
+
+    const int icc = r->icc & 0x1F;
+    if (icc <= 8) {
+        out->charge_ma = 25 * icc;
+    } else if (icc <= 16) {
+        out->charge_ma = 200 + 100 * (icc - 8);
+    } else {
+        out->charge_ma = -1;
+    }
+
+    const int term = r->iterm & 0x0F;
+    out->term_ma = (term <= 8) ? 25 * term : -1;
+    out->term_enabled = (r->iterm >> 4) & 1;
+    out->cv_mv = kCvMv[r->cv & 0x07];
+
+    out->charger_enabled = (r->gauge_ctrl >> 1) & 1;
+    out->button_cell_charge = (r->gauge_ctrl >> 2) & 1;
+    out->gauge_enabled = (r->gauge_ctrl >> 3) & 1;
+    out->vbat_adc_enabled = r->adc_ctrl & 1;
+    out->ts_adc_enabled = (r->adc_ctrl >> 1) & 1;
+    out->ts_affects_charger = ((r->ts_ctrl >> 4) & 1) == 0;
+    out->ts_current_mode = (r->ts_ctrl >> 2) & 0x03;
+    out->batt_detect_enabled = r->bat_det & 1;
 }
 
 batt_state_t batt_classify(const axp2101_status_t *s)
@@ -50,10 +89,10 @@ batt_state_t batt_classify(const axp2101_status_t *s)
     if (charging) {
         return BATT_STATE_CHARGING;
     }
-    if (s->vbus_in && s->stage == AXP_CHG_DONE) {
+    if (s->vbus_present && s->stage == AXP_CHG_DONE) {
         return BATT_STATE_FULL;
     }
-    if (s->vbus_in) {
+    if (s->vbus_present) {
         return BATT_STATE_EXTERNAL_IDLE;
     }
     return BATT_STATE_DISCHARGING;
@@ -121,23 +160,35 @@ batt_level_t batt_level_next(batt_level_t cur, int pct)
     }
 }
 
+/* Muestras seguidas que exige el paso from -> to. Solo el final de carga con
+ * el USB todavía conectado (cargando -> externa sin carga) es ambiguo; al
+ * desenchufar, la falta de VBUS es inequívoca y basta la confirmación normal. */
+static uint8_t samples_needed(batt_state_t from, batt_state_t to)
+{
+    if (from == BATT_STATE_CHARGING && to == BATT_STATE_EXTERNAL_IDLE) {
+        return BATT_CHARGING_EXIT_SAMPLES;
+    }
+    return BATT_CONFIRM_SAMPLES;
+}
+
 void batt_tracker_update(batt_tracker_t *t, const axp2101_status_t *s, bool read_ok)
 {
     t->charging_started = false;
 
     batt_state_t raw = read_ok ? batt_classify(s) : BATT_STATE_UNKNOWN;
 
-    /* Confirmación: un cambio de estado necesita BATT_CONFIRM_SAMPLES iguales. */
+    /* Confirmación: un cambio de estado necesita N muestras iguales seguidas. */
     if (raw == t->state) {
         t->pending = raw;
         t->pending_count = 0;
     } else if (raw == t->pending) {
-        if (++t->pending_count >= BATT_CONFIRM_SAMPLES - 1) {
+        if (++t->pending_count >= samples_needed(t->state, raw) - 1) {
             const batt_state_t prev = t->state;
             t->state = raw;
             t->pending_count = 0;
             if (raw == BATT_STATE_CHARGING && prev != BATT_STATE_CHARGING) {
                 t->charging_started = true;
+                t->charge_events++;
             }
             /* Cambio de fase (p. ej. se desenchufa): el % se vuelve a tomar
              * de la lectura actual, sin arrastrar el filtro anterior. */
