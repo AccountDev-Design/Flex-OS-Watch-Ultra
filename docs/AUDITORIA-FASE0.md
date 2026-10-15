@@ -142,7 +142,7 @@ El P4 Arduino **no usa LVGL**: tiene un motor gráfico propio. Toda la interfaz 
 
 ## 6. Riesgos y datos sin verificar
 
-1. **Flash de 32 MB**: los ejemplos oficiales usan 16 MB, y en el S3 más de 16 MB es experimental en ESP-IDF. Empezar con 16 MB como el oficial.
+1. **Flash de 32 MB**: los ejemplos oficiales usan 16 MB. *Actualizado en B1:* ESP-IDF 5.5.5 admite datos por encima de 16 MB en el GD25Q256 (solo la ejecución por encima de 16 MB es experimental), así que se declaran 32 MB. Ver `docs/FLASH-32MB.md`.
 2. **Batería**: falta la capacidad, saber si hay NTC (el código oficial indica que no) y la precisión del *fuel gauge* sin calibrar.
 3. **Rieles**: qué riel alimenta la pantalla (DSI_PWR_EN), el GPIO del motor, el comportamiento del PWR/GPIO10 y si hay reserva del RTC.
 4. **Versiones**: la ESP-IDF y la LVGL locales del usuario son desconocidas; el repositorio oficial es incoherente (9.5.0 frente a 9.2.0 en el lock).
@@ -166,7 +166,7 @@ Cada fase cuenta el **50 % al compilar y pasar las pruebas de PC**, y el **100 %
 | F6 Navegador remoto (FBP/1) | 8 | 0 |
 | F7 OTA firmado + rollback | 7 | 0 |
 | F8 Account/Cloud opcional, consumo y estabilidad | 10 | 0 |
-| **Global** | 100 | **4 %** |
+| **Global** | 100 | **4 %** (estado vigente en `docs/PROGRESO.md`) |
 
 ## 8. Próximo bloque: B1 "Arranque verificable"
 
