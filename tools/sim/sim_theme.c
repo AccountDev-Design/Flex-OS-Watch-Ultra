@@ -196,6 +196,7 @@ static void check_leaks(void)
         sim_run(40);
     }
     const size_t before = sim_mem_used();
+    const uint32_t blocks = sim_mem_blocks();
     for (int i = 0; i < 20; i++) {
         lv_obj_t *scr = build_components();
         lv_screen_load(scr);
@@ -205,8 +206,10 @@ static void check_leaks(void)
         sim_run(40);
     }
     const size_t after = sim_mem_used();
-    EXPECT(after == before, "fuga: %zu B antes, %zu B despues de 20 ciclos", before, after);
-    printf("componentes: memoria LVGL %zu B -> %zu B tras 20 ciclos\n", before, after);
+    EXPECT(sim_mem_blocks() == blocks, "fuga: %u bloques antes, %u despues de 20 ciclos", (unsigned)blocks,
+           (unsigned)sim_mem_blocks());
+    printf("componentes: %u -> %u bloques de LVGL (%zu B -> %zu B) tras 20 ciclos\n", (unsigned)blocks,
+           (unsigned)sim_mem_blocks(), before, after);
     lv_screen_load(s_orig);
     lv_obj_delete(base);
 }

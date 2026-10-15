@@ -8,6 +8,7 @@
 #include "lvgl.h"
 #include "battery_alerts.h"
 #include "watch_power.h"
+#include "watch_ui.h"
 
 /* ---- ui_system: sondeo único del servicio de batería y capas globales ---- */
 
@@ -28,3 +29,14 @@ bool ui_charge_anim_active(void);
 /** Muestra el aviso de batería baja o crítica (o lo actualiza si ya se ve). */
 void ui_banner_show_battery(batt_alert_t alert, int percent);
 bool ui_banner_active(void);
+
+/* ---- Pantallas ---- */
+
+/** Datos del arranque (táctil, batería, flash) guardados por watch_ui_home_create(). */
+const watch_ui_boot_info_t *ui_boot_info(void);
+
+/** Esfera: hora, fecha y batería. Devuelve la pantalla sin cargarla. */
+lv_obj_t *ui_face_create(void);
+
+/** Diagnóstico (antigua pantalla de inicio de B1). NULL si ya existe una. */
+lv_obj_t *ui_diag_create(void);

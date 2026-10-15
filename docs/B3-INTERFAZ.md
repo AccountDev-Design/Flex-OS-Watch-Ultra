@@ -8,7 +8,7 @@ físicas de la tabla final.
 | Bloque | Contenido | Estado |
 |---|---|---|
 | **B3-1** | Identidad consolidada: 9 iconos vectoriales nuevos, estados de los controles de vidrio (pulsado, activo, no disponible), cabecera estándar, lista y fila de Ajustes | implementado · compilado · pruebas en la vista previa · prueba física pendiente |
-| **B3-2** | Servicio de hora en solo lectura (RTC PCF85063) y esfera del reloj | servicio: implementado · compilado · pruebas en PC · prueba física pendiente. Esfera: en curso |
+| **B3-2** | Servicio de hora en solo lectura (RTC PCF85063) y esfera del reloj | implementado · compilado · pruebas en PC y en la vista previa · prueba física pendiente |
 | B3-3 | Navegación: pila de pantallas, transiciones 210/190 ms, volver, gestos | pendiente |
 | B3-4 | Panel rápido (solo controles con función real) | pendiente |
 | B3-5 | Ajustes: Pantalla, Batería, Diagnóstico, Acerca de | pendiente |
@@ -109,3 +109,41 @@ Los componentes aparecerán en pantalla con B3-4 y B3-5. Estas pruebas se harán
 |---|---|---|---|
 | T26 | Lectura del RTC | arrancar con el monitor serie | Una línea `watch_time: RTC aaaa-mm-dd hh:mm:ss (ok)`, o `RTC sin hora fiable: …` más los registros en crudo. Cualquiera de las dos es válida; **envía el registro** |
 | T27 | Deriva | si T26 dio una hora válida, compararla con un reloj de referencia al arrancar y 15 min después | Diferencia ≤ 2 s entre ambas comparaciones |
+
+### Esfera
+
+#### Criterios de aceptación
+
+| # | Criterio | Cómo se comprueba |
+|---|---|---|
+| E1 | Hora y fecha reales del servicio: "9:41" (24 h) y "Jueves, 15 de octubre" | `tests/host` y vista previa |
+| E2 | Batería real (caché de `ui_system`): indicador, % y estado | vista previa |
+| E3 | Sin hora fiable: "--:--" más el motivo ("Leyendo la hora…", "Hora sin configurar" o "Reloj RTC no disponible"); sin datos de batería, "--" y "Sin datos". Nunca un valor inventado | `tests/host` y vista previa, los 3 estados |
+| E4 | Eficiente: temporizador de 1 s ligado a la pantalla. Solo reescribe la hora al cambiar el minuto, la fecha al cambiar el día y la batería al cambiar su estado | la vista previa no envía **nada** a la pantalla durante 50 s del mismo minuto |
+| E5 | Minuto y día avanzan, incluida la medianoche | vista previa: 9:41 → 9:42; 23:59:58 → 0:00 del viernes 16 |
+| E6 | Crear y borrar la esfera no deja temporizadores ni memoria | 20 ciclos: mismos temporizadores y mismos bloques de LVGL |
+| E7 | Geometría del panel real de 410×502 | vista previa |
+
+#### Cambios en la interfaz
+
+- **Pantalla de inicio:** ahora es la esfera.
+- **Diagnóstico de B1:** batería con VBAT y USB, flash, memoria, coordenadas del táctil y el marco de 1 px de la prueba T2.
+  - Pasa a una pantalla de diagnóstico (`ui_diag.c`) con su temporizador ligado a la pantalla.
+  - Será accesible desde Ajustes en B3-5. Hasta entonces, T2 y T3 no se pueden repetir con este firmware.
+
+#### Comprobado en el PC (esfera)
+
+- **`tests/host`:** 482 comprobaciones, 0 fallos (+23 de los textos de la esfera).
+- **`tools/sim`:** esfera con hora válida, reposo, avance de minuto y de día, tres estados sin hora, batería sin datos y ciclo de vida: 0 fallos.
+  - Memoria: 164 → 164 bloques de LVGL.
+  - Vistas previas: `docs/img/f3_esfera.png` y `f3_esfera_sin_hora.png`.
+- **Firmware completo:** sin avisos.
+  - App: 862 240 B. Crece unos 31 KB porque la esfera usa ya la fuente Outfit de 28 px.
+  - DIRAM: 86 831 B.
+
+#### Pruebas en el reloj (pendientes)
+
+| # | Prueba | Cómo | Resultado esperado |
+|---|---|---|---|
+| T28 | Esfera con hora | arrancar | La hora y la fecha coinciden con la línea `watch_time: RTC …` de T26, el día de la semana es correcto y la batería coincide con el registro de `watch_power`. Si T26 dio "sin hora fiable", se ve "--:--" y "Hora sin configurar" |
+| T29 | Cambio de minuto | mirar la esfera al cambiar el minuto | Cambia como mucho ~2 s después que el reloj de referencia, sin parpadeos del resto de la pantalla |

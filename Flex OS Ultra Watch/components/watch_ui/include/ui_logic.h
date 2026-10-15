@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include "battery_model.h"
 #include "flex_batt_style.h"
+#include "watch_time_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,6 +35,21 @@ typedef struct {
 void ui_charge_gate_init(ui_charge_gate_t *g);
 bool ui_charge_gate_update(ui_charge_gate_t *g, uint32_t charge_events, batt_state_t prev_state,
                            batt_state_t state);
+
+/**
+ * Textos de la esfera. Con hora válida: "9:05" y "Jueves, 15 de octubre".
+ * Sin ella, "--:--" y el motivo (nunca una hora inventada). key cambia solo
+ * cuando cambia lo que hay que pintar (minuto, día o estado), para no
+ * reescribir las etiquetas cada segundo.
+ */
+typedef struct {
+    bool valid;
+    int64_t key;
+    char time[8];
+    char date[40];
+} ui_face_time_t;
+
+void ui_face_time(watch_time_state_t state, const wt_datetime_t *dt, ui_face_time_t *out);
 
 #ifdef __cplusplus
 }

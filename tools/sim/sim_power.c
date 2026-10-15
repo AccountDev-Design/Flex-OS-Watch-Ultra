@@ -16,6 +16,7 @@ void sim_suite_power(const char *out)
     boot.flash.configured_size = 32u * 1024 * 1024;
     boot.flash.verdict = FLASH_PROBE_UPPER_DISTINCT;
 
+    sim_set_time(WATCH_TIME_OK, 2026, 10, 15, 9, 41, 0);
     sim_scenario(84, 4085, BATT_STATE_DISCHARGING, BATT_LEVEL_NORMAL, false);
     watch_ui_home_create(&boot);
     sim_run(1200);

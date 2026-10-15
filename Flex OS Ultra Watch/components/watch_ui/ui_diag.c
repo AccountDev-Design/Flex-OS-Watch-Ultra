@@ -1,9 +1,11 @@
 /*
- * watch_home — pantalla de inicio de B1. Ver include/watch_ui.h
+ * ui_diag — pantalla de diagnóstico (la pantalla de inicio de B1): batería
+ * con VBAT y USB, flash, memoria, coordenadas del táctil y un marco de 1 px
+ * en el borde exacto del panel (prueba T2).
  *
- * Todo se ejecuta en la tarea de LVGL (creación con el bloqueo tomado y
- * actualización en un lv_timer). Los datos de batería se copian de la
- * instantánea de watch_power, que nunca espera al bus I2C.
+ * Todo se ejecuta en la tarea de LVGL. Los datos de batería se copian de la
+ * caché de ui_system, que nunca espera al bus I2C. El temporizador se borra
+ * con la pantalla.
  */
 #include "watch_ui.h"
 
@@ -33,7 +35,6 @@
 typedef struct {
     lv_obj_t *status_pct;
     lv_obj_t *batt_icon;
-    lv_obj_t *clock;
     lv_obj_t *batt_pct;
     lv_obj_t *batt_state;
     lv_obj_t *batt_detail;
@@ -47,6 +48,7 @@ typedef struct {
     bool power_ok;
     watch_flash_report_t flash;
     uint32_t ticks;
+    lv_timer_t *timer;
     /* último estado pintado, para no reescribir etiquetas sin cambios */
     int last_pct;
     int last_state;
@@ -158,6 +160,13 @@ static void refresh_cb(lv_timer_t *t)
     }
 }
 
+static void delete_cb(lv_event_t *e)
+{
+    (void)e;
+    lv_timer_delete(s_home.timer);
+    s_home.timer = NULL;
+}
+
 static void touch_cb(lv_event_t *e)
 {
     const lv_event_code_t code = lv_event_get_code(e);
@@ -179,8 +188,12 @@ static void touch_cb(lv_event_t *e)
     }
 }
 
-void watch_ui_home_create(const watch_ui_boot_info_t *info)
+lv_obj_t *ui_diag_create(void)
 {
+    const watch_ui_boot_info_t *info = ui_boot_info();
+    if (s_home.timer) {
+        return NULL; /* ya existe una: la navegación no debe crear dos */
+    }
     memset(&s_home, 0, sizeof(s_home));
     s_home.touch_ok = info->touch_ok;
     s_home.power_ok = info->power_ok;
@@ -189,7 +202,6 @@ void watch_ui_home_create(const watch_ui_boot_info_t *info)
     s_home.last_state = -1;
 
     watch_theme_init();
-    ui_system_start(info->power_ok);
 
     lv_obj_t *scr = lv_obj_create(NULL);
     lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
@@ -214,11 +226,8 @@ void watch_ui_home_create(const watch_ui_boot_info_t *info)
     s_home.status_pct = watch_theme_label(scr, FLEX_FONT_SMALL, FLEX_C_TXT, "--");
     lv_obj_align(s_home.status_pct, LV_ALIGN_TOP_RIGHT, -(FLEX_SAFE_X + ICON_W + 3 + 8), FLEX_SAFE_TOP + 2);
 
-    /* Esfera: sin RTC en B1 no hay hora real que mostrar. */
-    s_home.clock = watch_theme_label(scr, FLEX_FONT_CLOCK, FLEX_C_TXT, "--:--");
-    lv_obj_align(s_home.clock, LV_ALIGN_TOP_MID, 0, 36);
-    lv_obj_t *sub = watch_theme_label(scr, FLEX_FONT_SMALL, FLEX_C_MUTE, "Hora sin sincronizar");
-    lv_obj_align(sub, LV_ALIGN_TOP_MID, 0, 150);
+    lv_obj_t *title = watch_theme_label(scr, FLEX_FONT_TITLE, FLEX_C_TXT, "Diagnóstico");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 96);
 
     /* Tarjeta de batería */
     lv_obj_t *bc = watch_theme_glass_card(scr, CARD_X, BATT_CARD_Y, CARD_W, BATT_CARD_H);
@@ -261,9 +270,10 @@ void watch_ui_home_create(const watch_ui_boot_info_t *info)
     lv_obj_add_event_cb(scr, touch_cb, LV_EVENT_RELEASED, NULL);
     lv_obj_add_event_cb(scr, touch_cb, LV_EVENT_PRESS_LOST, NULL);
 
+    lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
+
     update_battery();
     update_system();
-    lv_timer_create(refresh_cb, REFRESH_MS, NULL);
-
-    lv_screen_load(scr);
+    s_home.timer = lv_timer_create(refresh_cb, REFRESH_MS, NULL);
+    return scr;
 }

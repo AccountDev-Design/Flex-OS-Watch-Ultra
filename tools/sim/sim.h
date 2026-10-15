@@ -8,6 +8,7 @@
 #include "lvgl.h"
 #include "flex_tokens.h"
 #include "watch_power.h"
+#include "watch_time_types.h"
 
 #define SIM_W FLEX_SCREEN_W
 #define SIM_H FLEX_SCREEN_H
@@ -40,9 +41,25 @@ void sim_tap(int32_t x, int32_t y);
 /** Escenario de batería que devolverá watch_power_get(). */
 void sim_scenario(int pct, int mv, batt_state_t st, batt_level_t lv, bool vbus);
 
-/** Memoria de LVGL en uso (asignador propio del simulador). */
+/** Hora que devolverá watch_time_now(): avanza con el reloj simulado. */
+void sim_set_time(watch_time_state_t st, int y, int mo, int d, int h, int mi, int s);
+
+/** Veces que LVGL ha enviado algo a la pantalla (para comprobar el reposo). */
+uint32_t sim_flush_count(void);
+
+/** Busca en el árbol de obj una etiqueta con exactamente ese texto. */
+lv_obj_t *sim_find_label(lv_obj_t *obj, const char *text);
+
+/** Número de temporizadores de LVGL vivos. */
+int sim_timer_count(void);
+
+/** Memoria de LVGL en uso (asignador propio del simulador). Varía con la
+ * fragmentación: para buscar fugas se usa sim_mem_blocks(). */
 size_t sim_mem_used(void);
+/** Bloques de memoria de LVGL vivos: no depende de la fragmentación. */
+uint32_t sim_mem_blocks(void);
 
 /* Baterías de pruebas */
 void sim_suite_power(const char *out);
 void sim_suite_theme(const char *out);
+void sim_suite_face(const char *out);

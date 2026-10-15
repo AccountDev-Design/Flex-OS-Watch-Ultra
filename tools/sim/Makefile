@@ -14,7 +14,8 @@ $(shell mkdir -p $(BUILD) && ln -sfn "../../../Flex OS Ultra Watch" $(FW))
 CFLAGS := -std=gnu11 -O1 -g -Wall -DLV_CONF_INCLUDE_SIMPLE -DLV_LVGL_H_INCLUDE_SIMPLE \
           -I. -Istubs -I$(LVGL_DIR) -I$(LVGL_DIR)/src \
           -I$(FW)/components/watch_ui -I$(FW)/components/watch_ui/include -I$(FW)/components/watch_theme/include \
-          -I$(FW)/components/watch_power/include -I$(FW)/components/watch_diag/include
+          -I$(FW)/components/watch_power/include -I$(FW)/components/watch_diag/include \
+          -I$(FW)/components/watch_time/include
 
 LVGL_SRC := $(shell find $(LVGL_DIR)/src -name '*.c')
 APP_SRC := $(wildcard sim_*.c) \
@@ -22,7 +23,9 @@ APP_SRC := $(wildcard sim_*.c) \
            $(wildcard $(FW)/components/watch_theme/*.c) \
            $(wildcard $(FW)/components/watch_theme/fonts/*.c) \
            $(FW)/components/watch_power/battery_model.c \
-           $(FW)/components/watch_power/battery_alerts.c
+           $(FW)/components/watch_power/battery_alerts.c \
+           $(FW)/components/watch_time/wt_time.c \
+           $(FW)/components/watch_time/rtc_pcf85063.c
 
 LVGL_OBJ := $(patsubst $(LVGL_DIR)/%.c,$(BUILD)/lvgl/%.o,$(LVGL_SRC))
 

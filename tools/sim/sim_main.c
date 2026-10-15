@@ -15,12 +15,19 @@
 
 #include "sim.h"
 #include "watch_diag.h"
+#include "watch_time.h"
 
 uint16_t sim_fb[SIM_W * SIM_H];
 int sim_fails;
 watch_power_snapshot_t sim_power;
 
 static uint32_t s_ms;
+static uint32_t s_flushes;
+static struct {
+    watch_time_state_t state;
+    int64_t base_sec;
+    uint32_t base_ms;
+} s_time;
 static struct {
     lv_point_t p;
     bool pressed;
@@ -35,6 +42,7 @@ static void flush_cb(lv_display_t *d, const lv_area_t *a, uint8_t *px)
     for (int y = a->y1; y <= a->y2; y++) {
         memcpy(&sim_fb[y * SIM_W + a->x1], &src[(y - a->y1) * aw], (size_t)aw * 2);
     }
+    s_flushes++;
     lv_display_flush_ready(d);
 }
 
@@ -94,7 +102,58 @@ size_t sim_mem_used(void)
     return m.total_size - m.free_size;
 }
 
-/* ---- Datos simulados que sustituyen a watch_power / watch_diag ---- */
+uint32_t sim_mem_blocks(void)
+{
+    lv_mem_monitor_t m;
+    lv_mem_monitor(&m);
+    return m.used_cnt;
+}
+
+uint32_t sim_flush_count(void)
+{
+    return s_flushes;
+}
+
+lv_obj_t *sim_find_label(lv_obj_t *obj, const char *text)
+{
+    if (lv_obj_check_type(obj, &lv_label_class) && strcmp(lv_label_get_text(obj), text) == 0) {
+        return obj;
+    }
+    for (uint32_t i = 0; i < lv_obj_get_child_count(obj); i++) {
+        lv_obj_t *r = sim_find_label(lv_obj_get_child(obj, (int32_t)i), text);
+        if (r) {
+            return r;
+        }
+    }
+    return NULL;
+}
+
+int sim_timer_count(void)
+{
+    int n = 0;
+    for (lv_timer_t *t = lv_timer_get_next(NULL); t; t = lv_timer_get_next(t)) {
+        n++;
+    }
+    return n;
+}
+
+void sim_set_time(watch_time_state_t st, int y, int mo, int d, int h, int mi, int s)
+{
+    const wt_datetime_t dt = {y, mo, d, h, mi, s, 0};
+    s_time.state = st;
+    s_time.base_sec = wt_to_seconds(&dt);
+    s_time.base_ms = s_ms;
+}
+
+/* ---- Datos simulados que sustituyen a watch_power / watch_time / watch_diag ---- */
+watch_time_state_t watch_time_now(wt_datetime_t *out)
+{
+    if (s_time.state == WATCH_TIME_OK) {
+        wt_from_seconds(s_time.base_sec + (s_ms - s_time.base_ms) / 1000, out);
+    }
+    return s_time.state;
+}
+
 bool watch_power_get(watch_power_snapshot_t *out)
 {
     *out = sim_power;
@@ -138,6 +197,7 @@ int main(int argc, char **argv)
 
     sim_suite_theme(out);
     sim_suite_power(out);
+    sim_suite_face(out);
 
     printf("%s (%d fallos)\n", sim_fails ? "FALLOS" : "TODO OK", sim_fails);
     return sim_fails ? 1 : 0;

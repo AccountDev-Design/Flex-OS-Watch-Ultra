@@ -3,6 +3,8 @@
  */
 #include "ui_logic.h"
 
+#include <stdio.h>
+
 flex_batt_kind_t ui_batt_kind(batt_state_t state, batt_level_t level)
 {
     switch (state) {
@@ -54,4 +56,29 @@ bool ui_charge_gate_update(ui_charge_gate_t *g, uint32_t charge_events, batt_sta
     }
     g->seen_events = charge_events;
     return state == BATT_STATE_CHARGING && prev_state != BATT_STATE_UNKNOWN;
+}
+
+void ui_face_time(watch_time_state_t state, const wt_datetime_t *dt, ui_face_time_t *out)
+{
+    out->valid = (state == WATCH_TIME_OK && dt != NULL);
+    if (out->valid) {
+        wt_fmt_hhmm(out->time, sizeof(out->time), dt);
+        wt_fmt_date_long(out->date, sizeof(out->date), dt);
+        /* minutos desde 1970: cambia una vez por minuto */
+        out->key = wt_days_from_civil(dt->year, dt->month, dt->day) * 1440 + dt->hour * 60 + dt->minute;
+        return;
+    }
+    snprintf(out->time, sizeof(out->time), "--:--");
+    switch (state) {
+    case WATCH_TIME_NOT_SET:
+        snprintf(out->date, sizeof(out->date), "Hora sin configurar");
+        break;
+    case WATCH_TIME_NO_RTC:
+        snprintf(out->date, sizeof(out->date), "Reloj RTC no disponible");
+        break;
+    default:
+        snprintf(out->date, sizeof(out->date), "Leyendo la hora…");
+        break;
+    }
+    out->key = -1 - (int64_t)state; /* negativo: no choca con una hora válida */
 }

@@ -1,9 +1,10 @@
 /*
  * watch_ui — pantallas LVGL de Flex OS Watch Ultra.
  *
- * B1: pantalla de inicio con la identidad de Flex OS Ultra y los datos que se
- * pueden verificar en el reloj (batería real del AXP2101, flash, memoria,
- * coordenadas del táctil y un marco de 1 px para comprobar el desfase).
+ * La pantalla de inicio es la esfera (hora del RTC, fecha y batería reales).
+ * Los datos de B1 que se verifican en el reloj (batería con VBAT y USB, flash,
+ * memoria, coordenadas del táctil y el marco de 1 px) pasan a la pantalla de
+ * diagnóstico.
  */
 #pragma once
 
@@ -20,7 +21,7 @@ typedef struct {
     watch_flash_report_t flash;
 } watch_ui_boot_info_t;
 
-/** Crea y carga la pantalla de inicio. Llamar con LVGL bloqueado. */
+/** Arranca la interfaz y carga la esfera. Llamar con LVGL bloqueado. */
 void watch_ui_home_create(const watch_ui_boot_info_t *info);
 
 #ifdef __cplusplus

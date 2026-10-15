@@ -1,6 +1,8 @@
 /*
  * Pruebas de PC de la lógica de interfaz (watch_ui/ui_logic, watch_theme/flex_batt_style).
  */
+#include <string.h>
+
 #include "test_util.h"
 
 #include "flex_batt_style.h"
@@ -83,8 +85,58 @@ static void test_charge_gate(void)
     CHECK(!ui_charge_gate_update(&b, 1, BATT_STATE_UNKNOWN, BATT_STATE_CHARGING));
 }
 
+static void test_face_time(void)
+{
+    ui_face_time_t t;
+    wt_datetime_t dt = {2026, 10, 15, 9, 41, 7, 4};
+    ui_face_time(WATCH_TIME_OK, &dt, &t);
+    CHECK(t.valid);
+    CHECK(strcmp(t.time, "9:41") == 0);
+    CHECK(strcmp(t.date, "Jueves, 15 de octubre") == 0);
+    const int64_t k = t.key;
+    CHECK(k >= 0);
+
+    /* Otro segundo del mismo minuto: misma clave (no se repinta). */
+    dt.second = 59;
+    ui_face_time(WATCH_TIME_OK, &dt, &t);
+    CHECK_EQ(t.key, k);
+    /* Minuto siguiente: clave distinta. */
+    dt.minute = 42;
+    ui_face_time(WATCH_TIME_OK, &dt, &t);
+    CHECK(t.key != k);
+    CHECK(strcmp(t.time, "9:42") == 0);
+    /* Mismo minuto de otro día: clave distinta. */
+    dt.minute = 41;
+    dt.day = 16;
+    dt.weekday = 5;
+    ui_face_time(WATCH_TIME_OK, &dt, &t);
+    CHECK(t.key != k);
+
+    /* Sin hora fiable: "--:--" y el motivo, claves distintas por estado. */
+    static const struct { watch_time_state_t st; const char *txt; } cases[] = {
+        {WATCH_TIME_STARTING, "Leyendo la hora…"},
+        {WATCH_TIME_NOT_SET, "Hora sin configurar"},
+        {WATCH_TIME_NO_RTC, "Reloj RTC no disponible"},
+    };
+    int64_t keys[3];
+    for (int i = 0; i < 3; i++) {
+        ui_face_time(cases[i].st, &dt, &t); /* aunque llegue una fecha, no se usa */
+        CHECK(!t.valid);
+        CHECK(strcmp(t.time, "--:--") == 0);
+        CHECK(strcmp(t.date, cases[i].txt) == 0);
+        CHECK(t.key < 0);
+        keys[i] = t.key;
+    }
+    CHECK(keys[0] != keys[1] && keys[1] != keys[2] && keys[0] != keys[2]);
+    /* OK sin fecha: se trata como no válida. */
+    ui_face_time(WATCH_TIME_OK, NULL, &t);
+    CHECK(!t.valid);
+    CHECK(strcmp(t.time, "--:--") == 0);
+}
+
 void test_ui_all(void)
 {
+    test_face_time();
     test_batt_kind();
     test_batt_style();
     test_charge_gate();
