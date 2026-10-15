@@ -1,192 +1,35 @@
 /*
- * ui_diag — pantalla de diagnóstico (la pantalla de inicio de B1): batería
- * con VBAT y USB, flash, memoria, coordenadas del táctil y un marco de 1 px
- * en el borde exacto del panel (prueba T2).
+ * ui_diag — Ajustes > Diagnóstico: estado medido de cada servicio, como
+ * lista que se refresca cada segundo (solo se reescribe lo que cambia).
  *
- * Todo se ejecuta en la tarea de LVGL. Los datos de batería se copian de la
- * caché de ui_system, que nunca espera al bus I2C. El temporizador se borra
- * con la pantalla.
+ *  - Prueba de pantalla y táctil (T2, T3): abre ui_touchtest.
+ *  - Memoria libre (watch_diag), búferes de LVGL (watch_display, al arrancar).
+ *  - Flash: tamaño declarado, identificador y la sonda de >16 MB de B1.
+ *  - Reloj: estado del servicio de hora y registros crudos del PCF85063.
+ *  - Batería: lecturas, errores y tiempos del servicio del AXP2101.
+ * Sustituye a la pantalla de inicio de B1 (con sus mismos datos).
  */
-#include "watch_ui.h"
+#include "ui_internal.h"
 
 #include <stdio.h>
-#include <string.h>
-#include "flex_battery_icon.h"
-#include "ui_internal.h"
 #include "ui_logic.h"
-#include "watch_power.h"
 #include "watch_theme.h"
+#include "watch_time.h"
 
-#define REFRESH_MS      500
-#define MEM_EVERY_TICKS 4      /* memoria cada 2 s */
-
-/* Geometría (px del panel de 410x502) */
-#define CARD_X      20
-#define CARD_W      (FLEX_SCREEN_W - 2 * CARD_X)
-#define BATT_CARD_Y (FLEX_HDR_H + 8)
-#define BATT_CARD_H 136
-#define SYS_CARD_Y  (BATT_CARD_Y + BATT_CARD_H + 12)
-#define SYS_CARD_H  110
-#define CARD_PAD    18
-#define TEXT_W      (CARD_W - 2 * CARD_PAD)
-#define ICON_W      34
-#define ICON_H      17
+#define DIAG_TICK_MS 1000
 
 typedef struct {
-    lv_obj_t *status_pct;
-    lv_obj_t *batt_icon;
-    lv_obj_t *batt_pct;
-    lv_obj_t *batt_state;
-    lv_obj_t *batt_detail;
-    lv_obj_t *sys_line1;
-    lv_obj_t *sys_line2;
-    lv_obj_t *sys_line3;
-    lv_obj_t *touch_dot;
-    lv_point_t touch;
-    bool touch_seen;
-    bool touch_ok;
-    bool power_ok;
-    watch_flash_report_t flash;
-    uint32_t ticks;
-    lv_timer_t *timer;
-    /* último estado pintado, para no reescribir etiquetas sin cambios */
-    int last_pct;
-    int last_state;
-    int last_level;
-    int last_vbat;
-    int last_vbus;
-} home_t;
-
-static home_t s_home;
-
-/* Color del texto de estado: el del relleno del indicador, salvo en reposo. */
-static uint32_t state_color(flex_batt_kind_t kind)
-{
-    return (kind == FLEX_BATT_NORMAL || kind == FLEX_BATT_UNKNOWN) ? FLEX_C_TXT2 : flex_batt_fill_rgb(kind);
-}
-
-static void update_battery(void)
-{
-    watch_power_snapshot_t snap;
-    const bool have = s_home.power_ok && ui_system_power(&snap);
-
-    const batt_state_t st = have ? snap.track.state : BATT_STATE_UNKNOWN;
-    const batt_level_t lv = have ? snap.track.level : BATT_LEVEL_UNKNOWN;
-    const int pct = have ? snap.track.percent : -1;
-    const int vbat = have ? snap.track.vbat_mv : -1;
-    const int vbus = have ? (int)snap.raw.vbus_present : -1;
-
-    if (pct == s_home.last_pct && (int)st == s_home.last_state && (int)lv == s_home.last_level &&
-        vbat == s_home.last_vbat && vbus == s_home.last_vbus) {
-        return;
-    }
-    s_home.last_pct = pct;
-    s_home.last_state = (int)st;
-    s_home.last_level = (int)lv;
-    s_home.last_vbat = vbat;
-    s_home.last_vbus = vbus;
-
-    char buf[96];
-    const flex_batt_kind_t kind = ui_batt_kind(st, lv);
-    const uint32_t col = state_color(kind);
-
-    /* barra de estado */
-    flex_battery_icon_set(s_home.batt_icon, kind, pct);
-    if (pct >= 0) {
-        lv_label_set_text_fmt(s_home.status_pct, "%d %%", pct);
-    } else {
-        lv_label_set_text(s_home.status_pct, "--");
-    }
-
-    /* tarjeta de batería */
-    if (pct >= 0) {
-        lv_label_set_text_fmt(s_home.batt_pct, "%d %%", pct);
-    } else {
-        lv_label_set_text(s_home.batt_pct, "--");
-    }
-    lv_label_set_text(s_home.batt_state, ui_batt_state_text(st));
-    lv_obj_set_style_text_color(s_home.batt_state, flex_color(col), 0);
-
-    if (!have) {
-        snprintf(buf, sizeof(buf), "AXP2101 no disponible");
-    } else {
-        char v[32];
-        if (vbat >= 0) {
-            snprintf(v, sizeof(v), "%d.%02d V", vbat / 1000, (vbat % 1000) / 10);
-        } else if (snap.raw.batt_present && !snap.raw.vbat_adc_enabled) {
-            snprintf(v, sizeof(v), "VBAT: ADC apagado");
-        } else {
-            snprintf(v, sizeof(v), "VBAT --");
-        }
-        snprintf(buf, sizeof(buf), "%s  ·  %s%s", v, vbus > 0 ? "USB conectado" : "Sin USB",
-                 (snap.raw.batt_present && !snap.raw.gauge_enabled) ? "  ·  gauge apagado" : "");
-    }
-    lv_label_set_text(s_home.batt_detail, buf);
-}
-
-static const char *flash_text(void)
-{
-    switch (s_home.flash.verdict) {
-    case FLASH_PROBE_UPPER_DISTINCT: return ">16 MB sin aliasing";
-    case FLASH_PROBE_ALIASED:        return ">16 MB con ALIASING";
-    case FLASH_PROBE_INCONCLUSIVE:   return ">16 MB no concluyente";
-    case FLASH_PROBE_READ_ERROR:     return ">16 MB error de lectura";
-    case FLASH_PROBE_NOT_CONFIGURED: return "16 MB declarados";
-    default:                         return "sonda no ejecutada";
-    }
-}
-
-static void update_system(void)
-{
-    watch_mem_report_t m;
-    watch_diag_mem(&m);
-    lv_label_set_text_fmt(s_home.sys_line2, "PSRAM %lu.%lu MB  ·  RAM %lu KB",
-                          (unsigned long)(m.psram_free / (1024 * 1024)),
-                          (unsigned long)((m.psram_free % (1024 * 1024)) * 10 / (1024 * 1024)),
-                          (unsigned long)(m.internal_free / 1024));
-    if (s_home.touch_seen) {
-        lv_label_set_text_fmt(s_home.sys_line3, "Toque  x %d  ·  y %d", (int)s_home.touch.x, (int)s_home.touch.y);
-    } else {
-        lv_label_set_text(s_home.sys_line3, s_home.touch_ok ? "Toca la pantalla" : "Táctil no disponible");
-    }
-}
-
-static void refresh_cb(lv_timer_t *t)
-{
-    (void)t;
-    update_battery();
-    if (s_home.ticks++ % MEM_EVERY_TICKS == 0) {
-        update_system();
-    }
-}
-
-static void delete_cb(lv_event_t *e)
-{
-    (void)e;
-    lv_timer_delete(s_home.timer);
-    s_home.timer = NULL;
-}
-
-static void touch_cb(lv_event_t *e)
-{
-    const lv_event_code_t code = lv_event_get_code(e);
-    lv_indev_t *indev = lv_indev_active();
-    if (!indev) {
-        return;
-    }
-    if (code == LV_EVENT_PRESSED || code == LV_EVENT_PRESSING) {
-        lv_indev_get_point(indev, &s_home.touch);
-        s_home.touch_seen = true;
-        lv_obj_set_pos(s_home.touch_dot, s_home.touch.x - 14, s_home.touch.y - 14);
-        lv_obj_remove_flag(s_home.touch_dot, LV_OBJ_FLAG_HIDDEN);
-        if (code == LV_EVENT_PRESSED) {
-            update_system();
-        }
-    } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
-        lv_obj_add_flag(s_home.touch_dot, LV_OBJ_FLAG_HIDDEN);
-        update_system();
-    }
-}
+    lv_obj_t *ram;
+    lv_obj_t *ram_big;
+    lv_obj_t *psram;
+    lv_obj_t *rtc_state;
+    lv_obj_t *rtc_detail;
+    lv_obj_t *rtc_reads;
+    lv_obj_t *rtc_regs;
+    lv_obj_t *pwr_reads;
+    lv_obj_t *pwr_i2c;
+    lv_obj_t *pwr_stack;
+} diag_t;
 
 static void back_cb(lv_event_t *e)
 {
@@ -194,88 +37,131 @@ static void back_cb(lv_event_t *e)
     ui_nav_back();
 }
 
+static void touchtest_cb(lv_event_t *e)
+{
+    (void)e;
+    ui_nav_push_opts(ui_touchtest_create, false);
+}
+
+static const char *flash_text(flash_probe_verdict_t v)
+{
+    switch (v) {
+    case FLASH_PROBE_UPPER_DISTINCT: return "sin aliasing";
+    case FLASH_PROBE_ALIASED:        return "CON ALIASING";
+    case FLASH_PROBE_INCONCLUSIVE:   return "no concluyente";
+    case FLASH_PROBE_READ_ERROR:     return "error de lectura";
+    case FLASH_PROBE_NOT_CONFIGURED: return "no aplica (16 MB)";
+    default:                         return "no ejecutada";
+    }
+}
+
+static void refresh(diag_t *d)
+{
+    char buf[48];
+    watch_mem_report_t m;
+    watch_diag_mem(&m);
+    ui_fmt_bytes(buf, sizeof(buf), m.internal_free);
+    watch_theme_info_set(d->ram, buf);
+    ui_fmt_bytes(buf, sizeof(buf), m.internal_largest);
+    watch_theme_info_set(d->ram_big, buf);
+    ui_fmt_bytes(buf, sizeof(buf), m.psram_free);
+    watch_theme_info_set(d->psram, buf);
+
+    watch_time_info_t ti;
+    watch_time_info(&ti);
+    watch_theme_info_set(d->rtc_state, ui_time_state_text(ti.state));
+    watch_theme_info_set(d->rtc_detail, ti.reads ? pcf85063_read_text(ti.last_read) : "--");
+    snprintf(buf, sizeof(buf), "%lu · errores %lu", (unsigned long)ti.reads, (unsigned long)ti.errors);
+    watch_theme_info_set(d->rtc_reads, buf);
+    if (ti.reads) {
+        snprintf(buf, sizeof(buf), "%02x %02x | %02x %02x %02x %02x %02x %02x %02x", ti.regs[0], ti.regs[1],
+                 ti.regs[4], ti.regs[5], ti.regs[6], ti.regs[7], ti.regs[8], ti.regs[9], ti.regs[10]);
+    } else {
+        snprintf(buf, sizeof(buf), "--");
+    }
+    watch_theme_info_set(d->rtc_regs, buf);
+
+    watch_power_snapshot_t s;
+    if (ui_system_power(&s) && s.driver_ok) {
+        snprintf(buf, sizeof(buf), "%lu · errores %lu", (unsigned long)s.samples, (unsigned long)s.errors);
+        watch_theme_info_set(d->pwr_reads, buf);
+        snprintf(buf, sizeof(buf), "%lu µs (máx. %lu)", (unsigned long)s.sample_us_last,
+                 (unsigned long)s.sample_us_max);
+        watch_theme_info_set(d->pwr_i2c, buf);
+        snprintf(buf, sizeof(buf), "%lu B", (unsigned long)s.stack_free_min);
+        watch_theme_info_set(d->pwr_stack, buf);
+    } else {
+        watch_theme_info_set(d->pwr_reads, "AXP2101 no disponible");
+        watch_theme_info_set(d->pwr_i2c, "--");
+        watch_theme_info_set(d->pwr_stack, "--");
+    }
+}
+
+static void tick_cb(lv_timer_t *t)
+{
+    refresh(lv_timer_get_user_data(t));
+}
+
+static void delete_cb(lv_event_t *e)
+{
+    lv_free(lv_event_get_user_data(e));
+}
+
 lv_obj_t *ui_diag_create(lv_obj_t *parent)
 {
-    const watch_ui_boot_info_t *info = ui_boot_info();
-    if (s_home.timer) {
-        return NULL; /* ya existe una: la navegación no debe crear dos */
-    }
-    memset(&s_home, 0, sizeof(s_home));
-    s_home.touch_ok = info->touch_ok;
-    s_home.power_ok = info->power_ok;
-    s_home.flash = info->flash;
-    s_home.last_pct = -2;
-    s_home.last_state = -1;
+    const watch_ui_boot_info_t *bi = ui_boot_info();
+    diag_t *d = lv_malloc_zeroed(sizeof(*d));
+    LV_ASSERT_MALLOC(d);
+    lv_obj_t *page = ui_page_new(parent);
+    watch_theme_page(page);
+    watch_theme_header(page, "Diagnóstico", back_cb, NULL);
+    lv_obj_t *list = watch_theme_list(page);
+    char buf[48];
 
-    watch_theme_init();
-
-    lv_obj_t *scr = ui_page_new(parent);
-    watch_theme_apply_background(scr);
-
-    /* Marco de 1 px en el borde exacto del panel: si el desfase de columna
-     * fuera incorrecto, uno de los lados se vería cortado o desplazado. */
-    lv_obj_t *frame = lv_obj_create(scr);
-    lv_obj_remove_style_all(frame);
-    lv_obj_set_size(frame, FLEX_SCREEN_W, FLEX_SCREEN_H);
-    lv_obj_set_style_border_width(frame, 1, 0);
-    lv_obj_set_style_border_color(frame, flex_color(FLEX_C_ACCENT), 0);
-    lv_obj_set_style_border_opa(frame, LV_OPA_70, 0);
-    lv_obj_remove_flag(frame, LV_OBJ_FLAG_CLICKABLE);
-
-    /* Cabecera con "volver" y estado de la batería a la derecha */
-    watch_theme_header(scr, "Diagnóstico", back_cb, NULL);
-    const int32_t icon_x = FLEX_SCREEN_W - FLEX_SAFE_X - ICON_W - 3;
-    s_home.batt_icon = flex_battery_icon_create(scr, ICON_W + 3, ICON_H);
-    lv_obj_set_pos(s_home.batt_icon, icon_x, FLEX_SAFE_TOP + (FLEX_HDR_ZONE - ICON_H) / 2);
-    s_home.status_pct = watch_theme_label(scr, FLEX_FONT_SMALL, FLEX_C_TXT, "--");
-    lv_obj_align(s_home.status_pct, LV_ALIGN_TOP_RIGHT, -(FLEX_SAFE_X + ICON_W + 3 + 8),
-                 FLEX_SAFE_TOP + (FLEX_HDR_ZONE - lv_font_get_line_height(FLEX_FONT_SMALL)) / 2);
-
-    /* Tarjeta de batería */
-    lv_obj_t *bc = watch_theme_glass_card(scr, CARD_X, BATT_CARD_Y, CARD_W, BATT_CARD_H);
-    lv_obj_t *bt = watch_theme_label(bc, FLEX_FONT_BODY, FLEX_C_TXT2, "Batería");
-    lv_obj_align(bt, LV_ALIGN_TOP_LEFT, 0, 0);
-    s_home.batt_state = watch_theme_label(bc, FLEX_FONT_BODY, FLEX_C_TXT2, "Sin datos");
-    lv_obj_align(s_home.batt_state, LV_ALIGN_TOP_RIGHT, 0, 0);
-    s_home.batt_pct = watch_theme_label(bc, FLEX_FONT_LARGE, FLEX_C_TXT, "--");
-    lv_obj_align(s_home.batt_pct, LV_ALIGN_TOP_LEFT, 0, 24);
-    s_home.batt_detail = watch_theme_label(bc, FLEX_FONT_SMALL, FLEX_C_MUTE, "");
-    lv_obj_align(s_home.batt_detail, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-
-    /* Tarjeta de sistema: tres líneas que nunca se salen de la tarjeta. */
-    lv_obj_t *sc = watch_theme_glass_card(scr, CARD_X, SYS_CARD_Y, CARD_W, SYS_CARD_H);
-    lv_obj_set_flex_flow(sc, LV_FLEX_FLOW_COLUMN);
-    s_home.sys_line1 = watch_theme_label(sc, FLEX_FONT_SMALL, FLEX_C_TXT2, "");
-    lv_label_set_text_fmt(s_home.sys_line1, "Flash %lu MB  ·  %s",
-                          (unsigned long)(s_home.flash.configured_size / (1024 * 1024)), flash_text());
-    s_home.sys_line2 = watch_theme_label(sc, FLEX_FONT_SMALL, FLEX_C_MUTE, "");
-    s_home.sys_line3 = watch_theme_label(sc, FLEX_FONT_SMALL, FLEX_C_MUTE, "");
-    lv_obj_t *lines[] = {s_home.sys_line1, s_home.sys_line2, s_home.sys_line3, s_home.batt_detail};
-    for (size_t i = 0; i < sizeof(lines) / sizeof(lines[0]); i++) {
-        lv_label_set_long_mode(lines[i], LV_LABEL_LONG_MODE_DOTS);
-        lv_obj_set_width(lines[i], TEXT_W);
+    lv_obj_t *tt = watch_theme_list_row(list, FLEX_ICON_CHECK, FLEX_C_CAT_BLUE, "Prueba de pantalla", NULL, true);
+    lv_obj_add_event_cb(tt, touchtest_cb, LV_EVENT_CLICKED, NULL);
+    if (!bi->touch_ok) {
+        watch_theme_row_set_value(tt, "Táctil no disponible");
     }
 
-    /* Punto de toque: anillo del acento que sigue al dedo. */
-    s_home.touch_dot = lv_obj_create(scr);
-    lv_obj_remove_style_all(s_home.touch_dot);
-    lv_obj_set_size(s_home.touch_dot, 28, 28);
-    lv_obj_set_style_radius(s_home.touch_dot, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_border_width(s_home.touch_dot, 3, 0);
-    lv_obj_set_style_border_color(s_home.touch_dot, flex_color(FLEX_C_ACCENT), 0);
-    lv_obj_set_style_border_opa(s_home.touch_dot, LV_OPA_COVER, 0);
-    lv_obj_remove_flag(s_home.touch_dot, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_flag(s_home.touch_dot, LV_OBJ_FLAG_HIDDEN);
+    watch_theme_section(list, "Memoria libre");
+    d->ram = watch_theme_info_row(list, "RAM interna", "--");
+    d->ram_big = watch_theme_info_row(list, "Bloque mayor interno", "--");
+    d->psram = watch_theme_info_row(list, "PSRAM", "--");
 
-    lv_obj_add_event_cb(scr, touch_cb, LV_EVENT_PRESSED, NULL);
-    lv_obj_add_event_cb(scr, touch_cb, LV_EVENT_PRESSING, NULL);
-    lv_obj_add_event_cb(scr, touch_cb, LV_EVENT_RELEASED, NULL);
-    lv_obj_add_event_cb(scr, touch_cb, LV_EVENT_PRESS_LOST, NULL);
+    watch_theme_section(list, "Pantalla");
+    if (bi->disp_buf_lines) {
+        snprintf(buf, sizeof(buf), "%s%u líneas · %s", bi->disp_double_buffer ? "2 × " : "",
+                 (unsigned)bi->disp_buf_lines, bi->disp_buf_psram ? "PSRAM" : "RAM DMA");
+    } else {
+        snprintf(buf, sizeof(buf), "--");
+    }
+    watch_theme_info_row(list, "Búferes de LVGL", buf);
 
-    lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, NULL);
+    watch_theme_section(list, "Flash");
+    ui_fmt_bytes(buf, sizeof(buf), bi->flash.configured_size);
+    watch_theme_info_row(list, "Declarada", bi->flash.configured_size ? buf : "--");
+    if (bi->flash.jedec_id) {
+        snprintf(buf, sizeof(buf), "%06lx", (unsigned long)bi->flash.jedec_id);
+    } else {
+        snprintf(buf, sizeof(buf), "--");
+    }
+    watch_theme_info_row(list, "JEDEC", buf);
+    watch_theme_info_row(list, "Sonda > 16 MB", flash_text(bi->flash.verdict));
 
-    update_battery();
-    update_system();
-    s_home.timer = lv_timer_create(refresh_cb, REFRESH_MS, NULL);
-    return scr;
+    watch_theme_section(list, "Reloj (PCF85063, solo lectura)");
+    d->rtc_state = watch_theme_info_row(list, "Hora", "--");
+    d->rtc_detail = watch_theme_info_row(list, "Última lectura", "--");
+    d->rtc_reads = watch_theme_info_row(list, "Lecturas", "--");
+    d->rtc_regs = watch_theme_info_row(list, "Registros", "--");
+
+    watch_theme_section(list, "Batería (AXP2101, solo lectura)");
+    d->pwr_reads = watch_theme_info_row(list, "Lecturas", "--");
+    d->pwr_i2c = watch_theme_info_row(list, "Lectura I2C", "--");
+    d->pwr_stack = watch_theme_info_row(list, "Pila libre mínima", "--");
+
+    refresh(d);
+    lv_obj_add_event_cb(page, delete_cb, LV_EVENT_DELETE, d);
+    ui_page_timer(page, tick_cb, DIAG_TICK_MS, d);
+    return page;
 }

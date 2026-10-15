@@ -52,6 +52,14 @@ void app_main(void)
     watch_ui_boot_info_t boot = {0};
     boot.brightness_get = watch_display_get_brightness;
     boot.brightness_set = ui_brightness_set;
+    boot.fw_version = app->version;
+    boot.idf_version = esp_get_idf_version();
+    watch_display_info_t dinfo;
+    watch_display_get_info(&dinfo);
+    boot.disp_buf_lines = dinfo.buf_lines;
+    boot.disp_buf_bytes = dinfo.buf_bytes;
+    boot.disp_double_buffer = dinfo.double_buffer;
+    boot.disp_buf_psram = dinfo.buf_in_psram;
 
     lv_indev_t *indev = NULL;
     esp_err_t err = watch_touch_start(disp, &indev);

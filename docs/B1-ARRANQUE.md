@@ -138,7 +138,7 @@ Copia el **registro serie completo** de cada prueba y envíamelo. Marca cada pru
 - **Sin hora real:** la esfera muestra "--:--" (el RTC PCF85063 llega en la Fase 4).
   - **Actualización (B3-2):** el RTC ya se lee en solo lectura y la pantalla de inicio es la esfera.
   - Esta pantalla de B1 pasa a ser la de diagnóstico, que vuelve a ser accesible desde Ajustes en B3-5.
-  - Las pruebas T2 y T3 se hacen allí (`docs/B3-INTERFAZ.md`).
+  - Las pruebas T2 y T3 se hacen en **Ajustes > Diagnóstico > Prueba de pantalla** (prueba T40 de `docs/B3-INTERFAZ.md`).
 - **Sin escrituras en el AXP2101:** ni ADC, ni pin TS, ni parámetros de carga. Activar el ADC de VBAT y desactivar el pin TS, como hace el código oficial, se decidirá en B2 con los registros de T8.
 - **Sin animación de carga:** es B2, y se disparará con la transición CONFIRMADA ya implementada (`charging_started`).
 - **Sin escrituras ni montaje** en las particiones `storage` o `assets`.

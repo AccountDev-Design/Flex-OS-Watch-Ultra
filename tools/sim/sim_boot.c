@@ -37,6 +37,11 @@ void sim_suite_boot(const char *out)
     boot.flash.verdict = FLASH_PROBE_UPPER_DISTINCT;
     boot.brightness_get = sim_brightness_get;
     boot.brightness_set = sim_brightness_set;
+    boot.fw_version = "0.1.0-b1"; /* como version.txt */
+    boot.idf_version = "v5.5.5";
+    boot.disp_buf_lines = 40;     /* ejemplo para la vista previa, no medido */
+    boot.disp_buf_bytes = 410 * 40 * 2;
+    boot.disp_double_buffer = true;
     watch_ui_home_create(&boot);
     EXPECT(lv_screen_active() == splash, "la esfera corto el splash sin transicion");
     sim_run(SIM_SPLASH_OUT_MAX_MS);

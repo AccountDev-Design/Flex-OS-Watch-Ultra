@@ -120,18 +120,21 @@ void sim_suite_qp(const char *out)
     EXPECT(sim_find_label(ui_nav_top(), "Ajustes"), "la pagina abierta no es Ajustes");
     sim_save(out, "f3_ajustes");
 
-    /* Filas pendientes: nada. Diagnóstico: abre. */
-    sim_tap(205, FLEX_HDR_H + 4 + FLEX_ROW_H / 2); /* Pantalla */
-    sim_run(300);
-    EXPECT(ui_nav_depth() == 2, "una fila pendiente abrio algo");
-    sim_tap(205, FLEX_HDR_H + 4 + 2 * (FLEX_ROW_H + FLEX_ROW_GAP) + FLEX_ROW_H / 2); /* Diagnóstico */
-    sim_run(300);
-    EXPECT(ui_nav_depth() == 3, "Diagnostico no se abrio desde Ajustes");
-    sim_tap(FLEX_HDR_X + FLEX_HDR_ZONE / 2, FLEX_SAFE_TOP + FLEX_HDR_ZONE / 2);
-    sim_run(300);
+    /* Volver a la esfera */
     sim_tap(FLEX_HDR_X + FLEX_HDR_ZONE / 2, FLEX_SAFE_TOP + FLEX_HDR_ZONE / 2);
     sim_run(300);
     EXPECT(ui_nav_depth() == 1 && !ui_nav_busy(), "no se volvio a la esfera (profundidad %d)", ui_nav_depth());
+
+    /* ---- Mosaico de batería: abre Ajustes > Batería ---- */
+    ui_qp_open();
+    sim_run(300);
+    sim_tap(16 + T_W / 2, T_Y1 + 52);
+    sim_run(600);
+    expect_closed("tras abrir Bateria");
+    EXPECT(ui_nav_depth() == 2 && sim_find_label(ui_nav_top(), "Batería"), "el mosaico no abrio Bateria");
+    sim_tap(FLEX_HDR_X + FLEX_HDR_ZONE / 2, FLEX_SAFE_TOP + FLEX_HDR_ZONE / 2);
+    sim_run(300);
+    EXPECT(ui_nav_depth() == 1, "no se volvio desde Bateria");
 
     /* ---- Fugas: abrir y cerrar 20 veces ---- */
     const uint32_t blocks = sim_mem_blocks();

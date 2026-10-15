@@ -98,3 +98,39 @@ bool ui_brightness_should_apply(int value, int applied, uint32_t last_ms, uint32
     }
     return final || (uint32_t)(now_ms - last_ms) >= UI_BRIGHT_APPLY_MS;
 }
+
+int ui_fmt_volts(char *buf, size_t n, int mv)
+{
+    if (mv < 0) {
+        return snprintf(buf, n, "--");
+    }
+    return snprintf(buf, n, "%d,%02d V", mv / 1000, (mv % 1000) / 10);
+}
+
+int ui_fmt_ma(char *buf, size_t n, int ma)
+{
+    if (ma < 0) {
+        return snprintf(buf, n, "--");
+    }
+    return snprintf(buf, n, "%d mA", ma);
+}
+
+int ui_fmt_bytes(char *buf, size_t n, uint32_t bytes)
+{
+    const uint32_t MB = 1024u * 1024u;
+    if (bytes >= MB) {
+        return snprintf(buf, n, "%lu,%lu MB", (unsigned long)(bytes / MB),
+                        (unsigned long)((bytes % MB) * 10u / MB));
+    }
+    return snprintf(buf, n, "%lu KB", (unsigned long)(bytes / 1024u));
+}
+
+const char *ui_time_state_text(watch_time_state_t st)
+{
+    switch (st) {
+    case WATCH_TIME_OK:      return "Correcta";
+    case WATCH_TIME_NOT_SET: return "Sin configurar";
+    case WATCH_TIME_NO_RTC:  return "No responde";
+    default:                 return "Leyendo…";
+    }
+}

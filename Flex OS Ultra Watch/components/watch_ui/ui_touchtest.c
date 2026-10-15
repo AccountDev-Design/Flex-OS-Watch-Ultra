@@ -1,0 +1,88 @@
+/*
+ * ui_touchtest — Ajustes > Diagnóstico > Prueba de pantalla y táctil
+ * (pruebas T2 y T3 de B1):
+ *  - marco de 1 px en el borde exacto del panel: si el desfase de columna
+ *    fuera incorrecto, uno de los lados se vería cortado o desplazado;
+ *  - un anillo sigue al dedo y se muestran sus coordenadas.
+ * Se abre sin el gesto "volver" del borde (ui_nav_push_opts) para poder
+ * tocar el borde izquierdo; se vuelve con el botón de la cabecera.
+ */
+#include "ui_internal.h"
+
+#include "watch_theme.h"
+
+typedef struct {
+    lv_obj_t *coords;
+    lv_obj_t *dot;
+} touchtest_t;
+
+static void back_cb(lv_event_t *e)
+{
+    (void)e;
+    ui_nav_back();
+}
+
+static void touch_cb(lv_event_t *e)
+{
+    touchtest_t *t = lv_event_get_user_data(e);
+    const lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_DELETE) {
+        lv_free(t);
+        return;
+    }
+    lv_indev_t *indev = lv_indev_active();
+    if (!indev) {
+        return;
+    }
+    if (code == LV_EVENT_PRESSED || code == LV_EVENT_PRESSING) {
+        lv_point_t p;
+        lv_indev_get_point(indev, &p);
+        lv_obj_set_pos(t->dot, p.x - 14, p.y - 14);
+        lv_obj_remove_flag(t->dot, LV_OBJ_FLAG_HIDDEN);
+        lv_label_set_text_fmt(t->coords, "x %d  ·  y %d", (int)p.x, (int)p.y);
+    } else {
+        lv_obj_add_flag(t->dot, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+lv_obj_t *ui_touchtest_create(lv_obj_t *parent)
+{
+    touchtest_t *t = lv_malloc_zeroed(sizeof(*t));
+    LV_ASSERT_MALLOC(t);
+    lv_obj_t *page = ui_page_new(parent);
+    watch_theme_apply_background(page);
+
+    lv_obj_t *frame = lv_obj_create(page);
+    lv_obj_remove_style_all(frame);
+    lv_obj_set_size(frame, FLEX_SCREEN_W, FLEX_SCREEN_H);
+    lv_obj_set_style_border_width(frame, 1, 0);
+    lv_obj_set_style_border_color(frame, flex_color(FLEX_C_ACCENT), 0);
+    lv_obj_set_style_border_opa(frame, LV_OPA_70, 0);
+    lv_obj_remove_flag(frame, LV_OBJ_FLAG_CLICKABLE);
+
+    watch_theme_header(page, "Prueba de pantalla", back_cb, NULL);
+
+    lv_obj_t *help = watch_theme_label(page, FLEX_FONT_SMALL, FLEX_C_TXT2,
+                                       "Marco azul de 1 px en los 4 bordes.\nToca las esquinas y el centro.");
+    lv_obj_set_style_text_align(help, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(help, LV_ALIGN_CENTER, 0, -40);
+    t->coords = watch_theme_label(page, FLEX_FONT_TITLE, FLEX_C_TXT, "Toca la pantalla");
+    lv_obj_align(t->coords, LV_ALIGN_CENTER, 0, 30);
+
+    t->dot = lv_obj_create(page);
+    lv_obj_remove_style_all(t->dot);
+    lv_obj_set_size(t->dot, 28, 28);
+    lv_obj_set_style_radius(t->dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(t->dot, 3, 0);
+    lv_obj_set_style_border_color(t->dot, flex_color(FLEX_C_ACCENT), 0);
+    lv_obj_set_style_border_opa(t->dot, LV_OPA_COVER, 0);
+    lv_obj_remove_flag(t->dot, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(t->dot, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_add_event_cb(page, touch_cb, LV_EVENT_PRESSED, t);
+    lv_obj_add_event_cb(page, touch_cb, LV_EVENT_PRESSING, t);
+    lv_obj_add_event_cb(page, touch_cb, LV_EVENT_RELEASED, t);
+    lv_obj_add_event_cb(page, touch_cb, LV_EVENT_PRESS_LOST, t);
+    lv_obj_add_event_cb(page, touch_cb, LV_EVENT_DELETE, t);
+    return page;
+}

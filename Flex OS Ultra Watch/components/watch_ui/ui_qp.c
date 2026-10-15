@@ -6,7 +6,8 @@
  *  - Brillo: control real del panel (DCS 0x51), mínimo 10 %, con el envío
  *    limitado durante el arrastre. No se guarda hasta F4.1 (NVS).
  *  - Ajustes: cierra el panel y abre la página de Ajustes.
- *  - Batería: el % y el estado reales (de la caché de ui_system).
+ *  - Batería: el % y el estado reales (de la caché de ui_system); abre
+ *    Ajustes > Batería.
  *  - Wi-Fi y Bluetooth: marcados "Pendiente" (F5); no reciben toques.
  *
  * Gestos (ui_gesture.c): arrastrar hacia abajo desde la franja superior de
@@ -38,7 +39,6 @@
 #define TILE_Y0     72
 #define TILE_Y1     (TILE_Y0 + TILE_H + TILE_GAP)
 #define SLIDER_Y    (TILE_Y1 + TILE_H + 16)
-#define SLIDER_H    64
 #define HANDLE_H    56          /* zona táctil del asa inferior */
 
 typedef enum {
@@ -60,13 +60,9 @@ static struct {
     lv_obj_t *batt_tile_icon;
     lv_obj_t *batt_tile_pct;
     lv_obj_t *batt_tile_state;
-    lv_obj_t *slider;
-    lv_obj_t *slider_val;
     lv_timer_t *timer;
     ui_drag_t drag;
     ui_page_create_t after_close; /* página que se abre al terminar de cerrar */
-    int bright_applied;
-    uint32_t bright_last_ms;
     int64_t last_time_key;
     int last_pct;
     int last_state;
@@ -150,67 +146,6 @@ static void tile_pending(lv_obj_t *t)
     lv_obj_set_style_text_color(lv_obj_get_child(t, 2), flex_color(FLEX_C_MUTE), 0);
 }
 
-/* ---- Brillo ---- */
-
-static void apply_brightness(bool final)
-{
-    const watch_ui_boot_info_t *b = ui_boot_info();
-    const int v = ui_brightness_clamp(lv_slider_get_value(s_qp.slider));
-    const uint32_t now = lv_tick_get();
-    lv_label_set_text_fmt(s_qp.slider_val, "%d %%", v);
-    if (b->brightness_set && ui_brightness_should_apply(v, s_qp.bright_applied, s_qp.bright_last_ms, now, final)) {
-        if (b->brightness_set(v)) {
-            s_qp.bright_applied = v;
-        }
-        s_qp.bright_last_ms = now;
-    }
-}
-
-static void slider_cb(lv_event_t *e)
-{
-    const lv_event_code_t code = lv_event_get_code(e);
-    apply_brightness(code != LV_EVENT_VALUE_CHANGED);
-}
-
-static void build_slider(lv_obj_t *root)
-{
-    const watch_ui_boot_info_t *b = ui_boot_info();
-    const int cur = b->brightness_get ? b->brightness_get() : -1;
-    lv_obj_t *sl = lv_slider_create(root);
-    lv_obj_remove_style_all(sl);
-    lv_obj_set_pos(sl, TILE_X0, SLIDER_Y);
-    lv_obj_set_size(sl, QP_W - 2 * TILE_X0, SLIDER_H);
-    lv_obj_set_style_bg_color(sl, flex_color(FLEX_C_GLASS), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(sl, LV_OPA_70, LV_PART_MAIN);
-    lv_obj_set_style_radius(sl, SLIDER_H / 2, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(sl, flex_color(FLEX_C_ACCENT), LV_PART_INDICATOR);
-    lv_obj_set_style_bg_opa(sl, LV_OPA_COVER, LV_PART_INDICATOR);
-    lv_obj_set_style_radius(sl, SLIDER_H / 2, LV_PART_INDICATOR);
-    lv_obj_set_style_bg_opa(sl, LV_OPA_40, LV_PART_INDICATOR | LV_STATE_DISABLED);
-    lv_slider_set_range(sl, UI_BRIGHT_MIN, UI_BRIGHT_MAX);
-
-    lv_obj_t *sun = flex_icon_create(sl, FLEX_ICON_SUN, 28, FLEX_C_TXT);
-    lv_obj_align(sun, LV_ALIGN_LEFT_MID, 18, 0);
-    s_qp.slider_val = watch_theme_label(sl, FLEX_FONT_BODY, FLEX_C_TXT, "");
-    lv_obj_align(s_qp.slider_val, LV_ALIGN_RIGHT_MID, -20, 0);
-    s_qp.slider = sl;
-
-    if (!b->brightness_set || cur < 0) {
-        /* Sin control de brillo real: se dice, no se simula. */
-        lv_slider_set_value(sl, UI_BRIGHT_MIN, LV_ANIM_OFF);
-        lv_obj_add_state(sl, LV_STATE_DISABLED);
-        lv_label_set_text(s_qp.slider_val, "No disponible");
-        lv_obj_set_style_text_color(s_qp.slider_val, flex_color(FLEX_C_MUTE), 0);
-        return;
-    }
-    lv_slider_set_value(sl, ui_brightness_clamp(cur), LV_ANIM_OFF);
-    lv_label_set_text_fmt(s_qp.slider_val, "%d %%", ui_brightness_clamp(cur));
-    s_qp.bright_applied = cur;
-    lv_obj_add_event_cb(sl, slider_cb, LV_EVENT_VALUE_CHANGED, NULL);
-    lv_obj_add_event_cb(sl, slider_cb, LV_EVENT_RELEASED, NULL);
-    lv_obj_add_event_cb(sl, slider_cb, LV_EVENT_PRESS_LOST, NULL);
-}
-
 /* ---- Animación de la cortina ---- */
 
 static void destroy(void)
@@ -268,6 +203,7 @@ static void animate_to(bool open, uint32_t ms)
 static void close_drag_cb(lv_event_t *e);
 static void handle_cb(lv_event_t *e);
 static void settings_cb(lv_event_t *e);
+static void battery_cb(lv_event_t *e);
 
 static void build(void)
 {
@@ -314,7 +250,7 @@ static void build(void)
     lv_obj_t *batt = tile(root, TILE_X0, TILE_Y1, FLEX_ICON_BOLT, FLEX_C_CAT_GREEN, "--", "",
                           &s_qp.batt_tile_state);
     s_qp.batt_tile_pct = lv_obj_get_child(batt, 1);
-    lv_obj_remove_flag(batt, LV_OBJ_FLAG_CLICKABLE); /* solo informa (detalle en Ajustes > Batería) */
+    lv_obj_add_event_cb(batt, battery_cb, LV_EVENT_CLICKED, NULL); /* abre Ajustes > Batería */
     /* El rayo diría "cargando" aunque descargue: el mosaico usa el indicador
      * real, el mismo de la esfera. */
     lv_obj_delete(lv_obj_get_child(batt, 0));
@@ -325,7 +261,7 @@ static void build(void)
                          "Ajustes", "Pantalla, batería…", NULL);
     lv_obj_add_event_cb(set, settings_cb, LV_EVENT_CLICKED, NULL);
 
-    build_slider(root);
+    ui_bright_create(root, TILE_X0, SLIDER_Y, QP_W - 2 * TILE_X0);
 
     /* Asa inferior: tocarla cierra el panel */
     lv_obj_t *handle = lv_obj_create(root);
@@ -426,6 +362,15 @@ static void settings_cb(lv_event_t *e)
     (void)e;
     if (s_qp.st == QP_OPEN) {
         s_qp.after_close = ui_settings_create;
+        animate_to(false, FLEX_ANIM_APP_CLOSE_MS);
+    }
+}
+
+static void battery_cb(lv_event_t *e)
+{
+    (void)e;
+    if (s_qp.st == QP_OPEN) {
+        s_qp.after_close = ui_battery_page_create;
         animate_to(false, FLEX_ANIM_APP_CLOSE_MS);
     }
 }

@@ -157,8 +157,43 @@ static void test_brightness(void)
     CHECK(!ui_brightness_should_apply(50, 40, 0xFFFFFFF0u, 0x10u, false));
 }
 
+static void test_formats(void)
+{
+    char b[24];
+    ui_fmt_volts(b, sizeof(b), 4085);
+    CHECK(strcmp(b, "4,08 V") == 0);
+    ui_fmt_volts(b, sizeof(b), 3009);
+    CHECK(strcmp(b, "3,00 V") == 0);
+    ui_fmt_volts(b, sizeof(b), 0);
+    CHECK(strcmp(b, "0,00 V") == 0);
+    ui_fmt_volts(b, sizeof(b), -1);
+    CHECK(strcmp(b, "--") == 0);
+    ui_fmt_ma(b, sizeof(b), 200);
+    CHECK(strcmp(b, "200 mA") == 0);
+    ui_fmt_ma(b, sizeof(b), -1);
+    CHECK(strcmp(b, "--") == 0);
+    ui_fmt_bytes(b, sizeof(b), 180u * 1024u);
+    CHECK(strcmp(b, "180 KB") == 0);
+    ui_fmt_bytes(b, sizeof(b), 1023u);
+    CHECK(strcmp(b, "0 KB") == 0);
+    ui_fmt_bytes(b, sizeof(b), 1024u * 1024u);
+    CHECK(strcmp(b, "1,0 MB") == 0);
+    ui_fmt_bytes(b, sizeof(b), 7u * 1024u * 1024u + 1024u * 1024u / 2u);
+    CHECK(strcmp(b, "7,5 MB") == 0);
+    ui_fmt_bytes(b, sizeof(b), 0xFFFFFFFFu);
+    CHECK(strcmp(b, "4095,9 MB") == 0);
+    char tiny[4];
+    ui_fmt_volts(tiny, sizeof(tiny), 4085);
+    CHECK(strcmp(tiny, "4,0") == 0);
+    CHECK(strcmp(ui_time_state_text(WATCH_TIME_OK), "Correcta") == 0);
+    CHECK(strcmp(ui_time_state_text(WATCH_TIME_NOT_SET), "Sin configurar") == 0);
+    CHECK(strcmp(ui_time_state_text(WATCH_TIME_NO_RTC), "No responde") == 0);
+    CHECK(strcmp(ui_time_state_text(WATCH_TIME_STARTING), "Leyendo…") == 0);
+}
+
 void test_ui_all(void)
 {
+    test_formats();
     test_brightness();
     test_face_time();
     test_batt_kind();

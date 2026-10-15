@@ -106,6 +106,7 @@
 #define FLEX_ROW_H           72
 #define FLEX_ROW_GAP         8
 #define FLEX_ROW_ICON        32
+#define FLEX_INFO_ROW_H      56   /* fila de solo información (no pulsable) */
 
 /* ---- Movimiento (ms) -------------------------------------------------- */
 #define FLEX_ANIM_APP_OPEN_MS   210

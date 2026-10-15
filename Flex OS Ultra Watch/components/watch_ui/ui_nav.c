@@ -210,6 +210,18 @@ lv_obj_t *ui_page_new(lv_obj_t *parent)
     return p;
 }
 
+static void page_timer_del_cb(lv_event_t *e)
+{
+    lv_timer_delete(lv_event_get_user_data(e));
+}
+
+lv_timer_t *ui_page_timer(lv_obj_t *page, lv_timer_cb_t cb, uint32_t period_ms, void *user_data)
+{
+    lv_timer_t *t = lv_timer_create(cb, period_ms, user_data);
+    lv_obj_add_event_cb(page, page_timer_del_cb, LV_EVENT_DELETE, t);
+    return t;
+}
+
 lv_obj_t *ui_nav_start(ui_page_create_t root)
 {
     if (s_nav.screen) {
@@ -226,7 +238,7 @@ lv_obj_t *ui_nav_start(ui_page_create_t root)
     return s_nav.screen;
 }
 
-bool ui_nav_push(ui_page_create_t create)
+bool ui_nav_push_opts(ui_page_create_t create, bool edge_gesture)
 {
     if (!s_nav.screen || s_nav.op != NAV_IDLE || s_nav.depth >= NAV_MAX_DEPTH) {
         return false;
@@ -235,10 +247,17 @@ bool ui_nav_push(ui_page_create_t create)
     if (!page) {
         return false;
     }
-    add_edge(page);
+    if (edge_gesture) {
+        add_edge(page);
+    }
     s_nav.pages[s_nav.depth++] = page;
     animate(NAV_PUSHING, FLEX_SCREEN_W, 0, FLEX_ANIM_APP_OPEN_MS);
     return true;
+}
+
+bool ui_nav_push(ui_page_create_t create)
+{
+    return ui_nav_push_opts(create, true);
 }
 
 bool ui_nav_back(void)

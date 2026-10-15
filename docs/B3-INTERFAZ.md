@@ -11,7 +11,7 @@ físicas de la tabla final.
 | **B3-2** | Servicio de hora en solo lectura (RTC PCF85063) y esfera del reloj | implementado · compilado · pruebas en PC y en la vista previa · prueba física pendiente |
 | **B3-3** | Navegación: pila de páginas, transiciones 210/190 ms, volver (botón y gesto desde el borde), arranque con splash | implementado · compilado · pruebas en PC y en la vista previa · prueba física tras B3-5 |
 | **B3-4** | Panel rápido (solo controles con función real) y raíz de Ajustes | implementado · compilado · pruebas en PC y en la vista previa · prueba física pendiente |
-| B3-5 | Ajustes: Pantalla, Batería, Diagnóstico, Acerca de | pendiente |
+| **B3-5** | Ajustes: Pantalla, Batería, Diagnóstico (con la prueba de pantalla y táctil), Acerca de | implementado · compilado · pruebas en PC y en la vista previa · prueba física pendiente |
 | B3-6 | Pruebas de integración en la vista previa (gestos, fugas, animaciones) | pendiente |
 
 ## B3-1. Identidad: iconos y componentes
@@ -257,3 +257,51 @@ Los componentes aparecerán en pantalla con B3-4 y B3-5. Estas pruebas se harán
 | T34 | Brillo | arrastrar el control de brillo de un extremo a otro | El brillo cambia con suavidad mientras se arrastra; no baja del 10 %; el registro serie no muestra errores |
 | T35 | Pendientes | tocar Wi-Fi y Bluetooth | No hacen nada; se ven apagados con "Pendiente" |
 | T36 | Cerrar y Ajustes | cerrar arrastrando hacia arriba y con el asa; abrir Ajustes > Diagnóstico y volver dos veces | Siempre se vuelve a la esfera; sin pantallas congeladas |
+
+## B3-5. Páginas de Ajustes
+
+### Criterios de aceptación
+
+| # | Criterio | Cómo se comprueba |
+|---|---|---|
+| A1 | Ajustes: cuatro filas con función; los valores (brillo, % de batería, versión) son reales y se refrescan cada segundo, solo si cambian | vista previa: el brillo cambiado en Pantalla aparece al volver |
+| A2 | Pantalla: el mismo control de brillo real del panel rápido (componente compartido), aviso honesto de que aún no se guarda y "Apagado" marcado "Pendiente" (F4) | vista previa |
+| A3 | Batería: estado real; umbrales leídos de `battery_thresholds.h` y marcados **provisionales** mientras no estén calibrados (D4); configuración del cargador en **solo lectura**; sin datos, "--" | vista previa con datos y sin ellos |
+| A4 | Diagnóstico: memoria, búferes de LVGL, flash (declarada, JEDEC, sonda > 16 MB), RTC (estado, última lectura, registros) y servicio de batería (lecturas, errores, tiempo de lectura I2C, pila mínima) | vista previa |
+| A5 | Prueba de pantalla y táctil (T2, T3 de B1): marco de 1 px y coordenadas. Se abre **sin** el gesto del borde para poder tocar el borde izquierdo | vista previa: un toque en x = 2 da coordenadas y no navega |
+| A6 | Acerca de: versión del firmware, ESP-IDF y LVGL; PSRAM y flash medidas en el arranque | vista previa |
+| A7 | Todas las etiquetas de todas las pantallas se pueden dibujar con su fuente | recorrido automático de las etiquetas reales (esfera, panel, cada página) |
+| A8 | Las listas se desplazan arrastrando, sin navegar | vista previa: desplazamiento > 150 px y misma página |
+| A9 | Sin fugas | cada página 5 veces: mismos bloques, temporizadores y 0 animaciones |
+
+### Hallazgos de la vista previa (corregidos)
+
+- **Listas que no se desplazaban.** Sobre filas de información (no pulsables), LVGL no encontraba un objeto pulsable desde el que desplazar, porque la lista tampoco lo era.
+  - Ahora la lista es pulsable.
+  - La prueba exige el desplazamiento; antes solo comprobaba que no se navegara.
+- **Títulos partidos en dos líneas.** En LVGL 9, los "..." solo actúan con la altura fija: los títulos de fila tienen ahora la altura de una línea.
+- **Glifos que faltaban.** "≤" y "≥" no están en las fuentes Outfit generadas (Latin-1, guiones y "…"); el texto de los umbrales se escribe sin ellos. La comprobación automática A7 evita que vuelva a pasar.
+
+### Comprobado en el PC
+
+- **`tests/host`:** 557 comprobaciones, 0 fallos (+16 de formatos).
+  - "4,08 V" con coma decimal.
+  - mA y KB/MB.
+  - "--" para lo no disponible.
+  - Estado del RTC.
+- **`tools/sim`:** todas las baterías, 0 fallos.
+  - Ajustes: 182 → 182 bloques de LVGL y los mismos temporizadores.
+  - Vistas previas: `docs/img/f3_ajustes_raiz.png`, `f3_pantalla.png`, `f3_bateria.png`, `f3_bateria_cargador.png`, `f3_diagnostico.png`, `f3_prueba_pantalla.png` y `f3_acerca_de.png`.
+  - Las cifras de memoria y de búferes de esas vistas son de ejemplo del simulador, no medidas.
+- **Firmware completo:** sin avisos.
+  - App: 876 160 B.
+  - DIRAM: 87 159 B.
+
+### Pruebas en el reloj
+
+| # | Prueba | Cómo | Resultado esperado |
+|---|---|---|---|
+| T37 | Ajustes | panel rápido > Ajustes | Cuatro filas con brillo, % de batería y versión reales; ninguna "Pendiente" |
+| T38 | Batería | Ajustes > Batería; desplazar hasta el final | Nivel, tensión y USB coinciden con el registro serie de `watch_power`; la configuración del cargador coincide con la línea `config` del registro; los umbrales dicen "provisionales" |
+| T39 | Diagnóstico | Ajustes > Diagnóstico | RAM y PSRAM libres coinciden con el registro serie; el estado del RTC coincide con T26 |
+| T40 | Prueba de pantalla (= T2 y T3 de B1) | Diagnóstico > Prueba de pantalla; mirar los bordes y tocar las 4 esquinas y el centro | Marco azul de 1 px en los 4 bordes; coordenadas cerca de (0,0), (409,0), (0,501), (409,501) y (205,251) |

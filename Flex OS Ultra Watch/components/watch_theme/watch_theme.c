@@ -19,6 +19,7 @@ static lv_style_t s_checked;
 static lv_style_t s_disabled;
 static lv_style_t s_row;
 static lv_style_t s_tile;
+static lv_style_t s_info;
 static lv_style_t s_list;
 static bool s_inited;
 
@@ -124,6 +125,19 @@ void watch_theme_init(void)
     lv_style_set_border_color(&s_tile, flex_color(FLEX_GLASS_EDGE_HI));
     lv_style_set_border_opa(&s_tile, FLEX_GLASS_EDGE_WEAK);
     lv_style_set_pad_all(&s_tile, 16);
+
+    /* Fila de información: el mismo vidrio que las filas, más baja. */
+    lv_style_init(&s_info);
+    lv_style_set_bg_color(&s_info, flex_color(FLEX_C_GLASS));
+    lv_style_set_bg_opa(&s_info, flat_mix);
+    lv_style_set_radius(&s_info, FLEX_RADIUS_ROW);
+    lv_style_set_pad_left(&s_info, 16);
+    lv_style_set_pad_right(&s_info, 16);
+    lv_style_set_pad_column(&s_info, 12);
+    lv_style_set_layout(&s_info, LV_LAYOUT_FLEX);
+    lv_style_set_flex_flow(&s_info, LV_FLEX_FLOW_ROW);
+    lv_style_set_flex_cross_place(&s_info, LV_FLEX_ALIGN_CENTER);
+    lv_style_set_flex_track_place(&s_info, LV_FLEX_ALIGN_CENTER);
 
     lv_style_init(&s_list);
     lv_style_set_pad_left(&s_list, FLEX_LIST_X);
@@ -282,7 +296,9 @@ lv_obj_t *watch_theme_list(lv_obj_t *parent)
     lv_obj_set_size(list, FLEX_SCREEN_W, FLEX_SCREEN_H - FLEX_HDR_H);
     lv_obj_set_scroll_dir(list, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_remove_flag(list, LV_OBJ_FLAG_CLICKABLE);
+    /* Pulsable a propósito: LVGL solo desplaza desde un objeto pulsable, y
+     * las filas de información y los títulos de sección no lo son. */
+    lv_obj_add_flag(list, LV_OBJ_FLAG_CLICKABLE);
     return list;
 }
 
@@ -300,12 +316,15 @@ lv_obj_t *watch_theme_list_row(lv_obj_t *parent, flex_icon_t icon, uint32_t acce
 
     flex_icon_create(row, icon, FLEX_ROW_ICON, accent); /* ROW_ICON */
 
+    /* Una sola línea: en LVGL 9 los "..." solo actúan con la altura fija. */
     lv_obj_t *t = watch_theme_label(row, FLEX_FONT_BODY, FLEX_C_TXT, title ? title : ""); /* ROW_TITLE */
     lv_label_set_long_mode(t, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_height(t, lv_font_get_line_height(FLEX_FONT_BODY));
     lv_obj_set_flex_grow(t, 1);
 
     lv_obj_t *v = watch_theme_label(row, FLEX_FONT_SMALL, FLEX_C_TXT2, value ? value : ""); /* ROW_VALUE */
     lv_label_set_long_mode(v, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_height(v, lv_font_get_line_height(FLEX_FONT_SMALL));
     lv_obj_set_style_max_width(v, 170, 0);
     if (!value) {
         lv_obj_add_flag(v, LV_OBJ_FLAG_HIDDEN);
@@ -353,4 +372,45 @@ lv_obj_t *watch_theme_tile(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, in
     lv_obj_remove_flag(t, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(t, LV_OBJ_FLAG_CLICKABLE);
     return t;
+}
+
+lv_obj_t *watch_theme_section(lv_obj_t *list, const char *text)
+{
+    watch_theme_init();
+    lv_obj_t *l = watch_theme_label(list, FLEX_FONT_SMALL, FLEX_C_MUTE, text);
+    lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_width(l, LV_PCT(100));
+    lv_obj_set_style_pad_left(l, 6, 0);
+    lv_obj_set_style_pad_top(l, 10, 0);
+    return l;
+}
+
+lv_obj_t *watch_theme_info_row(lv_obj_t *list, const char *title, const char *value)
+{
+    watch_theme_init();
+    lv_obj_t *row = lv_obj_create(list);
+    lv_obj_remove_style_all(row);
+    lv_obj_add_style(row, &s_info, 0);
+    lv_obj_set_size(row, LV_PCT(100), FLEX_INFO_ROW_H);
+    lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+
+    lv_obj_t *t = watch_theme_label(row, FLEX_FONT_SMALL, FLEX_C_TXT2, title ? title : "");
+    lv_label_set_long_mode(t, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_height(t, lv_font_get_line_height(FLEX_FONT_SMALL));
+    lv_obj_set_flex_grow(t, 1);
+    /* El valor puede ocupar dos líneas (caben en FLEX_INFO_ROW_H); más, con "...". */
+    lv_obj_t *v = watch_theme_label(row, FLEX_FONT_SMALL, FLEX_C_TXT, value ? value : "");
+    lv_label_set_long_mode(v, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_style_max_width(v, 230, 0);
+    lv_obj_set_style_max_height(v, 2 * lv_font_get_line_height(FLEX_FONT_SMALL), 0);
+    lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_RIGHT, 0);
+    return row;
+}
+
+void watch_theme_info_set(lv_obj_t *row, const char *value)
+{
+    lv_obj_t *v = lv_obj_get_child(row, 1);
+    if (v && strcmp(lv_label_get_text(v), value ? value : "") != 0) {
+        lv_label_set_text(v, value ? value : "");
+    }
 }

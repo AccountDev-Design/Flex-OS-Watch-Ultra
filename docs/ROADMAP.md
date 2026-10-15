@@ -1,11 +1,11 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 26 %   [█████░░░░░░░░░░░░░░░]   (verificado en el reloj: 7 %)
+PROGRESO GLOBAL: 28,5 %   [██████░░░░░░░░░░░░░░]   (verificado en el reloj: 7 %)
 ```
 
 - **Completado:** auditoría y plan (F0); proyecto ESP-IDF flasheado y arrancando en el reloj (F1.1). Software de F2 (lecturas, estados, indicador, animación y avisos) hecho y probado en el PC.
-- **En curso:** F3 (interfaz, tema y navegación): B3-1 a B3-4 hechos; sigue B3-5 (páginas de Ajustes). F2 está hecha en software y espera las pruebas físicas.
+- **En curso:** F3 (interfaz, tema y navegación): B3-1 a B3-5 hechos en software; queda B3-6 (integración). F2 y F3 esperan las pruebas físicas.
 - **Falta:** las pruebas físicas de B1/B2-1, el resto de batería, la esfera, el panel rápido, los ajustes, los servicios, Flex Phone, el navegador, OTA, la seguridad y las pruebas finales.
 - **Siguiente:** flashear B2-1 y enviar el registro serie de las pruebas T14-T18 (`docs/B2-ENERGIA.md`).
 
@@ -49,13 +49,13 @@ Dentro de F2 queda:
 - **B2-2:** decisión sobre el ADC y el pin TS (❓ D1). Necesita los registros reales de T14.
 - Calibración de los umbrales con la batería real (❓ D4).
 
-### F3 · Interfaz, tema y navegación — 7,5 / 20
+### F3 · Interfaz, tema y navegación — 10 / 20
 | Tarea | Peso | Estado | Puntos |
 |---|---|---|---|
 | F3.1 Identidad Flex OS Ultra: paleta, Outfit, iconos, radios, fondo Onyx, **Liquid Glass** base (tinte adaptativo, brillo, sombra, bordes). **B3-1:** 12 iconos vectoriales, estados pulsado/activo/no disponible, cabecera, lista y fila de Ajustes (`docs/B3-INTERFAZ.md`). Pendiente: fondo pre-desenfocado para fondos con detalle | 5 | 🟡 faltan T2, T13 y T23-T25 | 2,5 |
 | F3.2 Esfera del reloj: hora y fecha reales del RTC (servicio de solo lectura; poner en hora es F4.2), batería real, estados sin datos (B3-2) | 5 | 🟡 faltan T26-T29 | 2,5 |
 | F3.3 Panel rápido: cortina que sigue al dedo, brillo real (mín. 10 %), batería real, acceso a Ajustes, Wi-Fi/Bluetooth marcados "Pendiente" (B3-4) | 5 | 🟡 faltan T33-T36 | 2,5 |
-| F3.4 Ajustes, navegación por gestos y **animaciones/transiciones** (apertura y cierre 210/190 ms, volver, arranque). **B3-3** hecho (navegación, gesto, splash); faltan los Ajustes (B3-5) | 5 | 🔄 | 0 |
+| F3.4 Ajustes (Pantalla, Batería, Diagnóstico, Acerca de), navegación por gestos y **animaciones/transiciones** (apertura y cierre 210/190 ms, volver, arranque) (B3-3, B3-5) | 5 | 🟡 faltan T30-T32 y T37-T40 | 2,5 |
 
 ### F4 · Servicios del sistema — 0 / 10
 | Tarea | Peso | Estado |
@@ -149,7 +149,7 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 
 - **B1:** T1-T13 (`docs/B1-ARRANQUE.md` §5). T1 (arranque) ya está confirmado.
 - **B2:** T14-T22 (`docs/B2-ENERGIA.md`).
-- **B3:** T23-T36 y siguientes (`docs/B3-INTERFAZ.md`).
+- **B3:** T23-T40 (`docs/B3-INTERFAZ.md`).
 - **Flash de 32 MB:** T10 y la prueba de escritura (`docs/FLASH-32MB.md` §6).
 - **Ruta con espacios** `Flex OS Ultra Watch/`: confirmar que compila en Windows y con la extensión de VS Code.
 - **`dependencies.lock`:** subir el que generó tu PC.
@@ -166,4 +166,5 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-15 | 21 % | 0 | B3-1 (iconos y componentes del tema) amplía F3.1, que ya contaba al 50 % |
 | 2026-10-15 | 23,5 % | +2,5 | F3.2 (servicio de hora de solo lectura y esfera) compila y pasa las pruebas de PC y de la vista previa: 50 % de 5 |
 | 2026-10-15 | 23,5 % | 0 | B3-3 (navegación y arranque) es parte de F3.4, que no suma hasta tener también los Ajustes (B3-5) |
-| 2026-10-15 | **26 %** | +2,5 | F3.3 (panel rápido) compila y pasa las pruebas de PC y de la vista previa: 50 % de 5 |
+| 2026-10-15 | 26 % | +2,5 | F3.3 (panel rápido) compila y pasa las pruebas de PC y de la vista previa: 50 % de 5 |
+| 2026-10-15 | **28,5 %** | +2,5 | F3.4 (navegación, arranque y páginas de Ajustes) compila y pasa las pruebas de PC y de la vista previa: 50 % de 5 |

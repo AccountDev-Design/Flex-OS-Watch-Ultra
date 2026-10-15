@@ -41,6 +41,9 @@ lv_obj_t *ui_page_new(lv_obj_t *parent);
 lv_obj_t *ui_nav_start(ui_page_create_t root);
 /** Abre una página encima (210 ms). false si hay una transición en curso o no cabe. */
 bool ui_nav_push(ui_page_create_t create);
+/** Igual, pero sin el gesto "volver" del borde (p. ej. la prueba táctil, que
+ * necesita el borde izquierdo); se vuelve con el botón de la cabecera. */
+bool ui_nav_push_opts(ui_page_create_t create, bool edge_gesture);
 /** Vuelve a la página anterior (190 ms). false en la raíz. */
 bool ui_nav_back(void);
 /** Vuelve a la raíz (la esfera) con una sola animación. */
@@ -58,11 +61,22 @@ const watch_ui_boot_info_t *ui_boot_info(void);
 /** Esfera: hora, fecha y batería (página raíz). */
 lv_obj_t *ui_face_create(lv_obj_t *parent);
 
-/** Diagnóstico (antigua pantalla de inicio de B1). NULL si ya existe una. */
+/** Ajustes > Diagnóstico (con los datos de la pantalla de inicio de B1). */
 lv_obj_t *ui_diag_create(lv_obj_t *parent);
 
-/** Raíz de Ajustes. */
+/** Raíz de Ajustes y sus páginas. */
 lv_obj_t *ui_settings_create(lv_obj_t *parent);
+lv_obj_t *ui_display_page_create(lv_obj_t *parent);
+lv_obj_t *ui_battery_page_create(lv_obj_t *parent);
+lv_obj_t *ui_about_create(lv_obj_t *parent);
+/** Prueba de pantalla (marco de 1 px) y táctil (coordenadas). */
+lv_obj_t *ui_touchtest_create(lv_obj_t *parent);
+
+/** Control de brillo compartido (panel rápido y Pantalla), de w x 64 px. */
+lv_obj_t *ui_bright_create(lv_obj_t *parent, int32_t x, int32_t y, int32_t w);
+
+/** Temporizador ligado a una página: se borra con ella. */
+lv_timer_t *ui_page_timer(lv_obj_t *page, lv_timer_cb_t cb, uint32_t period_ms, void *user_data);
 
 /* ---- Panel rápido (ui_qp) ---- */
 

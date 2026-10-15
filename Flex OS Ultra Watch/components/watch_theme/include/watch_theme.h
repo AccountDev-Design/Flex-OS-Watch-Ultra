@@ -108,6 +108,17 @@ lv_obj_t *watch_theme_list(lv_obj_t *parent);
 lv_obj_t *watch_theme_list_row(lv_obj_t *parent, flex_icon_t icon, uint32_t accent, const char *title,
                                const char *value, bool chevron);
 void watch_theme_row_set_value(lv_obj_t *row, const char *value);
+
+/** Título de sección dentro de una lista (texto pequeño apagado). */
+lv_obj_t *watch_theme_section(lv_obj_t *list, const char *text);
+
+/**
+ * Fila de solo información (FLEX_INFO_ROW_H px, no pulsable): título a la
+ * izquierda y valor a la derecha. El valor se cambia con
+ * watch_theme_info_set(), que no reescribe si no cambia.
+ */
+lv_obj_t *watch_theme_info_row(lv_obj_t *list, const char *title, const char *value);
+void watch_theme_info_set(lv_obj_t *row, const char *value);
 /** Marca la fila como no disponible: apagada, sin toque y con el valor "Pendiente". */
 void watch_theme_row_set_pending(lv_obj_t *row);
 

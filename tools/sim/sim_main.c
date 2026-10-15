@@ -171,6 +171,12 @@ void sim_set_time(watch_time_state_t st, int y, int mo, int d, int h, int mi, in
 }
 
 /* ---- Datos simulados que sustituyen a watch_power / watch_time / watch_diag ---- */
+void watch_time_info(watch_time_info_t *out)
+{
+    memset(out, 0, sizeof(*out));
+    out->state = s_time.state;
+}
+
 watch_time_state_t watch_time_now(wt_datetime_t *out)
 {
     if (s_time.state == WATCH_TIME_OK) {
@@ -189,6 +195,8 @@ void watch_diag_mem(watch_mem_report_t *out)
 {
     memset(out, 0, sizeof(*out));
     out->internal_free = 180 * 1024;   /* valores de ejemplo, no medidos */
+    out->internal_largest = 110 * 1024;
+    out->psram_total = 8 * 1024 * 1024;
     out->psram_free = 7200 * 1024;
 }
 
@@ -226,6 +234,7 @@ int main(int argc, char **argv)
     sim_suite_face(out);
     sim_suite_nav(out);
     sim_suite_qp(out);
+    sim_suite_settings(out);
 
     printf("%s (%d fallos)\n", sim_fails ? "FALLOS" : "TODO OK", sim_fails);
     return sim_fails ? 1 : 0;

@@ -5,6 +5,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include "battery_model.h"
 #include "flex_batt_style.h"
@@ -60,6 +61,19 @@ void ui_face_time(watch_time_state_t state, const wt_datetime_t *dt, ui_face_tim
 #define UI_BRIGHT_MIN      10
 #define UI_BRIGHT_MAX      100
 #define UI_BRIGHT_APPLY_MS 60
+
+/* ---- Formatos de las páginas de información (español: coma decimal) ----
+ * Un valor negativo significa "no disponible" y se escribe "--": nunca se
+ * inventa un valor. Todas devuelven lo mismo que snprintf. */
+
+/** 4085 -> "4,08 V" (se trunca a centésimas). */
+int ui_fmt_volts(char *buf, size_t n, int mv);
+/** 200 -> "200 mA" */
+int ui_fmt_ma(char *buf, size_t n, int ma);
+/** 184320 -> "180 KB"; 7340032 -> "7,0 MB" (a partir de 1 MB, con un decimal). */
+int ui_fmt_bytes(char *buf, size_t n, uint32_t bytes);
+/** Estado del servicio de hora para Diagnóstico. */
+const char *ui_time_state_text(watch_time_state_t st);
 
 int ui_brightness_clamp(int percent);
 bool ui_brightness_should_apply(int value, int applied, uint32_t last_ms, uint32_t now_ms, bool final);

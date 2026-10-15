@@ -9,6 +9,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "watch_diag.h"
 
 #ifdef __cplusplus
@@ -23,6 +24,13 @@ typedef struct {
      * el panel rápido lo muestra como no disponible. */
     int (*brightness_get)(void);        /**< 0..100, o < 0 si se desconoce */
     bool (*brightness_set)(int percent); /**< true si se aplicó */
+    /* Para Acerca de y Diagnóstico (NULL / 0 = no disponible) */
+    const char *fw_version;              /**< versión del firmware (esp_app_desc) */
+    const char *idf_version;
+    uint16_t disp_buf_lines;             /**< búferes parciales de LVGL (watch_display) */
+    uint32_t disp_buf_bytes;
+    bool disp_double_buffer;
+    bool disp_buf_psram;
 } watch_ui_boot_info_t;
 
 /**
