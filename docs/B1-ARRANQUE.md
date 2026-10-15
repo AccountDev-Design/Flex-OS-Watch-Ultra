@@ -46,30 +46,53 @@ de Flex OS Ultra y lectura **de solo lectura** del AXP2101.
 
 ## 3. Compilar y flashear en tu PC (ESP-IDF 5.5.5)
 
+El proyecto ESP-IDF está en la carpeta **`Flex OS Ultra Watch/`**. Se compila y se flashea desde dentro. La guía completa, con los archivos que genera la compilación, está en `Flex OS Ultra Watch/README.md`.
+
 ### Con terminal ESP-IDF (o "ESP-IDF Terminal" en VS Code)
 
 ```bash
 git clone https://github.com/AccountDev-Design/Flex-OS-Watch-Ultra.git
 cd Flex-OS-Watch-Ultra
 git checkout ccr-b6cde864-7hvm3w
-idf.py set-target esp32s3        # genera sdkconfig desde sdkconfig.defaults
+cd "Flex OS Ultra Watch"           # comillas: el nombre tiene espacios
+idf.py set-target esp32s3          # solo la primera vez: genera sdkconfig desde sdkconfig.defaults
 idf.py build
-idf.py -p COM5 flash monitor     # Windows: COMx · Linux: /dev/ttyACM0 · macOS: /dev/cu.usbmodem*
+idf.py -p COM5 flash monitor       # Windows: COMx · Linux: /dev/ttyACM0 · macOS: /dev/cu.usbmodem*
 ```
 
 ### Con la extensión de VS Code
 
-1. Abre la carpeta.
+1. Abre la carpeta **`Flex OS Ultra Watch`**, no la raíz del repositorio.
 2. Elige "Set Espressif Device Target" → `esp32s3` (puerto USB Serial/JTAG).
 3. Ejecuta "Build", luego "Flash" (método UART/USB) y luego "Monitor".
 
+### Si ya compilaste B1 en la raíz antes de la reorganización
+
+Tu copia local tiene, en la raíz y sin versionar, lo que generó aquella compilación:
+- `build/`, `managed_components/` y `sdkconfig` (ignorados por Git);
+- `dependencies.lock`, que no está ignorado y es la resolución exacta con la que B1 funcionó en tu reloj.
+
+Para conservar esa misma configuración:
+
+```bash
+git pull
+mv dependencies.lock "Flex OS Ultra Watch/"     # Windows: move dependencies.lock "Flex OS Ultra Watch\"
+mv sdkconfig "Flex OS Ultra Watch/"             # opcional: tu sdkconfig de B1
+cd "Flex OS Ultra Watch"
+idf.py build                                    # sin set-target si moviste sdkconfig (set-target lo regenera)
+```
+
+- Después puedes borrar los antiguos `build/` y `managed_components/` de la raíz: son regenerables y ya no se usan.
+- Sube `Flex OS Ultra Watch/dependencies.lock` al repositorio.
+
 ### Notas
 
-- **No ejecutes `idf.py erase-flash`.** El flasheo solo escribe bootloader (0x0), tabla (0x8000), `otadata` (0xE000) y la app (0x10000) — ver `build/flash_args`.
+- **No ejecutes `idf.py erase-flash`.** El flasheo solo escribe bootloader (0x0), tabla (0x8000), `otadata` (0xE000) y la app (0x10000) — ver `Flex OS Ultra Watch/build/flash_args`.
+- **Espacios en la ruta:** ESP-IDF 5.5.5 los declara no soportados. Este proyecto compila y genera el flasheo correctamente en una ruta con espacios (comprobado en Linux), pero no en Windows ni con la extensión de VS Code. Si falla, renombra la carpeta sin espacios (`git mv "Flex OS Ultra Watch" Flex-OS-Ultra-Watch`).
 - Si no entra en modo de descarga, mantén **BOOT** (GPIO0) mientras conectas o reinicias.
 - El reloj usa el USB nativo del ESP32-S3 (USB Serial/JTAG). La consola sale por él como consola secundaria, igual que en los ejemplos oficiales.
-- Para volver al firmware de fábrica está la imagen oficial `FirmWare/ESP32-S3-Touch-AMOLED-2.06-xiaozhi-251104.bin`: 28 MB desde 0x0, que sustituye todo.
-- Sin acceso al registro (como en el entorno de desarrollo):
+- Para volver al firmware de fábrica está la imagen oficial `FirmWare/ESP32-S3-Touch-AMOLED-2.06-xiaozhi-251104.bin` del repositorio de Waveshare: 28 MB desde 0x0, sustituye todo. No forma parte de este proyecto.
+- Sin acceso al registro (como en el entorno de desarrollo), desde la raíz del repositorio:
 
   ```bash
   FLEX_DEPS_DIR=/ruta/deps tools/offline/build_offline.sh build
@@ -83,7 +106,7 @@ idf.py -p COM5 flash monitor     # Windows: COMx · Linux: /dev/ttyACM0 · macOS
 | Tamaño de la app | 818 688 B (0,78 MiB) en una ranura de 6 MB |
 | RAM interna estática (DIRAM) | 86 KB usados, 255 KB libres. Con `LV_ATTRIBUTE_FAST_MEM_USE_IRAM`: 194 KB usados, solo 148 KB libres, por eso se desactiva |
 | Tabla de particiones | válida con 32 MB; rechazada con 16 MB |
-| Pruebas de PC (`make -C tests/host`, con ASan y UBSan) | **87/87**: decodificación AXP2101, estados, confirmación de carga, filtros, histéresis, sonda de flash, tinte del vidrio y fondo |
+| Pruebas de PC (`make -C tests/host` desde la raíz, con ASan y UBSan) | **87/87**: decodificación AXP2101, estados, confirmación de carga, filtros, histéresis, sonda de flash, tinte del vidrio y fondo |
 | Vista previa LVGL en el PC (`tools/sim`) | 4 escenarios renderizados: `docs/img/b1_*.png` (datos **simulados**) |
 
 **Nada de lo anterior prueba el hardware.**

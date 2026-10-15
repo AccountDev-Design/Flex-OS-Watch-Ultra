@@ -45,8 +45,17 @@ Global  [███░░░░░░░░░░░░░░░░░]  17 %   (
 - Diseñada y compilada.
 - Acceso por encima de 16 MB verificado solo en el código de ESP-IDF; **no** se cuenta como aprovechada hasta T10 y la prueba de escritura (docs/FLASH-32MB.md §6).
 
+**Prueba en hardware informada por el usuario (2026-10-15):**
+- B1 se compiló en su PC con el registro de componentes, se flasheó y la prueba inicial en el reloj fue satisfactoria.
+- Confirma que la resolución del registro funciona y que el arranque es correcto.
+- No cambia la puntuación hasta tener los registros de T1-T13.
+
+**Reorganización (2026-10-15):**
+- El proyecto ESP-IDF pasa a `Flex OS Ultra Watch/` sin cambiar ni un byte del firmware (47 archivos renombrados).
+- Las imágenes compiladas solo difieren de las de B1 en la fecha y hora de compilación y en los hashes derivados.
+
 **Bloqueos:**
 - Pruebas físicas: requieren tu reloj.
-- Resolución del registro de componentes: requiere tu PC, porque este entorno no accede a `components.espressif.com`.
+- `dependencies.lock`: tu PC ya resolvió las dependencias contra el registro. Falta subir ese archivo a `Flex OS Ultra Watch/`, porque este entorno no accede a `components.espressif.com`.
 
 **Siguiente bloque propuesto (B2):** decidir, con los registros de T8, si se activa el ADC de VBAT y se desactiva el pin TS como en el código oficial. Después, indicador de batería en el tema y animación de carga disparada por `charging_started`.

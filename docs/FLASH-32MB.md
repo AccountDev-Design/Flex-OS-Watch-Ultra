@@ -34,7 +34,7 @@ El identificador esperado es `0xC84019`: fabricante GigaDevice (0xC8), tipo 0x40
 | 0x0000000 – 0x0FFFFFF (16 MB) | caché (ejecución y mmap) + `esp_partition` | bootloader, apps OTA, volcado de memoria, recursos mapeables |
 | 0x1000000 – 0x1FFFFFF (16 MB) | **solo** `esp_partition_read/write/erase` (SPI1, comandos de 4 bytes) | datos de usuario (LittleFS), nunca código |
 
-## 4. Tabla de particiones (`partitions.csv`)
+## 4. Tabla de particiones (`Flex OS Ultra Watch/partitions.csv`)
 
 | Nombre | Desplazamiento | Tamaño | Justificación |
 |---|---|---|---|

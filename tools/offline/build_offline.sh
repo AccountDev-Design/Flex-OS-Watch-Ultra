@@ -3,8 +3,9 @@
 # Espressif (entornos cuyo proxy bloquea components.espressif.com).
 #
 # NO es la forma normal de compilar: en un PC con acceso al registro usa
-# `idf.py build` (docs/B1-ARRANQUE.md). Este script copia el proyecto a una
-# carpeta de trabajo y sustituye las dependencias del registro por copias
+# `idf.py build` dentro de "Flex OS Ultra Watch/" (docs/B1-ARRANQUE.md). Este
+# script copia ese proyecto a una carpeta de trabajo y sustituye las
+# dependencias del registro por copias
 # locales de las MISMAS versiones, tomadas de sus repositorios de GitHub
 # (override_path). El manifiesto real del repositorio no se modifica.
 #
@@ -13,8 +14,12 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+PROJECT="$ROOT/Flex OS Ultra Watch"
+[ -f "$PROJECT/CMakeLists.txt" ] || { echo "no se encuentra el proyecto en $PROJECT" >&2; exit 2; }
 DEPS=${FLEX_DEPS_DIR:?"define FLEX_DEPS_DIR"}
-WORK=${FLEX_OFFLINE_WORK:-"$ROOT/../flex-watch-offline-build"}
+# La carpeta de trabajo conserva el nombre del proyecto (con espacios) para
+# compilar en las mismas condiciones que en el repositorio.
+WORK=${FLEX_OFFLINE_WORK:-"$ROOT/../flex-watch-offline-build/Flex OS Ultra Watch"}
 
 # nombre_en_el_registro:carpeta_local
 DEPS_MAP=(
@@ -36,7 +41,7 @@ mkdir -p "$WORK"
 find "$WORK" -mindepth 1 -maxdepth 1 \
     ! -name build ! -name sdkconfig ! -name sdkconfig.old ! -name dependencies.lock \
     ! -name managed_components -exec rm -rf {} +
-(cd "$ROOT" && tar --exclude=./build --exclude=./managed_components --exclude=./.git \
+(cd "$PROJECT" && tar --exclude=./build --exclude=./managed_components --exclude=./.git \
     --exclude=./dependencies.lock --exclude=./sdkconfig --exclude=./sdkconfig.old \
     -cf - .) | tar -xf - -C "$WORK"
 
