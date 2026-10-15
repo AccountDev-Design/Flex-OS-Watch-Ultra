@@ -15,6 +15,7 @@
 #include "lvgl.h"
 #include "watch_power.h"
 #include "watch_ui.h"
+#include "ui_internal.h"
 #include "flex_tokens.h"
 
 #define W FLEX_SCREEN_W
@@ -133,5 +134,22 @@ int main(int argc, char **argv)
     scenario(4, 3450, BATT_STATE_DISCHARGING, BATT_LEVEL_CRITICAL, false);
     run(1200);
     save_png(out, "b2_critica");
-    return 0;
+
+    /* B2-4: enchufar desde descarga -> una animación, que se borra sola. */
+    int fails = 0;
+    scenario(62, 4012, BATT_STATE_CHARGING, BATT_LEVEL_NORMAL, true);
+    s_sim.track.prev_state = BATT_STATE_DISCHARGING;
+    s_sim.track.charge_events = 1;
+    run(1200);
+    save_png(out, "b2_animacion_carga");
+    if (!ui_charge_anim_active()) { printf("FALLO: la animacion de carga no se mostro\n"); fails++; }
+    run(2600);
+    if (ui_charge_anim_active()) { printf("FALLO: la animacion sigue activa a los 3,8 s\n"); fails++; }
+    if (lv_anim_count_running() != 0) { printf("FALLO: %u animaciones vivas\n", (unsigned)lv_anim_count_running()); fails++; }
+    if (lv_obj_get_child_count(lv_layer_top()) != 0) { printf("FALLO: quedan objetos en layer_top\n"); fails++; }
+    /* Sin evento nuevo no se repite */
+    run(1200);
+    if (ui_charge_anim_active()) { printf("FALLO: la animacion se repitio sin evento\n"); fails++; }
+    printf("animacion de carga: %s\n", fails ? "FALLOS" : "OK");
+    return fails ? 1 : 0;
 }

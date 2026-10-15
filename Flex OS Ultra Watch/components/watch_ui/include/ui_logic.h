@@ -19,6 +19,22 @@ flex_batt_kind_t ui_batt_kind(batt_state_t state, batt_level_t level);
 /** Texto de estado en español. */
 const char *ui_batt_state_text(batt_state_t state);
 
+/**
+ * Compuerta de la animación de carga. Se dispara una sola vez por cada inicio
+ * de carga CONFIRMADO por el servicio (charge_events), y solo si se venía de
+ * un estado conocido: al arrancar (UNKNOWN -> CHARGING) o al recuperarse de un
+ * error de lectura no se anima. Los eventos anteriores a la creación de la
+ * interfaz tampoco se animan.
+ */
+typedef struct {
+    uint32_t seen_events;
+    bool primed;
+} ui_charge_gate_t;
+
+void ui_charge_gate_init(ui_charge_gate_t *g);
+bool ui_charge_gate_update(ui_charge_gate_t *g, uint32_t charge_events, batt_state_t prev_state,
+                           batt_state_t state);
+
 #ifdef __cplusplus
 }
 #endif

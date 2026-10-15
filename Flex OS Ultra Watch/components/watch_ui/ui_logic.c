@@ -34,3 +34,24 @@ const char *ui_batt_state_text(batt_state_t state)
     default:                       return "Sin datos";
     }
 }
+
+void ui_charge_gate_init(ui_charge_gate_t *g)
+{
+    g->seen_events = 0;
+    g->primed = false;
+}
+
+bool ui_charge_gate_update(ui_charge_gate_t *g, uint32_t charge_events, batt_state_t prev_state,
+                           batt_state_t state)
+{
+    if (!g->primed) {
+        g->seen_events = charge_events;
+        g->primed = true;
+        return false;
+    }
+    if (charge_events == g->seen_events) {
+        return false;
+    }
+    g->seen_events = charge_events;
+    return state == BATT_STATE_CHARGING && prev_state != BATT_STATE_UNKNOWN;
+}

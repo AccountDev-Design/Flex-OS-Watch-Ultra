@@ -58,8 +58,34 @@ static void test_batt_style(void)
     }
 }
 
+static void test_charge_gate(void)
+{
+    ui_charge_gate_t g;
+    ui_charge_gate_init(&g);
+    /* Primera lectura: solo fija la referencia (eventos previos a la interfaz) */
+    CHECK(!ui_charge_gate_update(&g, 3, BATT_STATE_DISCHARGING, BATT_STATE_CHARGING));
+    /* Sin eventos nuevos: nada, aunque siga cargando */
+    CHECK(!ui_charge_gate_update(&g, 3, BATT_STATE_DISCHARGING, BATT_STATE_CHARGING));
+    /* Enchufar desde descarga: una sola vez */
+    CHECK(ui_charge_gate_update(&g, 4, BATT_STATE_DISCHARGING, BATT_STATE_CHARGING));
+    CHECK(!ui_charge_gate_update(&g, 4, BATT_STATE_DISCHARGING, BATT_STATE_CHARGING));
+    /* Desde "externa sin carga" o "completa" también es un inicio real */
+    CHECK(ui_charge_gate_update(&g, 5, BATT_STATE_EXTERNAL_IDLE, BATT_STATE_CHARGING));
+    CHECK(ui_charge_gate_update(&g, 6, BATT_STATE_FULL, BATT_STATE_CHARGING));
+    /* Desde "sin datos" (arranque o error de lectura): no se anima */
+    CHECK(!ui_charge_gate_update(&g, 7, BATT_STATE_UNKNOWN, BATT_STATE_CHARGING));
+    /* El evento llegó pero ya se desenchufó antes de leerlo: no se anima */
+    CHECK(!ui_charge_gate_update(&g, 8, BATT_STATE_CHARGING, BATT_STATE_DISCHARGING));
+    /* Arranque ya cargando: la 1.a confirmación viene de UNKNOWN */
+    ui_charge_gate_t b;
+    ui_charge_gate_init(&b);
+    CHECK(!ui_charge_gate_update(&b, 0, BATT_STATE_UNKNOWN, BATT_STATE_UNKNOWN));
+    CHECK(!ui_charge_gate_update(&b, 1, BATT_STATE_UNKNOWN, BATT_STATE_CHARGING));
+}
+
 void test_ui_all(void)
 {
     test_batt_kind();
     test_batt_style();
+    test_charge_gate();
 }

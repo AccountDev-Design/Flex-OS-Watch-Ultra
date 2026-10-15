@@ -13,7 +13,7 @@ $(shell mkdir -p $(BUILD) && ln -sfn "../../../Flex OS Ultra Watch" $(FW))
 
 CFLAGS := -std=gnu11 -O1 -g -Wall -DLV_CONF_INCLUDE_SIMPLE -DLV_LVGL_H_INCLUDE_SIMPLE \
           -I. -Istubs -I$(LVGL_DIR) -I$(LVGL_DIR)/src \
-          -I$(FW)/components/watch_ui/include -I$(FW)/components/watch_theme/include \
+          -I$(FW)/components/watch_ui -I$(FW)/components/watch_ui/include -I$(FW)/components/watch_theme/include \
           -I$(FW)/components/watch_power/include -I$(FW)/components/watch_diag/include
 
 LVGL_SRC := $(shell find $(LVGL_DIR)/src -name '*.c')

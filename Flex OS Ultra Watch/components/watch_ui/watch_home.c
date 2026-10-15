@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "flex_battery_icon.h"
+#include "ui_internal.h"
 #include "ui_logic.h"
 #include "watch_power.h"
 #include "watch_theme.h"
@@ -65,7 +66,7 @@ static uint32_t state_color(flex_batt_kind_t kind)
 static void update_battery(void)
 {
     watch_power_snapshot_t snap;
-    const bool have = s_home.power_ok && watch_power_get(&snap);
+    const bool have = s_home.power_ok && ui_system_power(&snap);
 
     const batt_state_t st = have ? snap.track.state : BATT_STATE_UNKNOWN;
     const batt_level_t lv = have ? snap.track.level : BATT_LEVEL_UNKNOWN;
@@ -188,6 +189,7 @@ void watch_ui_home_create(const watch_ui_boot_info_t *info)
     s_home.last_state = -1;
 
     watch_theme_init();
+    ui_system_start(info->power_ok);
 
     lv_obj_t *scr = lv_obj_create(NULL);
     lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
