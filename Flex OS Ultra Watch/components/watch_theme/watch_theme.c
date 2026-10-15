@@ -135,6 +135,13 @@ lv_obj_t *watch_theme_glass_card(lv_obj_t *parent, int32_t x, int32_t y, int32_t
     return card;
 }
 
+void watch_theme_glass_set_min_tint(lv_obj_t *card, lv_opa_t min_mix)
+{
+    if (lv_obj_get_style_bg_opa(card, 0) < min_mix) {
+        lv_obj_set_style_bg_opa(card, min_mix, 0);
+    }
+}
+
 lv_obj_t *watch_theme_label(lv_obj_t *parent, const lv_font_t *font, uint32_t rgb, const char *text)
 {
     lv_obj_t *l = lv_label_create(parent);

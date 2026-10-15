@@ -13,8 +13,9 @@ INC := -I$(FW)/components/watch_power/include \
        -I$(FW)/components/watch_diag/include \
        -I$(FW)/components/watch_theme/include \
        -I$(FW)/components/watch_ui/include
-SRC := test_main.c test_ui.c \
+SRC := test_main.c test_ui.c test_power_alerts.c \
        $(FW)/components/watch_power/battery_model.c \
+       $(FW)/components/watch_power/battery_alerts.c \
        $(FW)/components/watch_diag/flash_probe_logic.c \
        $(FW)/components/watch_theme/flex_glass_math.c \
        $(FW)/components/watch_theme/flex_wallpaper.c \

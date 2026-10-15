@@ -21,7 +21,8 @@ APP_SRC := sim_main.c \
            $(wildcard $(FW)/components/watch_ui/*.c) \
            $(wildcard $(FW)/components/watch_theme/*.c) \
            $(wildcard $(FW)/components/watch_theme/fonts/*.c) \
-           $(FW)/components/watch_power/battery_model.c
+           $(FW)/components/watch_power/battery_model.c \
+           $(FW)/components/watch_power/battery_alerts.c
 
 LVGL_OBJ := $(patsubst $(LVGL_DIR)/%.c,$(BUILD)/lvgl/%.o,$(LVGL_SRC))
 
@@ -32,7 +33,10 @@ $(BUILD)/lvgl/%.o: $(LVGL_DIR)/%.c lv_conf.h
 	@mkdir -p $(dir $@)
 	@$(CC) $(CFLAGS) -w -c $< -o $@
 
-$(BUILD)/sim: $(APP_SRC) $(LVGL_OBJ)
+APP_HDR := $(wildcard $(FW)/components/*/include/*.h) $(wildcard $(FW)/components/watch_ui/*.h) \
+           $(wildcard stubs/*.h stubs/*/*.h) lv_conf.h
+
+$(BUILD)/sim: $(APP_SRC) $(APP_HDR) $(LVGL_OBJ)
 	@echo "LD $@"
 	@$(CC) $(CFLAGS) -Werror $(APP_SRC) $(LVGL_OBJ) -lm -o $@
 

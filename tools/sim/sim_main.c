@@ -89,6 +89,9 @@ static void save_png(const char *dir, const char *name)
     printf("escrito %s\n", path);
 }
 
+static int g_fails;
+#define EXPECT(cond, msg) do { if (!(cond)) { printf("FALLO: %s\n", msg); g_fails++; } } while (0)
+
 int main(int argc, char **argv)
 {
     const char *out = argc > 1 ? argv[1] : ".";
@@ -117,6 +120,12 @@ int main(int argc, char **argv)
     scenario(12, 3640, BATT_STATE_DISCHARGING, BATT_LEVEL_LOW, false);
     run(1200);
     save_png(out, "b1_baja");
+    /* B2-5: aviso de batería baja visible y que se va solo (~4,6 s) */
+    EXPECT(ui_banner_active(), "el aviso de bateria baja no se mostro");
+    run(4000);
+    EXPECT(!ui_banner_active(), "el aviso de bateria baja no se oculto");
+    run(2000);
+    EXPECT(!ui_banner_active(), "el aviso de bateria baja se repitio");
 
     scenario(-1, -1, BATT_STATE_UNKNOWN, BATT_LEVEL_UNKNOWN, false);
     s_sim.driver_ok = false;
@@ -134,9 +143,12 @@ int main(int argc, char **argv)
     scenario(4, 3450, BATT_STATE_DISCHARGING, BATT_LEVEL_CRITICAL, false);
     run(1200);
     save_png(out, "b2_critica");
+    EXPECT(ui_banner_active(), "el aviso critico no se mostro");
+    run(4000);
+    EXPECT(!ui_banner_active(), "el aviso critico no se oculto");
 
     /* B2-4: enchufar desde descarga -> una animación, que se borra sola. */
-    int fails = 0;
+    int fails = g_fails;
     scenario(62, 4012, BATT_STATE_CHARGING, BATT_LEVEL_NORMAL, true);
     s_sim.track.prev_state = BATT_STATE_DISCHARGING;
     s_sim.track.charge_events = 1;

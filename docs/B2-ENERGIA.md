@@ -8,7 +8,7 @@ B2 avanza en bloques pequeños. **Ningún bloque escribe registros del AXP2101.*
 | B2-2 | Decidir, con los registros reales, si se activa el ADC de VBAT y se desactiva el pin TS como hace el código oficial (decisión D1 de `ROADMAP.md`) | pendiente de T14 |
 | B2-3 | Indicador de batería del tema: icono vectorial con 7 estados (normal, bajo, crítico, cargando, completa, externa, sin datos/sin batería) | implementado · compilado · pruebas en PC · prueba física pendiente |
 | B2-4 | Animación de carga (anillo hasta el % real, ~2,3 s, se cierra con un toque) disparada una vez por cada inicio de carga confirmado que venga de un estado conocido; `ui_system` lee el servicio una sola vez para todas las pantallas | implementado · compilado · pruebas en PC y de ciclo de vida en la vista previa · prueba física pendiente |
-| B2-5 | Avisos de batería baja o crítica | pendiente |
+| B2-5 | Avisos de batería baja o crítica: un aviso por episodio y clase, solo descargando, enfriamiento de 10 min; umbrales provisionales aislados en `battery_thresholds.h` | implementado · compilado · pruebas en PC y de ciclo de vida · prueba física pendiente |
 
 ## B2-1. Auditoría frente al datasheet del AXP2101
 
@@ -76,3 +76,61 @@ Flashea con `idf.py -p PUERTO flash monitor` desde `Flex OS Ultra Watch/` y copi
 | T18 | Recursos | registro tras 30 min | `lectura I2C` con máximo < 5000 us; `pila libre minima` ≥ 512 B; ningún aviso de pila; sin reinicios |
 
 Las pruebas T4-T8 de B1 (`B1-ARRANQUE.md` §5) siguen vigentes.
+
+## B2-3 a B2-5. Indicador, animación y avisos
+
+**Indicador** (`watch_theme/flex_battery_icon`):
+- Es un único objeto LVGL dibujado con primitivas vectoriales: contorno, polo, relleno proporcional y glifo.
+- Solo se invalida cuando cambia el tipo de vista o el porcentaje.
+
+| Estado del servicio | Vista |
+|---|---|
+| descargando, nivel normal | relleno blanco |
+| descargando, nivel bajo | relleno ámbar (`warn`) |
+| descargando, nivel crítico | relleno y contorno rojos |
+| cargando | relleno verde + rayo |
+| carga completa | relleno verde + marca |
+| externa sin carga | relleno azul claro + rayo atenuado |
+| sin datos | solo contorno gris, **nunca un relleno inventado** |
+| sin batería | contorno tachado |
+
+**D3 (resuelta):** en "carga completa" se muestra el porcentaje real del gauge, no un 100 % forzado.
+
+**Animación de inicio de carga** (`watch_ui/ui_charge_anim`):
+- Es un anillo que sube hasta el % real. Entra en 220 ms, llena el anillo en 900 ms y sale a los 2 s (unos 2,3 s en total). Un toque la cierra.
+- Se dispara **una vez** por cada `charge_events` nuevo, y solo si el estado previo confirmado era conocido (descarga, externa o completa). Nunca al arrancar ya cargando, ni tras un error de lectura.
+- Vive en `lv_layer_top` y se borra al terminar.
+
+**Avisos** (`watch_power/battery_alerts` + `watch_ui/ui_banner`):
+- **Batería baja** al entrar en nivel bajo; **crítica** al entrar en nivel crítico.
+- Solo descargando. Se rearman al volver a nivel normal (≥ 18 %), con 10 min de enfriamiento por clase.
+- Tarjeta de vidrio superior: entra en 220 ms, se ve 4,2 s y sale en 180 ms (tiempos de la referencia).
+- **Diferencia justificada:** el suelo de tinte del aviso es 235, no 150. La referencia usa 150 sobre un fondo desenfocado; sin desenfoque, la esfera se transparentaba (comprobado en la vista previa).
+
+**Umbrales:** `battery_thresholds.h` con `BATT_THRESHOLDS_CALIBRATED 0`:
+
+| Nivel | Entra | Sale |
+|---|---|---|
+| Bajo | 15 % | 18 % |
+| Crítico | 5 % | 8 % |
+
+Siguen siendo provisionales (D4) hasta medir una descarga real.
+
+**`ui_system`:** un único temporizador (500 ms) lee el servicio y comparte la copia entre las pantallas y las capas globales.
+
+### Comprobado en el PC (B2-3 a B2-5)
+
+| Comprobación | Resultado |
+|---|---|
+| Pruebas de PC | **363/363**: estado → vista, colores, glifos, relleno monótono, compuerta de la animación, avisos (secuencias, USB, rearme, enfriamiento, vuelta del reloj de 32 bits) |
+| Vista previa con LVGL 9.5 real (`tools/sim`) | El aviso bajo y el crítico aparecen y desaparecen solos. La animación aparece, se borra sola, no deja animaciones ni objetos en `lv_layer_top` y no se repite sin un evento nuevo |
+| Compilación ESP-IDF 5.5.5 | OK, 0 avisos; DIRAM 86 775 B (+248 B desde B2-1); app 826 272 B; particiones idénticas |
+
+### Pruebas en el reloj (pendientes)
+
+| # | Prueba | Cómo | Esperado |
+|---|---|---|---|
+| T19 | Indicador | mirar la barra de estado sin USB, con USB cargando y con USB al 100 % | El dibujo coincide con la tabla de vistas y con el texto de la tarjeta |
+| T20 | Animación de carga | conectar el USB con la batería no llena; desconectar y volver a conectar; reiniciar con el USB conectado | Una animación por conexión (≤ 4 s tras conectar). **Ninguna** al arrancar ya conectado. Se cierra con un toque |
+| T21 | Aviso de batería baja | usar el reloj sin USB hasta ≤ 15 % | Un solo aviso ámbar; no se repite mientras siga bajo; no aparece cargando |
+| T22 | Aviso crítico (opcional) | seguir hasta ≤ 5 % | Un aviso rojo. **Precaución:** el PMIC puede apagar el reloj al vaciarse; no es necesario agotarla |

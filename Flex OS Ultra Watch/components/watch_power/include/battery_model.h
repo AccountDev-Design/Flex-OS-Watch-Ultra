@@ -165,12 +165,8 @@ typedef enum {
     BATT_LEVEL_CRITICAL,
 } batt_level_t;
 
-/* Umbrales PROVISIONALES con histéresis (entrar / salir), en %. Se ajustarán
- * tras medir la batería real del reloj. */
-#define BATT_LOW_ENTER_PCT      15
-#define BATT_LOW_EXIT_PCT       18
-#define BATT_CRITICAL_ENTER_PCT 5
-#define BATT_CRITICAL_EXIT_PCT  8
+/* Umbrales con histéresis: battery_thresholds.h (provisionales hasta calibrar). */
+#include "battery_thresholds.h"
 
 /** Siguiente nivel con histéresis: empeorar es inmediato, mejorar exige el umbral de salida. */
 batt_level_t batt_level_next(batt_level_t cur, int pct);

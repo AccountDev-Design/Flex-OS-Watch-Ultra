@@ -52,6 +52,17 @@ bool watch_theme_apply_background(lv_obj_t *screen);
  */
 lv_obj_t *watch_theme_glass_card(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h);
 
+/**
+ * Suelo de tinte del vidrio (gGlMinMix de la referencia): quien dibuja vidrio
+ * sobre contenido que no controla (un aviso) lo sube para que el texto se lea.
+ * La referencia usa 150 (Overlay.h:167) porque detrás hay un fondo
+ * DESENFOCADO. Aquí no se desenfoca (coste), y con 150 la esfera se
+ * transparenta a través del aviso (comprobado en la vista previa), así que
+ * el suelo sube a 235.
+ */
+#define FLEX_GLASS_MIN_MIX_BANNER 235
+void watch_theme_glass_set_min_tint(lv_obj_t *card, lv_opa_t min_mix);
+
 /** Etiqueta con fuente y color de la paleta. */
 lv_obj_t *watch_theme_label(lv_obj_t *parent, const lv_font_t *font, uint32_t rgb, const char *text);
 

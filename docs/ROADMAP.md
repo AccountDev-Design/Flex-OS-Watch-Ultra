@@ -1,11 +1,11 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 18 %   [████░░░░░░░░░░░░░░░░]   (verificado en el reloj: 7 %)
+PROGRESO GLOBAL: 21 %   [████░░░░░░░░░░░░░░░░]   (verificado en el reloj: 7 %)
 ```
 
-- **Completado:** auditoría y plan (F0); proyecto ESP-IDF flasheado y arrancando en el reloj (F1.1).
-- **En curso:** F2.2. B2-3 (indicador) y B2-4 (animación de carga) hechos en el PC; sigue B2-5 (avisos de batería baja).
+- **Completado:** auditoría y plan (F0); proyecto ESP-IDF flasheado y arrancando en el reloj (F1.1). Software de F2 (lecturas, estados, indicador, animación y avisos) hecho y probado en el PC.
+- **En curso:** F3 (interfaz, tema y navegación). F2 está hecha en software y espera las pruebas físicas.
 - **Falta:** las pruebas físicas de B1/B2-1, el resto de batería, la esfera, el panel rápido, los ajustes, los servicios, Flex Phone, el navegador, OTA, la seguridad y las pruebas finales.
 - **Siguiente:** flashear B2-1 y enviar el registro serie de las pruebas T14-T18 (`docs/B2-ENERGIA.md`).
 
@@ -39,16 +39,15 @@ Estados: ✅ verificado en el reloj · 🟡 compilado y probado en PC · 🔄 en
 | F1.4 LVGL 9.5: buffers DMA medidos, FPS y memoria medidos | 2 | 🟡 faltan T9 y T11 | 1 |
 | F1.5 Estabilidad: 30 min sin reinicios | 1 | 🟡 falta T12 | 0,5 |
 
-### F2 · Batería y energía — 4,5 / 15
+### F2 · Batería y energía — 7,5 / 15
 | Tarea | Peso | Estado | Puntos |
 |---|---|---|---|
 | F2.1 Lectura del AXP2101 y estados (porcentaje, VBAT, USB, carga, completa, externa sin carga; filtrado, histéresis, errores). B1 + **B2-1** | 9 | 🔄🟡 faltan T4-T8 y T14-T18 | 4,5 |
-| F2.2 Indicador de batería, animación de carga y avisos de batería baja (B2-3, B2-4, B2-5) | 6 | 🔄 B2-3 y B2-4 hechos en PC | 0 (cuenta al terminar los tres) |
+| F2.2 Indicador de batería, animación de carga y avisos de batería baja (B2-3, B2-4, B2-5) | 6 | 🟡 faltan T19-T22 | 3 |
 
-Dentro de F2 también:
-- **B2-2:** decisión sobre el ADC y el pin TS (❓ D1).
-- **B2-5:** avisos de batería baja.
-- Calibración de umbrales con la batería real (❓ D4).
+Dentro de F2 queda:
+- **B2-2:** decisión sobre el ADC y el pin TS (❓ D1). Necesita los registros reales de T14.
+- Calibración de los umbrales con la batería real (❓ D4).
 
 ### F3 · Interfaz, tema y navegación — 2,5 / 20
 | Tarea | Peso | Estado | Puntos |
@@ -129,8 +128,8 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 |---|---|---|
 | D1 | ¿Activar el ADC de VBAT y desactivar el pin TS como hace el código oficial? Se decide con los registros de T14 | B2-2 |
 | D2 | Parámetros de carga: no se escriben mientras no se conozca la capacidad de la batería | — |
-| D3 | En "carga completa", ¿mostrar el valor del gauge o forzar 100 %? (hoy: el valor del gauge) | B2-3 |
-| D4 | Umbrales de batería baja y crítica (provisionales: 15 % y 5 %) | B2-5 |
+| D3 | ✅ Resuelta: en "carga completa" se muestra el valor real del gauge | — |
+| D4 | Calibrar los umbrales de batería baja y crítica (hoy provisionales: 15 % y 5 %, aislados en `battery_thresholds.h`) | calibración |
 | D5 | Transporte con Flex Phone: Wi-Fi, BLE o ambos | F5.5 |
 | D6 | Topología prioritaria: misma red, hotspot del móvil o punto de acceso del reloj | F5.5 |
 | D7 | Protocolo: Flex Link v2 (en claro) o v3 cifrado | F5.6 |
@@ -147,7 +146,7 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 ## Verificaciones pendientes en el reloj
 
 - **B1:** T1-T13 (`docs/B1-ARRANQUE.md` §5). T1 (arranque) ya está confirmado.
-- **B2-1:** T14-T18 (`docs/B2-ENERGIA.md`).
+- **B2:** T14-T22 (`docs/B2-ENERGIA.md`).
 - **Flash de 32 MB:** T10 y la prueba de escritura (`docs/FLASH-32MB.md` §6).
 - **Ruta con espacios** `Flex OS Ultra Watch/`: confirmar que compila en Windows y con la extensión de VS Code.
 - **`dependencies.lock`:** subir el que generó tu PC.
@@ -159,4 +158,5 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-15 | 4 % | inicial | Auditoría (F0 4/5) |
 | 2026-10-15 | 17 % | +13 | F0 completa (+1); B1 compilado y con pruebas de PC (F1 5, F2 4,5, F3 2,5) |
 | 2026-10-15 | 17 % | 0 | Reorganización a `Flex OS Ultra Watch/` (sin cambio funcional) |
-| 2026-10-15 | **18 %** | +1 | Se fija el reparto interno de F1. F1.1 (flasheo y arranque) queda verificada en el reloj según el usuario: pasa de 50 % a 100 %. B2-1 no suma: mejora una tarea que ya contaba al 50 % |
+| 2026-10-15 | 18 % | +1 | Se fija el reparto interno de F1. F1.1 (flasheo y arranque) queda verificada en el reloj según el usuario: pasa de 50 % a 100 %. B2-1 no suma: mejora una tarea que ya contaba al 50 % |
+| 2026-10-15 | **21 %** | +3 | F2.2 (indicador, animación de carga y avisos) compila y pasa las pruebas de PC y de la vista previa: 50 % de 6 |
