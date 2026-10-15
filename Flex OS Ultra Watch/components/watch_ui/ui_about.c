@@ -32,8 +32,8 @@ lv_obj_t *ui_about_create(lv_obj_t *parent)
     watch_theme_info_row(list, "LVGL", buf);
 
     watch_theme_section(list, "Equipo");
-    watch_theme_info_row(list, "Placa", "Waveshare ESP32-S3-Touch-AMOLED-2.06");
-    watch_theme_info_row(list, "Pantalla", "AMOLED 2,06\" · 410 × 502");
+    watch_theme_info_row(list, "Placa", "Waveshare ESP32-S3 Touch AMOLED 2.06");
+    watch_theme_info_row(list, "Pantalla", "AMOLED 410 × 502");
     watch_mem_report_t m;
     watch_diag_mem(&m);
     if (m.psram_total > 0) {

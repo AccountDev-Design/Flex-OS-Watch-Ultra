@@ -158,7 +158,9 @@ static void check_components(const char *out)
     sim_save(out, "f3_componentes");
 
     /* Zona "volver": un toque en su borde (no en el glifo) también cuenta. */
-    sim_tap(FLEX_HDR_X + 6, FLEX_SAFE_TOP + FLEX_HDR_ZONE - 6);
+    lv_area_t z;
+    lv_obj_get_coords(lv_obj_get_child(lv_obj_get_child(scr, 0), 0), &z); /* cabecera -> zona */
+    sim_tap(z.x1 + 6, z.y2 - 6);
     EXPECT(s_c.back == 1, "la zona volver entrego %d clics (esperado 1)", s_c.back);
 
     /* Fila activa: pulsada se ve distinta; al soltar, un clic. */

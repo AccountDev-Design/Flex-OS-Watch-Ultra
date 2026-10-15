@@ -23,9 +23,9 @@
 /* Geometría (px del panel de 410x502) */
 #define TIME_Y     112
 #define DATE_Y     (TIME_Y + 86 + 10)   /* 86 = alto de línea de la fuente del reloj */
-#define COMP_W     236
-#define COMP_H     84
-#define COMP_Y     372
+#define COMP_W     264
+#define COMP_H     96   /* relleno 18 + % (34) + estado (24) + relleno 18 */
+#define COMP_Y     364
 #define BICON_W    46
 #define BICON_H    22
 
@@ -128,12 +128,17 @@ lv_obj_t *ui_face_create(lv_obj_t *parent)
     lv_obj_t *card = watch_theme_glass_card(scr, (FLEX_SCREEN_W - COMP_W) / 2, COMP_Y, COMP_W, COMP_H);
     f->batt_icon = flex_battery_icon_create(card, BICON_W, BICON_H);
     lv_obj_align(f->batt_icon, LV_ALIGN_LEFT_MID, 0, 0);
-    f->batt_pct = watch_theme_label(card, FLEX_FONT_TITLE, FLEX_C_TXT, "--");
-    lv_obj_align(f->batt_pct, LV_ALIGN_TOP_LEFT, BICON_W + 16, -6);
-    f->batt_state = watch_theme_label(card, FLEX_FONT_SMALL, FLEX_C_TXT2, "");
-    lv_obj_set_width(f->batt_state, COMP_W - 36 - BICON_W - 16);
+    /* % y estado en columna: nunca se pisan, sea cual sea el texto. */
+    lv_obj_t *col = lv_obj_create(card);
+    lv_obj_remove_style_all(col);
+    lv_obj_set_size(col, COMP_W - 36 - BICON_W - 16, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_remove_flag(col, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_align(col, LV_ALIGN_LEFT_MID, BICON_W + 16, 0);
+    f->batt_pct = watch_theme_label(col, FLEX_FONT_TITLE, FLEX_C_TXT, "--");
+    f->batt_state = watch_theme_label(col, FLEX_FONT_SMALL, FLEX_C_TXT2, "");
+    lv_obj_set_size(f->batt_state, LV_PCT(100), lv_font_get_line_height(FLEX_FONT_SMALL));
     lv_label_set_long_mode(f->batt_state, LV_LABEL_LONG_MODE_DOTS);
-    lv_obj_align(f->batt_state, LV_ALIGN_BOTTOM_LEFT, BICON_W + 16, 4);
 
     /* Arrastrar hacia abajo desde arriba abre el panel rápido. */
     ui_qp_attach(scr);

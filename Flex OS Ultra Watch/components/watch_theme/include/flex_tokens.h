@@ -83,10 +83,10 @@
 /* ---- Geometría del reloj (px del panel de 410x502) ------------------- */
 #define FLEX_SCREEN_W        410
 #define FLEX_SCREEN_H        502
-/* Margen lateral. El radio de las esquinas físicas del AMOLED no está
- * documentado: PENDIENTE de medir en el reloj (docs/B1-ARRANQUE.md). */
+/* Márgenes mínimos. Cerca de las esquinas redondeadas del panel manda
+ * flex_safe.h (radio estimado, pendiente de la prueba T44). */
 #define FLEX_SAFE_X          22
-#define FLEX_SAFE_TOP        12
+#define FLEX_SAFE_TOP        20
 #define FLEX_STATUS_H        48
 #define FLEX_RADIUS_CARD     26   /* tarjeta grande del panel rápido (QuickPanel.h:105) */
 #define FLEX_RADIUS_MODULE   20
@@ -96,7 +96,8 @@
 
 /* Cabecera estándar (AppFramework.h:399-405): zona de "volver" a la
  * izquierda y título después de ella. Allí la zona mide 56 (>= 44 a 217 ppi);
- * aquí FLEX_TOUCH_MIN. La banda total mide lo mismo que allí: 76 px. */
+ * aquí FLEX_TOUCH_MIN. La zona se aparta de la esquina redondeada lo que pida
+ * flex_safe.h (watch_theme_header); FLEX_HDR_X es solo el mínimo. */
 #define FLEX_HDR_ZONE        FLEX_TOUCH_MIN
 #define FLEX_HDR_X           8
 #define FLEX_HDR_GAP         8
@@ -105,7 +106,12 @@
 /* Filas de lista (Ajustes): 66 px + 8 de separación en la referencia. Aquí
  * 72 (por encima de la zona táctil mínima) para que quepan 5 filas bajo la
  * cabecera en 502 px. */
-#define FLEX_LIST_X          16
+#define FLEX_LIST_X          FLEX_SAFE_X
+/* Hueco negro bajo las listas: la parte visible de la lista termina donde la
+ * esquina redondeada ya no muerde ni el lateral de una fila que asoma a
+ * medio desplazar (x = FLEX_LIST_X) ni su contenido. Lo comprueba
+ * tests/host/test_safe.c para el FLEX_CORNER_R vigente. */
+#define FLEX_LIST_BOTTOM     52
 #define FLEX_ROW_H           72
 #define FLEX_ROW_GAP         8
 #define FLEX_ROW_ICON        32

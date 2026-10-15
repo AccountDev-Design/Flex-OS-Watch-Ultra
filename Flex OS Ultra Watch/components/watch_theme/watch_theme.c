@@ -7,6 +7,7 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "flex_glass_math.h"
+#include "flex_safe.h"
 #include "flex_wallpaper.h"
 
 static const char *TAG = "watch_theme";
@@ -23,6 +24,8 @@ static bool s_inited;
 
 /* Hijos de una fila, en este orden (watch_theme_list_row) */
 enum { ROW_ICON = 0, ROW_TITLE, ROW_VALUE };
+
+#define HDR_CHEV 26 /* chevron de "volver" */
 
 static uint16_t *s_wall_px;
 static lv_image_dsc_t s_wall_dsc;
@@ -134,7 +137,7 @@ void watch_theme_init(void)
     lv_style_set_pad_left(&s_list, FLEX_LIST_X);
     lv_style_set_pad_right(&s_list, FLEX_LIST_X);
     lv_style_set_pad_top(&s_list, 4);
-    lv_style_set_pad_bottom(&s_list, 28);
+    lv_style_set_pad_bottom(&s_list, 12);
     lv_style_set_pad_row(&s_list, FLEX_ROW_GAP);
     lv_style_set_layout(&s_list, LV_LAYOUT_FLEX);
     lv_style_set_flex_flow(&s_list, LV_FLEX_FLOW_COLUMN);
@@ -273,28 +276,37 @@ lv_obj_t *watch_theme_header(lv_obj_t *parent, const char *title, lv_event_cb_t 
     lv_obj_set_pos(hdr, 0, 0);
     lv_obj_remove_flag(hdr, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
-    int32_t tx = FLEX_SAFE_X;
+    const int32_t th = lv_font_get_line_height(FLEX_FONT_TITLE);
+    const int32_t ty = FLEX_SAFE_TOP + (FLEX_HDR_ZONE - th) / 2;
+    int32_t tx = flex_safe_left(ty, ty + th - 1, FLEX_SAFE_MARGIN);
     if (back_cb) {
         /* Zona táctil completa con el glifo centrado (AppFramework.h:394):
-         * el dedo acierta aunque no toque el chevron. */
+         * el dedo acierta aunque no toque el chevron. La zona se aparta de la
+         * esquina redondeada hasta que el chevron se ve entero. */
+        const int32_t cy = FLEX_SAFE_TOP + (FLEX_HDR_ZONE - HDR_CHEV) / 2;
+        int32_t zx = flex_safe_left(cy, cy + HDR_CHEV - 1, FLEX_SAFE_MARGIN) - (FLEX_HDR_ZONE - HDR_CHEV) / 2;
+        if (zx < FLEX_HDR_X) {
+            zx = FLEX_HDR_X;
+        }
         lv_obj_t *zone = lv_obj_create(hdr);
         lv_obj_remove_style_all(zone);
         lv_obj_set_size(zone, FLEX_HDR_ZONE, FLEX_HDR_ZONE);
-        lv_obj_set_pos(zone, FLEX_HDR_X, FLEX_SAFE_TOP);
+        lv_obj_set_pos(zone, zx, FLEX_SAFE_TOP);
         lv_obj_set_style_radius(zone, FLEX_HDR_ZONE / 2, 0);
         lv_obj_add_style(zone, &s_pressed, LV_STATE_PRESSED);
         lv_obj_remove_flag(zone, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_flag(zone, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(zone, back_cb, LV_EVENT_CLICKED, user_data);
-        lv_obj_t *chev = flex_icon_create(zone, FLEX_ICON_CHEVRON_LEFT, 26, FLEX_C_TXT);
+        lv_obj_t *chev = flex_icon_create(zone, FLEX_ICON_CHEVRON_LEFT, HDR_CHEV, FLEX_C_TXT);
         lv_obj_center(chev);
-        tx = FLEX_HDR_X + FLEX_HDR_ZONE + FLEX_HDR_GAP;
+        tx = zx + FLEX_HDR_ZONE + FLEX_HDR_GAP;
     }
     if (title) {
         lv_obj_t *l = watch_theme_label(hdr, FLEX_FONT_TITLE, FLEX_C_TXT, title);
         lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_DOTS);
-        lv_obj_set_width(l, FLEX_SCREEN_W - tx - FLEX_SAFE_X);
-        lv_obj_set_pos(l, tx, FLEX_SAFE_TOP + (FLEX_HDR_ZONE - lv_font_get_line_height(FLEX_FONT_TITLE)) / 2);
+        lv_obj_set_height(l, th);
+        lv_obj_set_width(l, flex_safe_right(ty, ty + th - 1, FLEX_SAFE_MARGIN) + 1 - tx);
+        lv_obj_set_pos(l, tx, ty);
     }
     return hdr;
 }
@@ -306,7 +318,7 @@ lv_obj_t *watch_theme_list(lv_obj_t *parent)
     lv_obj_remove_style_all(list);
     lv_obj_add_style(list, &s_list, 0);
     lv_obj_set_pos(list, 0, FLEX_HDR_H);
-    lv_obj_set_size(list, FLEX_SCREEN_W, FLEX_SCREEN_H - FLEX_HDR_H);
+    lv_obj_set_size(list, FLEX_SCREEN_W, FLEX_SCREEN_H - FLEX_HDR_H - FLEX_LIST_BOTTOM);
     lv_obj_set_scroll_dir(list, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
     /* Pulsable a propósito: LVGL solo desplaza desde un objeto pulsable, y
@@ -393,7 +405,7 @@ lv_obj_t *watch_theme_section(lv_obj_t *list, const char *text)
     lv_obj_t *l = watch_theme_label(list, FLEX_FONT_SMALL, FLEX_C_MUTE, text);
     lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_width(l, LV_PCT(100));
-    lv_obj_set_style_pad_left(l, 6, 0);
+    lv_obj_set_style_pad_left(l, 16, 0); /* alineado con el contenido de las filas */
     lv_obj_set_style_pad_top(l, 10, 0);
     return l;
 }
@@ -414,7 +426,7 @@ lv_obj_t *watch_theme_info_row(lv_obj_t *list, const char *title, const char *va
     /* El valor puede ocupar dos líneas (caben en FLEX_INFO_ROW_H); más, con "...". */
     lv_obj_t *v = watch_theme_label(row, FLEX_FONT_SMALL, FLEX_C_TXT, value ? value : "");
     lv_label_set_long_mode(v, LV_LABEL_LONG_MODE_DOTS);
-    lv_obj_set_style_max_width(v, 230, 0);
+    lv_obj_set_style_max_width(v, 180, 0); /* deja ~130 px al título; un valor largo pasa a 2 líneas */
     lv_obj_set_style_max_height(v, 2 * lv_font_get_line_height(FLEX_FONT_SMALL), 0);
     lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_RIGHT, 0);
     return row;

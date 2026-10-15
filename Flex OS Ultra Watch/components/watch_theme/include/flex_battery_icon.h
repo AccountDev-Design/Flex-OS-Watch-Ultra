@@ -21,6 +21,9 @@ lv_obj_t *flex_battery_icon_create(lv_obj_t *parent, int32_t w, int32_t h);
 /** Actualiza la vista. percent = -1 si no hay dato. Devuelve true si cambió algo. */
 bool flex_battery_icon_set(lv_obj_t *icon, flex_batt_kind_t kind, int percent);
 
+/** ¿obj es un indicador de flex_battery_icon_create()? (verificación de la interfaz) */
+bool flex_battery_icon_is(lv_obj_t *obj);
+
 #ifdef __cplusplus
 }
 #endif

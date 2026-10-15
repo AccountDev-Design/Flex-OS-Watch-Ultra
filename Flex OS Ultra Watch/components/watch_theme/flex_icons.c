@@ -258,3 +258,19 @@ void flex_icon_set(lv_obj_t *obj, flex_icon_t icon)
         lv_obj_invalidate(obj);
     }
 }
+
+static bool has_cb(lv_obj_t *obj, lv_event_cb_t cb)
+{
+    const uint32_t n = lv_obj_get_event_count(obj);
+    for (uint32_t i = 0; i < n; i++) {
+        if (lv_event_dsc_get_cb(lv_obj_get_event_dsc(obj, i)) == cb) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool flex_icon_is(lv_obj_t *obj)
+{
+    return obj && has_cb(obj, icon_draw_cb);
+}

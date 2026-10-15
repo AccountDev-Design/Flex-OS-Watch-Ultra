@@ -65,6 +65,16 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T40) en **una sola s
 | T6, T7, T17 | Carga completa: no debe alternar entre "Cargando" y "Externa sin carga" |
 | T21 (y T22 opcional) | Aviso de batería baja usando el reloj sin USB hasta el 15 %. **No** es necesario agotar la batería |
 
+## 5. Correcciones B4 (T41-T45, `B4-CALIDAD.md` y `B2-ENERGIA.md`)
+
+| Pruebas | Qué hacer |
+|---|---|
+| T41 | Con la esfera visible y sin tocarla, conecta y desconecta el USB: el estado y la animación deben cambiar solos en ~1 s |
+| T42 | Con el medidor de LVGL: desplaza Ajustes > Batería y baja/sube el panel rápido despacio; anota FPS y ms |
+| T43 | Animación de carga sin destello ni tirón; fondos en negro puro |
+| T44 | Prueba de pantalla: primer arco de esquina que se ve entero (104/112/120/128/136) |
+| T45 | Nada cortado en las esquinas: panel rápido, páginas de Ajustes, aviso |
+
 ## Qué enviarme
 
 - El registro serie completo de la sesión.

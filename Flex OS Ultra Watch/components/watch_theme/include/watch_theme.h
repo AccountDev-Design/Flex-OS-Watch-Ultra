@@ -112,11 +112,16 @@ void watch_theme_page(lv_obj_t *screen);
 /**
  * Cabecera estándar de FLEX_HDR_H px: zona "volver" de FLEX_HDR_ZONE px con
  * el chevron centrado y el título a continuación, recortado con "..." antes
- * del borde. back_cb recibe LV_EVENT_CLICKED de la zona (NULL = sin zona).
+ * del borde. La zona y el título se apartan de la esquina redondeada
+ * (flex_safe.h). back_cb recibe LV_EVENT_CLICKED de la zona (NULL = sin zona).
  */
 lv_obj_t *watch_theme_header(lv_obj_t *parent, const char *title, lv_event_cb_t back_cb, void *user_data);
 
-/** Lista vertical con desplazamiento bajo la cabecera (hasta el borde inferior). */
+/**
+ * Lista vertical con desplazamiento bajo la cabecera. Termina
+ * FLEX_LIST_BOTTOM px antes del borde inferior para que la esquina
+ * redondeada no corte el contenido de las filas.
+ */
 lv_obj_t *watch_theme_list(lv_obj_t *parent);
 
 /**

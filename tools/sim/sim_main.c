@@ -298,6 +298,7 @@ int main(int argc, char **argv)
     sim_suite_qp(out);
     sim_suite_settings(out);
     sim_suite_monkey(out);
+    sim_suite_visual(out);
     sim_suite_bench(out);
 
     printf("%s (%d fallos)\n", sim_fails ? "FALLOS" : "TODO OK", sim_fails);

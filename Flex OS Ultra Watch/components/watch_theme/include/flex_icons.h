@@ -33,6 +33,9 @@ void flex_icon_draw(lv_layer_t *layer, flex_icon_t icon, const lv_area_t *box, l
 /** Objeto LVGL de size x size que dibuja el icono (sin hijos ni imágenes). */
 lv_obj_t *flex_icon_create(lv_obj_t *parent, flex_icon_t icon, int32_t size, uint32_t rgb);
 void flex_icon_set_color(lv_obj_t *obj, uint32_t rgb);
+/** ¿obj es un icono de flex_icon_create()? (verificación de la interfaz) */
+bool flex_icon_is(lv_obj_t *obj);
+
 /** Cambia el glifo (solo invalida si cambia). */
 void flex_icon_set(lv_obj_t *obj, flex_icon_t icon);
 

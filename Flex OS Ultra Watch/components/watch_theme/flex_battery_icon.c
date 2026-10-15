@@ -135,3 +135,17 @@ bool flex_battery_icon_set(lv_obj_t *icon, flex_batt_kind_t kind, int percent)
     lv_obj_invalidate(icon);
     return true;
 }
+
+bool flex_battery_icon_is(lv_obj_t *obj)
+{
+    if (!obj) {
+        return false;
+    }
+    const uint32_t n = lv_obj_get_event_count(obj);
+    for (uint32_t i = 0; i < n; i++) {
+        if (lv_event_dsc_get_cb(lv_obj_get_event_dsc(obj, i)) == batt_draw_cb) {
+            return true;
+        }
+    }
+    return false;
+}

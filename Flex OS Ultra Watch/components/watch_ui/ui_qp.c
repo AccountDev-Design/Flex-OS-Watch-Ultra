@@ -22,6 +22,7 @@
 #include "ui_internal.h"
 
 #include "flex_battery_icon.h"
+#include "flex_safe.h"
 #include "ui_gesture.h"
 #include "ui_logic.h"
 #include "watch_theme.h"
@@ -33,6 +34,7 @@
 #define QP_TICK_MS  1000
 
 /* Geometría del contenido (px del panel de 410x502) */
+#define HDR_Y       24          /* fila de hora y batería */
 #define TILE_X0     16
 #define TILE_GAP    12
 #define TILE_W      ((QP_W - 2 * TILE_X0 - TILE_GAP) / 2)
@@ -149,6 +151,18 @@ static lv_obj_t *tile(lv_obj_t *parent, int32_t x, int32_t y, flex_icon_t icon, 
     return t;
 }
 
+/* Contenedor transparente en fila (flex), sin desplazamiento ni toques. */
+static lv_obj_t *row_box(lv_obj_t *parent)
+{
+    lv_obj_t *b = lv_obj_create(parent);
+    lv_obj_remove_style_all(b);
+    lv_obj_set_layout(b, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(b, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(b, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_remove_flag(b, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    return b;
+}
+
 static void tile_pending(lv_obj_t *t)
 {
     lv_obj_add_state(t, LV_STATE_DISABLED);
@@ -251,15 +265,27 @@ static void build(void)
     lv_obj_add_event_cb(root, close_drag_cb, LV_EVENT_PRESS_LOST, NULL);
     s_qp.root = root;
 
-    /* Cabecera: hora, fecha corta y batería */
-    s_qp.time = watch_theme_label(root, FLEX_FONT_TITLE, FLEX_C_TXT, "--:--");
-    lv_obj_set_pos(s_qp.time, FLEX_SAFE_X, FLEX_SAFE_TOP + 8);
-    s_qp.date = watch_theme_label(root, FLEX_FONT_SMALL, FLEX_C_TXT2, "");
-    lv_obj_align_to(s_qp.date, s_qp.time, LV_ALIGN_OUT_RIGHT_BOTTOM, 10, -3);
-    s_qp.batt_icon = flex_battery_icon_create(root, 37, 17);
-    lv_obj_align(s_qp.batt_icon, LV_ALIGN_TOP_RIGHT, -FLEX_SAFE_X, FLEX_SAFE_TOP + 20);
-    s_qp.batt_pct = watch_theme_label(root, FLEX_FONT_SMALL, FLEX_C_TXT, "--");
-    lv_obj_align(s_qp.batt_pct, LV_ALIGN_TOP_RIGHT, -(FLEX_SAFE_X + 37 + 8), FLEX_SAFE_TOP + 16);
+    /* Cabecera: hora y fecha corta a la izquierda, % y batería a la
+     * derecha, dentro de lo que dejan ver las esquinas redondeadas a esa
+     * altura (en la foto del reloj el icono de batería quedaba cortado). */
+    const int32_t hh = lv_font_get_line_height(FLEX_FONT_TITLE);
+    const int32_t hx = flex_safe_left(HDR_Y, HDR_Y + hh - 1, FLEX_SAFE_MARGIN);
+    lv_obj_t *hdr = row_box(root);
+    lv_obj_set_pos(hdr, hx, HDR_Y);
+    lv_obj_set_size(hdr, flex_safe_right(HDR_Y, HDR_Y + hh - 1, FLEX_SAFE_MARGIN) + 1 - hx, hh);
+    lv_obj_set_flex_align(hdr, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_t *left = row_box(hdr);
+    lv_obj_set_size(left, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_align(left, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
+    lv_obj_set_style_pad_column(left, 10, 0);
+    s_qp.time = watch_theme_label(left, FLEX_FONT_TITLE, FLEX_C_TXT, "--:--");
+    s_qp.date = watch_theme_label(left, FLEX_FONT_SMALL, FLEX_C_TXT2, "");
+    lv_obj_set_style_pad_bottom(s_qp.date, 3, 0);
+    lv_obj_t *right = row_box(hdr);
+    lv_obj_set_size(right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_column(right, 8, 0);
+    s_qp.batt_pct = watch_theme_label(right, FLEX_FONT_SMALL, FLEX_C_TXT, "--");
+    s_qp.batt_icon = flex_battery_icon_create(right, 37, 17);
 
     /* Mosaicos */
     lv_obj_t *wifi = tile(root, TILE_X0, TILE_Y0, FLEX_ICON_WIFI, FLEX_C_CAT_NET, "Wi-Fi", "", NULL);
@@ -278,7 +304,7 @@ static void build(void)
     lv_obj_move_to_index(s_qp.batt_tile_icon, 0);
     lv_obj_set_pos(s_qp.batt_tile_icon, 0, 6);
     lv_obj_t *set = tile(root, TILE_X0 + TILE_W + TILE_GAP, TILE_Y1, FLEX_ICON_GEAR, FLEX_C_CAT_BLUE,
-                         "Ajustes", "Pantalla, batería…", NULL);
+                         "Ajustes", "Pantalla, batería", NULL);
     lv_obj_add_event_cb(set, settings_cb, LV_EVENT_CLICKED, NULL);
 
     ui_bright_create(root, TILE_X0, SLIDER_Y, QP_W - 2 * TILE_X0);

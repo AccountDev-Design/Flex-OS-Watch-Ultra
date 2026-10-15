@@ -14,7 +14,7 @@ INC := -I$(FW)/components/watch_power/include \
        -I$(FW)/components/watch_theme/include \
        -I$(FW)/components/watch_ui/include \
        -I$(FW)/components/watch_time/include
-SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test_power_sched.c \
+SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test_power_sched.c test_safe.c \
        $(FW)/components/watch_power/battery_model.c \
        $(FW)/components/watch_power/battery_alerts.c \
        $(FW)/components/watch_power/power_sched.c \
@@ -22,6 +22,7 @@ SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test
        $(FW)/components/watch_theme/flex_glass_math.c \
        $(FW)/components/watch_theme/flex_wallpaper.c \
        $(FW)/components/watch_theme/flex_batt_style.c \
+       $(FW)/components/watch_theme/flex_safe.c \
        $(FW)/components/watch_ui/ui_logic.c \
        $(FW)/components/watch_ui/ui_gesture.c \
        $(FW)/components/watch_time/wt_time.c \
@@ -31,7 +32,7 @@ SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test
 all: test
 
 $(BUILD)/test_host: $(SRC) $(wildcard $(FW)/components/*/include/*.h)
-	$(CC) $(CFLAGS) $(INC) $(SRC) -o $@
+	$(CC) $(CFLAGS) $(INC) $(SRC) -lm -o $@
 
 test: $(BUILD)/test_host
 	./$(BUILD)/test_host

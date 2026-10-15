@@ -1,7 +1,7 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 28,5 %   [██████░░░░░░░░░░░░░░]   (verificado en el reloj: 7 %)
+PROGRESO GLOBAL: 32 %   [██████░░░░░░░░░░░░░░]   (verificado en el reloj: 10,5 %)
 ```
 
 - **Completado:**
@@ -10,13 +10,19 @@ PROGRESO GLOBAL: 28,5 %   [██████░░░░░░░░░░░�
   - Software de F2: lecturas del AXP2101, estados, indicador, animación de carga y avisos.
   - Software de F3: identidad, hora del RTC y esfera, navegación y arranque, panel rápido y Ajustes.
   - F2 y F3 están compilados y probados en el PC, incluidos ASan/UBSan y la prueba "mono".
-- **En curso:** pruebas físicas de F2 y F3.
+  - Prueba física del 2026-10-15 (fotos y vídeo del usuario): pantalla, táctil, LVGL (50 FPS en reposo), flash de 32 MB y lecturas del AXP2101 sin errores. La carga se detecta en el reloj.
+  - B4 (`docs/B4-CALIDAD.md`), con lo que se vio en esa prueba:
+    - respuesta rápida de carga, sin tocar la pantalla;
+    - animación de carga sin tirón;
+    - negro AMOLED;
+    - área segura con esquinas redondeadas;
+    - verificador visual de todas las pantallas.
+- **En curso:** F4 (servicios).
 - **Falta:**
-  - Las pruebas físicas T1-T40.
-  - B2-2: ADC y pin TS (❓ D1).
+  - Pruebas físicas de F2/F3 sobre el firmware con B4 (T41-T45 y las T de F2/F3 aún sin resultado).
   - La calibración de umbrales (❓ D4).
-  - Los servicios (F4), Flex Phone, el navegador, OTA, la seguridad y las pruebas finales.
-- **Siguiente:** flashear el firmware actual y seguir `docs/PRUEBAS-RELOJ.md` (T1-T40 en una sesión), enviando el registro serie.
+  - Flex Phone, el navegador, OTA, la seguridad y las pruebas finales.
+- **Siguiente:** F4.1 (ajustes persistentes en NVS).
 
 ## Cómo se calcula
 
@@ -39,13 +45,13 @@ Estados: ✅ verificado en el reloj · 🟡 compilado y probado en PC · 🔄 en
 |---|---|---|---|
 | Auditoría de hardware, referencia Arduino, reutilización y plan | 5 | ✅ | 5 |
 
-### F1 · Base ESP-IDF, pantalla y táctil — 6 / 10
+### F1 · Base ESP-IDF, pantalla y táctil — 9,5 / 10
 | Tarea | Peso | Estado | Puntos |
 |---|---|---|---|
 | F1.1 Proyecto ESP-IDF 5.5.5 + BSP oficial; compilar, flashear y arrancar en el reloj | 2 | ✅ (confirmado por el usuario) | 2 |
-| F1.2 Pantalla CO5300: imagen completa, desfase 0x16, brillo | 3 | 🟡 falta T2 | 1,5 |
-| F1.3 Táctil FT3168: coordenadas y ejes | 2 | 🟡 falta T3 | 1 |
-| F1.4 LVGL 9.5: buffers DMA medidos, FPS y memoria medidos | 2 | 🟡 faltan T9 y T11 | 1 |
+| F1.2 Pantalla CO5300: imagen completa, desfase 0x16, brillo | 3 | ✅ (fotos del 2026-10-15 y confirmación del usuario) | 3 |
+| F1.3 Táctil FT3168: coordenadas y ejes | 2 | ✅ (navegación y desplazamiento en el vídeo; confirmación del usuario) | 2 |
+| F1.4 LVGL 9.5: buffers DMA medidos, FPS y memoria medidos | 2 | ✅ (Diagnóstico y medidor: 50 FPS en reposo, 22-32 al desplazar antes de B4) | 2 |
 | F1.5 Estabilidad: 30 min sin reinicios | 1 | 🟡 falta T12 | 0,5 |
 
 ### F2 · Batería y energía — 7,5 / 15
@@ -55,8 +61,9 @@ Estados: ✅ verificado en el reloj · 🟡 compilado y probado en PC · 🔄 en
 | F2.2 Indicador de batería, animación de carga y avisos de batería baja (B2-3, B2-4, B2-5) | 6 | 🟡 faltan T19-T22 | 3 |
 
 Dentro de F2 queda:
-- **B2-2:** decisión sobre el ADC y el pin TS (❓ D1). Necesita los registros reales de T14.
+- **B2-2:** cerrada sin cambios (D1 resuelta). En el reloj la batería carga y VBAT se lee bien sin escribir el ADC ni el pin TS.
 - Calibración de los umbrales con la batería real (❓ D4).
+- F2.1 y F2.2 siguen al 50 %. B2-6 y B4-C2 cambiaron el muestreo y la animación después de la prueba, así que hay que repetirla (T41, T43). Los estados "completa" y "externa sin carga" no tienen resultado físico.
 
 ### F3 · Interfaz, tema y navegación — 10 / 20
 | Tarea | Peso | Estado | Puntos |
@@ -135,7 +142,7 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 
 | # | Decisión | Bloquea |
 |---|---|---|
-| D1 | ¿Activar el ADC de VBAT y desactivar el pin TS como hace el código oficial? Se decide con los registros de T14 | B2-2 |
+| D1 | ✅ Resuelta (2026-10-15): no se escribe nada. En el reloj la batería carga y VBAT se lee bien con la configuración de fábrica | — |
 | D2 | Parámetros de carga: no se escriben mientras no se conozca la capacidad de la batería | — |
 | D3 | ✅ Resuelta: en "carga completa" se muestra el valor real del gauge | — |
 | D4 | Calibrar los umbrales de batería baja y crítica (hoy provisionales: 15 % y 5 %, aislados en `battery_thresholds.h`) | calibración |
@@ -177,4 +184,5 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-15 | 23,5 % | 0 | B3-3 (navegación y arranque) es parte de F3.4, que no suma hasta tener también los Ajustes (B3-5) |
 | 2026-10-15 | 26 % | +2,5 | F3.3 (panel rápido) compila y pasa las pruebas de PC y de la vista previa: 50 % de 5 |
 | 2026-10-15 | 28,5 % | +2,5 | F3.4 (navegación, arranque y páginas de Ajustes) compila y pasa las pruebas de PC y de la vista previa: 50 % de 5 |
-| 2026-10-15 | **28,5 %** | 0 | B3-6 (integración y robustez en el PC) no añade tareas: las de F2 y F3 solo suben con las pruebas físicas |
+| 2026-10-15 | 28,5 % | 0 | B3-6 (integración y robustez en el PC) no añade tareas: las de F2 y F3 solo suben con las pruebas físicas |
+| 2026-10-15 | **32 %** | +3,5 | Prueba física del usuario (fotos y vídeo): F1.2, F1.3 y F1.4 pasan de 50 % a 100 %. F1.5 no tiene prueba larga. B4 (C1-C4) corrige lo visto en esa prueba y no suma: mejora tareas que ya contaban |

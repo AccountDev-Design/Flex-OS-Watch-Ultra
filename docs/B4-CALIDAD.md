@@ -13,8 +13,8 @@ Al desplazar la lista o mover el panel rápido, el medidor de LVGL bajó a 22-33
 |---|---|---|
 | C1 | Respuesta rápida al enchufar y desenchufar (B2-6 en `B2-ENERGIA.md`) | implementado · pruebas de PC · prueba física pendiente (T41) |
 | C2 | Rendimiento del dibujo, animación de carga sin tirón y negro AMOLED | implementado · pruebas de PC · prueba física pendiente (T42, T43) |
-| C3 | Área segura con las esquinas redondeadas del panel | pendiente |
-| C4 | Verificador automático de integridad visual en todas las pantallas | pendiente |
+| C3 | Área segura con las esquinas redondeadas del panel | implementado · pruebas de PC · prueba física pendiente (T44) |
+| C4 | Verificador automático de integridad visual en todas las pantallas | implementado · 0 fallos en la vista previa |
 
 ## C2. Rendimiento, animación de carga y negro AMOLED
 
@@ -66,3 +66,52 @@ Al desplazar la lista o mover el panel rápido, el medidor de LVGL bajó a 22-33
 |---|---|---|---|
 | T42 | Fluidez | con el medidor de LVGL visible: desplazar la lista de Ajustes > Batería y bajar y subir el panel rápido despacio | Anota FPS y ms del medidor. Antes de B4: 22-33 FPS y hasta 65 ms. Se espera una mejora clara; el valor exacto solo se sabrá en el reloj |
 | T43 | Animación de carga y negro | conectar el USB con la esfera visible | La animación aparece sin destello ni tirón, sobre negro puro. Los fondos de la esfera, Ajustes y el panel son negro puro: en una habitación a oscuras no se distingue el borde del panel |
+
+## C3. Área segura con esquinas redondeadas
+
+- **Causa:** el panel de 410 × 502 tiene esquinas redondeadas grandes y el diseño solo dejaba márgenes rectos (22 px). En las fotos se cortaban el icono de batería del panel rápido (arriba a la derecha) y textos al final de las listas (abajo a la izquierda).
+- **Modelo** (`watch_theme/flex_safe.c`, lógica pura con pruebas de PC):
+  - Arco de radio `FLEX_CORNER_R` = 124 px. Es una estimación a partir de las fotos (sale 113-126); la medida real la da T44.
+  - `flex_safe_left/right(y1, y2, m)` devuelven qué x se ve a cada altura.
+- **Recolocado:**
+  - **Cabecera de las páginas:** baja a y = 20 y la zona "volver" y el título se apartan de la esquina lo que pida el arco.
+  - **Panel rápido:** la hora, la fecha, el % y el icono de batería van en una fila dentro de la parte visible a su altura.
+  - **Listas:**
+    - Terminan 52 px antes del borde inferior (`FLEX_LIST_BOTTOM`), con márgenes laterales de 22 px. La esquina no muerde ni el contenido ni el lateral de una fila a medio desplazar.
+    - Una prueba de PC comprueba estas constantes contra el radio vigente: si T44 da otro radio, la prueba avisa.
+  - **Complicación de batería de la esfera:** el % y el estado van en columna y ya no se pisan; es más ancha para que "Externa sin carga" quepa entera.
+  - **Aviso de batería baja:** está más adentro y más bajo, con sus esquinas dentro de las del panel. Muestra "Batería baja · 12 %" y debajo "Conecta el cargador", sin "...".
+- **Guías de calibración (T44):** en Ajustes > Diagnóstico > Prueba de pantalla hay arcos de 104, 112, 120, 128 y 136 px en las dos esquinas inferiores, cada uno de un color, con la leyenda en el centro.
+
+## C4. Verificador de integridad visual
+
+`tools/sim/sim_lint.c` y `sim_visual.c` recorren todas las pantallas de la vista previa y sus estados:
+- la esfera, con textos largos, sin hora y sin batería;
+- el panel rápido;
+- Ajustes y cada página, al principio y al final de su lista;
+- la prueba de pantalla;
+- el aviso y la animación de carga.
+
+En cada texto, icono e indicador comprueba:
+
+| Comprobación | Qué detecta |
+|---|---|
+| ESQUINA | Algo fuera de la parte visible del panel, con 2 px de margen |
+| RECORTE | Un contenedor que corta su contenido |
+| PUNTOS | Un texto truncado con "..." |
+| SOLAPE | Dos contenidos de la misma capa que se pisan, comparando la tinta del texto |
+| FONDO | Una tarjeta, fila o aviso mordido por la esquina, teniendo en cuenta su propio radio |
+
+Además compara la imagen tras cada animación con un redibujado completo, para detectar **residuos**.
+
+| Ejecución | Resultado |
+|---|---|
+| Primera | Encontró los fallos de las fotos y otros: la complicación de la esfera, la cabecera del panel, el chevron de todas las páginas, el final de las listas, el valor de "Placa" y "Búferes de LVGL" |
+| Actual | **0 fallos**, también con ASan/UBSan |
+
+### Pruebas en el reloj
+
+| # | Prueba | Cómo | Resultado esperado |
+|---|---|---|---|
+| T44 | Radio de las esquinas | Ajustes > Diagnóstico > Prueba de pantalla: mira las dos esquinas inferiores con buena luz | Los arcos de radio menor que la esquina real se ven cortados por su centro. Indica el **primer color/número que se ve entero** (y si las dos esquinas coinciden). Con ese dato se ajusta `FLEX_CORNER_R` |
+| T45 | Nada cortado en las esquinas | Panel rápido (icono de batería), cada página de Ajustes al principio y al final, aviso de batería baja si aparece | Ningún icono, texto ni tarjeta mordido por el borde curvo |

@@ -13,10 +13,14 @@
 #include "flex_battery_icon.h"
 #include "watch_theme.h"
 
-#define B_X        16
-#define B_Y        14
+/* Posición: lo bastante abajo y adentro para que las esquinas del aviso
+ * queden dentro de las esquinas redondeadas del panel (flex_safe.h; lo
+ * comprueba la vista previa). */
+#define B_X        36
+#define B_Y        26
 #define B_W        (FLEX_SCREEN_W - 2 * B_X)
-#define B_H        88
+#define B_PAD_V    14
+#define B_H        (2 * B_PAD_V + 28 + 24)   /* título (28) + texto (24): termina antes de la hora */
 #define B_RADIUS   22
 #define T_IN_MS    220
 #define T_SHOW_MS  4200
@@ -82,18 +86,26 @@ static void build(void)
     watch_theme_init();
     lv_obj_t *card = watch_theme_glass_card(lv_layer_top(), B_X, -(B_H + 12), B_W, B_H);
     lv_obj_set_style_radius(card, B_RADIUS, 0);
+    lv_obj_set_style_pad_ver(card, B_PAD_V, 0);
     watch_theme_glass_set_min_tint(card, FLEX_GLASS_MIN_MIX_BANNER);
     lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(card, tap_cb, LV_EVENT_CLICKED, NULL);
 
     s_b.icon = flex_battery_icon_create(card, 44, 22);
     lv_obj_align(s_b.icon, LV_ALIGN_LEFT_MID, 0, 0);
-    s_b.title = watch_theme_label(card, FLEX_FONT_BODY, FLEX_C_TXT, "");
-    lv_obj_align(s_b.title, LV_ALIGN_TOP_LEFT, 60, -4);
-    s_b.text = watch_theme_label(card, FLEX_FONT_SMALL, FLEX_C_TXT2, "");
-    lv_obj_align(s_b.text, LV_ALIGN_BOTTOM_LEFT, 60, 2);
+    /* Título y texto en columna: no se pisan. */
+    lv_obj_t *col = lv_obj_create(card);
+    lv_obj_remove_style_all(col);
+    lv_obj_set_size(col, B_W - 36 - 60, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_remove_flag(col, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_align(col, LV_ALIGN_LEFT_MID, 60, 0);
+    s_b.title = watch_theme_label(col, FLEX_FONT_BODY, FLEX_C_TXT, "");
+    lv_obj_set_size(s_b.title, LV_PCT(100), lv_font_get_line_height(FLEX_FONT_BODY));
+    lv_label_set_long_mode(s_b.title, LV_LABEL_LONG_MODE_DOTS);
+    s_b.text = watch_theme_label(col, FLEX_FONT_SMALL, FLEX_C_TXT2, "Conecta el cargador");
+    lv_obj_set_size(s_b.text, LV_PCT(100), lv_font_get_line_height(FLEX_FONT_SMALL));
     lv_label_set_long_mode(s_b.text, LV_LABEL_LONG_MODE_DOTS);
-    lv_obj_set_width(s_b.text, B_W - 36 - 60);
     s_b.card = card;
 }
 
@@ -115,13 +127,13 @@ void ui_banner_show_battery(batt_alert_t alert, int percent)
         lv_anim_start(&a);
     }
     flex_battery_icon_set(s_b.icon, critical ? FLEX_BATT_CRITICAL : FLEX_BATT_LOW, percent);
-    lv_label_set_text(s_b.title, critical ? "Batería crítica" : "Batería baja");
-    lv_obj_set_style_text_color(s_b.title, flex_color(critical ? FLEX_C_ERR : FLEX_C_WARN), 0);
+    const char *title = critical ? "Batería crítica" : "Batería baja";
     if (percent >= 0) {
-        lv_label_set_text_fmt(s_b.text, "Queda %d %%  ·  Conecta el cargador", percent);
+        lv_label_set_text_fmt(s_b.title, "%s · %d %%", title, percent);
     } else {
-        lv_label_set_text(s_b.text, "Conecta el cargador");
+        lv_label_set_text(s_b.title, title);
     }
+    lv_obj_set_style_text_color(s_b.title, flex_color(critical ? FLEX_C_ERR : FLEX_C_WARN), 0);
     start_out(T_IN_MS + T_SHOW_MS);
 }
 
