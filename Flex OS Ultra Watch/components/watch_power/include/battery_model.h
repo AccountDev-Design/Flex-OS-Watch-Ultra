@@ -171,12 +171,30 @@ typedef enum {
 /** Siguiente nivel con histéresis: empeorar es inmediato, mejorar exige el umbral de salida. */
 batt_level_t batt_level_next(batt_level_t cur, int pct);
 
-/** Muestras iguales seguidas para confirmar un cambio de estado. */
+/**
+ * Confirmación de un cambio de estado: el estado nuevo debe verse en al menos
+ * BATT_CONFIRM_SAMPLES muestras seguidas Y mantenerse durante el tiempo que
+ * fija batt_hold_ms(desde, hacia), medido desde la primera muestra que lo vio.
+ * Así la confirmación no depende del ritmo de muestreo: el servicio puede
+ * muestrear deprisa durante un cambio (respuesta rápida) sin perder la
+ * histéresis donde hace falta:
+ *  - salir de "cargando" con el USB aún conectado: 4 s. Al final de la
+ *    tensión constante la corriente cae hacia cero y el sentido puede oscilar
+ *    entre carga y reposo; sin esta espera el estado parpadearía;
+ *  - de "descargando" a "externa sin carga": 1,2 s, para dar tiempo al
+ *    cargador a arrancar tras enchufar y no mostrar un estado intermedio;
+ *  - "completa", "sin batería" y "sin datos": 1 s;
+ *  - el resto (enchufar con carga, desenchufar): 150 ms.
+ */
 #define BATT_CONFIRM_SAMPLES 2
-/** Muestras seguidas para SALIR de "cargando": al final de la tensión
- *  constante la corriente cae hacia cero y el sentido puede oscilar entre
- *  carga y reposo; sin esta histéresis el estado parpadearía. */
-#define BATT_CHARGING_EXIT_SAMPLES 3
+#define BATT_HOLD_CHARGING_EXIT_MS 4000u
+#define BATT_HOLD_PLUG_IDLE_MS     1200u
+#define BATT_HOLD_SLOW_MS          1000u
+#define BATT_HOLD_FAST_MS          150u
+/** Periodo que supone batt_tracker_update() (API sin tiempo). */
+#define BATT_LEGACY_PERIOD_MS      2000u
+
+uint32_t batt_hold_ms(batt_state_t from, batt_state_t to);
 
 /** Seguimiento filtrado entre muestras. */
 typedef struct {
@@ -196,15 +214,24 @@ typedef struct {
     int vbat_ema_x4;          /**< EMA de VBAT en cuartos de mV */
     batt_state_t pending;
     uint8_t pending_count;
+    uint32_t pending_since_ms; /**< momento de la primera muestra del estado pendiente */
+    uint32_t clock_ms;         /**< reloj de batt_tracker_update() (API sin tiempo) */
 } batt_tracker_t;
 
 void batt_tracker_init(batt_tracker_t *t);
 
 /**
- * Incorpora una muestra.
+ * Incorpora una muestra tomada en now_ms (reloj monótono en ms; se admite que
+ * dé la vuelta).
  * @param read_ok false si la lectura I2C falló (no se modifica el % ni VBAT).
  */
+void batt_tracker_update_at(batt_tracker_t *t, const axp2101_status_t *s, bool read_ok, uint32_t now_ms);
+
+/** Igual, suponiendo una muestra cada BATT_LEGACY_PERIOD_MS. */
 void batt_tracker_update(batt_tracker_t *t, const axp2101_status_t *s, bool read_ok);
+
+/** ¿Hay un cambio de estado visto pero aún sin confirmar? */
+bool batt_tracker_pending(const batt_tracker_t *t);
 
 const char *batt_state_name(batt_state_t st);
 

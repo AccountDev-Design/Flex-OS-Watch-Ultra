@@ -59,9 +59,16 @@ static void refresh(settings_t *s)
     }
 }
 
+/* El brillo puede cambiar en Pantalla o en el panel rápido. */
 static void tick_cb(lv_timer_t *t)
 {
     refresh(lv_timer_get_user_data(t));
+}
+
+static void power_cb(lv_obj_t *page, const watch_power_snapshot_t *snap)
+{
+    (void)snap;
+    refresh(lv_obj_get_user_data(page));
 }
 
 static void delete_cb(lv_event_t *e)
@@ -84,6 +91,8 @@ lv_obj_t *ui_settings_create(lv_obj_t *parent)
     row(list, FLEX_ICON_INFO, FLEX_C_CAT_BLUE, "Acerca de", bi->fw_version, ui_about_create);
     refresh(s);
     lv_obj_add_event_cb(page, delete_cb, LV_EVENT_DELETE, s);
+    lv_obj_set_user_data(page, s);
+    ui_power_listen(page, power_cb);
     ui_page_timer(page, tick_cb, SETTINGS_TICK_MS, s);
     return page;
 }

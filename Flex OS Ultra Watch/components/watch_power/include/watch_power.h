@@ -1,9 +1,11 @@
 /*
  * watch_power — telemetría de batería del AXP2101 en SOLO LECTURA.
  *
- * Una tarea propia lee el PMIC cada WATCH_POWER_PERIOD_MS por el bus I2C
- * compartido del BSP y publica una instantánea. La interfaz solo copia esa
- * instantánea (nunca espera al bus I2C).
+ * Una tarea propia lee el PMIC por el bus I2C compartido del BSP y publica una
+ * instantánea. Ritmo (power_sched.h): un registro cada 0,5 s para detectar
+ * enseguida el USB, una muestra completa cada 3 s y, durante un cambio, cada
+ * 200 ms hasta confirmarlo. La interfaz solo copia la instantánea (nunca
+ * espera al bus I2C) y sabe si cambió con watch_power_generation().
  *
  * Garantía: este módulo NO escribe ningún registro del AXP2101. Si el ADC de
  * VBAT o el fuel gauge están desactivados en el chip, el dato se informa como
@@ -22,7 +24,6 @@
 extern "C" {
 #endif
 
-#define WATCH_POWER_PERIOD_MS 2000
 
 typedef struct {
     bool driver_ok;          /**< el AXP2101 respondió con su identificador */
@@ -42,6 +43,14 @@ typedef struct {
 
 /** Arranca la tarea de lectura. bus = bsp_i2c_get_handle(). */
 esp_err_t watch_power_start(i2c_master_bus_handle_t bus);
+
+/**
+ * Contador que cambia cada vez que cambia algo que la interfaz muestra
+ * (estado, %, nivel, VBAT, USB, eventos de carga, configuración). Lectura
+ * atómica sin bloqueo: la interfaz lo consulta a menudo y solo copia la
+ * instantánea cuando cambia.
+ */
+uint32_t watch_power_generation(void);
 
 /** Copia la última instantánea. Devuelve false si el servicio no arrancó. */
 bool watch_power_get(watch_power_snapshot_t *out);

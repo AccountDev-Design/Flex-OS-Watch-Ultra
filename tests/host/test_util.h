@@ -14,3 +14,4 @@ void test_ui_all(void);
 void test_alerts_all(void);
 void test_time_all(void);
 void test_gesture_all(void);
+void test_power_sched_all(void);

@@ -161,29 +161,47 @@ batt_level_t batt_level_next(batt_level_t cur, int pct)
     }
 }
 
-/* Muestras seguidas que exige el paso from -> to. Solo el final de carga con
- * el USB todavía conectado (cargando -> externa sin carga) es ambiguo; al
- * desenchufar, la falta de VBUS es inequívoca y basta la confirmación normal. */
-static uint8_t samples_needed(batt_state_t from, batt_state_t to)
+uint32_t batt_hold_ms(batt_state_t from, batt_state_t to)
 {
     if (from == BATT_STATE_CHARGING && to == BATT_STATE_EXTERNAL_IDLE) {
-        return BATT_CHARGING_EXIT_SAMPLES;
+        return BATT_HOLD_CHARGING_EXIT_MS;
     }
-    return BATT_CONFIRM_SAMPLES;
+    if (from == BATT_STATE_DISCHARGING && to == BATT_STATE_EXTERNAL_IDLE) {
+        return BATT_HOLD_PLUG_IDLE_MS;
+    }
+    if (to == BATT_STATE_FULL || to == BATT_STATE_NO_BATTERY || to == BATT_STATE_UNKNOWN) {
+        return BATT_HOLD_SLOW_MS;
+    }
+    return BATT_HOLD_FAST_MS;
+}
+
+bool batt_tracker_pending(const batt_tracker_t *t)
+{
+    return t->pending != t->state;
 }
 
 void batt_tracker_update(batt_tracker_t *t, const axp2101_status_t *s, bool read_ok)
+{
+    t->clock_ms += BATT_LEGACY_PERIOD_MS;
+    batt_tracker_update_at(t, s, read_ok, t->clock_ms);
+}
+
+void batt_tracker_update_at(batt_tracker_t *t, const axp2101_status_t *s, bool read_ok, uint32_t now_ms)
 {
     t->charging_started = false;
 
     batt_state_t raw = read_ok ? batt_classify(s) : BATT_STATE_UNKNOWN;
 
-    /* Confirmación: un cambio de estado necesita N muestras iguales seguidas. */
+    /* Confirmación: muestras seguidas y tiempo mínimo (batt_hold_ms). */
     if (raw == t->state) {
         t->pending = raw;
         t->pending_count = 0;
     } else if (raw == t->pending) {
-        if (++t->pending_count >= samples_needed(t->state, raw) - 1) {
+        if (t->pending_count < 255) {
+            t->pending_count++;
+        }
+        const uint32_t held = now_ms - t->pending_since_ms; /* resta sin signo: tolera la vuelta */
+        if (t->pending_count >= BATT_CONFIRM_SAMPLES - 1 && held >= batt_hold_ms(t->state, raw)) {
             const batt_state_t prev = t->state;
             t->prev_state = prev;
             t->state = raw;
@@ -204,6 +222,7 @@ void batt_tracker_update(batt_tracker_t *t, const axp2101_status_t *s, bool read
     } else {
         t->pending = raw;
         t->pending_count = 0;
+        t->pending_since_ms = now_ms;
     }
 
     if (!read_ok) {

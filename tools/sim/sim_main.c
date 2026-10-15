@@ -235,6 +235,18 @@ watch_time_state_t watch_time_now(wt_datetime_t *out)
     return s_time.state;
 }
 
+/* Generación: cambia con cualquier cambio de sim_power (las pruebas lo
+ * modifican directamente), como la del servicio real con los datos visibles. */
+uint32_t watch_power_generation(void)
+{
+    const uint8_t *p = (const uint8_t *)&sim_power;
+    uint32_t h = 2166136261u;
+    for (size_t i = 0; i < sizeof(sim_power); i++) {
+        h = (h ^ p[i]) * 16777619u;
+    }
+    return h;
+}
+
 bool watch_power_get(watch_power_snapshot_t *out)
 {
     *out = sim_power;

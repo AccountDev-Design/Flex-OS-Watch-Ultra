@@ -4,8 +4,9 @@
  *
  *  - Sin hora fiable muestra "--:--" y el motivo; nunca una hora inventada.
  *  - Un temporizador de 1 s, ligado a la pantalla (se borra con ella), solo
- *    reescribe una etiqueta cuando cambia lo que muestra: la hora una vez por
- *    minuto, la fecha una vez al día y la batería cuando cambia su estado.
+ *    reescribe la hora al cambiar el minuto y la fecha al cambiar el día.
+ *  - La batería se actualiza por suscripción (ui_power_listen): en cuanto
+ *    ui_system recibe un cambio, sin sondeo propio ni esperar a un toque.
  *  - Geometría del panel real de 410x502.
  *  - Es la página raíz de ui_nav.
  */
@@ -58,13 +59,12 @@ static void update_time(face_t *f)
     }
 }
 
-static void update_battery(face_t *f)
+static void update_battery(face_t *f, const watch_power_snapshot_t *snap)
 {
-    watch_power_snapshot_t snap;
-    const bool have = ui_system_power(&snap);
-    const batt_state_t st = have ? snap.track.state : BATT_STATE_UNKNOWN;
-    const batt_level_t lv = have ? snap.track.level : BATT_LEVEL_UNKNOWN;
-    const int pct = have ? snap.track.percent : -1;
+    const bool have = snap != NULL;
+    const batt_state_t st = have ? snap->track.state : BATT_STATE_UNKNOWN;
+    const batt_level_t lv = have ? snap->track.level : BATT_LEVEL_UNKNOWN;
+    const int pct = have ? snap->track.percent : -1;
     if (pct == f->last_pct && (int)st == f->last_state && (int)lv == f->last_level) {
         return;
     }
@@ -87,9 +87,13 @@ static void update_battery(face_t *f)
 
 static void tick_cb(lv_timer_t *t)
 {
-    face_t *f = lv_timer_get_user_data(t);
-    update_time(f);
-    update_battery(f);
+    update_time(lv_timer_get_user_data(t));
+}
+
+/* Cambio de batería: llega de ui_system en cuanto se confirma (sin sondeo). */
+static void power_cb(lv_obj_t *page, const watch_power_snapshot_t *snap)
+{
+    update_battery(lv_obj_get_user_data(page), snap);
 }
 
 static void delete_cb(lv_event_t *e)
@@ -137,6 +141,8 @@ lv_obj_t *ui_face_create(lv_obj_t *parent)
     f->timer = lv_timer_create(tick_cb, FACE_TICK_MS, f);
     lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, f);
     update_time(f);
-    update_battery(f);
+    update_battery(f, NULL);
+    lv_obj_set_user_data(scr, f);
+    ui_power_listen(scr, power_cb);
     return scr;
 }

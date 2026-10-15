@@ -13,8 +13,6 @@
 #include "ui_logic.h"
 #include "watch_theme.h"
 
-#define BATT_TICK_MS 1000
-
 typedef struct {
     lv_obj_t *level;
     lv_obj_t *state;
@@ -80,9 +78,11 @@ static void refresh(battpage_t *b)
     watch_theme_info_set(b->ts, cfg ? (s.cfg.ts_affects_charger ? "Afecta a la carga" : "No afecta") : "--");
 }
 
-static void tick_cb(lv_timer_t *t)
+/* Cambio de batería: llega de ui_system en cuanto se confirma. */
+static void power_cb(lv_obj_t *page, const watch_power_snapshot_t *snap)
 {
-    refresh(lv_timer_get_user_data(t));
+    (void)snap;
+    refresh(lv_obj_get_user_data(page));
 }
 
 static void delete_cb(lv_event_t *e)
@@ -138,6 +138,7 @@ lv_obj_t *ui_battery_page_create(lv_obj_t *parent)
 
     refresh(b);
     lv_obj_add_event_cb(page, delete_cb, LV_EVENT_DELETE, b);
-    ui_page_timer(page, tick_cb, BATT_TICK_MS, b);
+    lv_obj_set_user_data(page, b);
+    ui_power_listen(page, power_cb);
     return page;
 }

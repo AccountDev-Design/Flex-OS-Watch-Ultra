@@ -66,6 +66,7 @@ static struct {
     int64_t last_time_key;
     int last_pct;
     int last_state;
+    int last_level;
 } s_qp;
 
 /* ---- Contenido ---- */
@@ -88,16 +89,20 @@ static void update(void)
         lv_label_set_text(s_qp.date, d);
     }
 
-    watch_power_snapshot_t snap;
-    const bool have = ui_system_power(&snap);
-    const batt_state_t bst = have ? snap.track.state : BATT_STATE_UNKNOWN;
-    const batt_level_t blv = have ? snap.track.level : BATT_LEVEL_UNKNOWN;
-    const int pct = have ? snap.track.percent : -1;
-    if (pct == s_qp.last_pct && (int)bst == s_qp.last_state) {
+}
+
+static void update_battery(const watch_power_snapshot_t *snap)
+{
+    const bool have = snap != NULL;
+    const batt_state_t bst = have ? snap->track.state : BATT_STATE_UNKNOWN;
+    const batt_level_t blv = have ? snap->track.level : BATT_LEVEL_UNKNOWN;
+    const int pct = have ? snap->track.percent : -1;
+    if (pct == s_qp.last_pct && (int)bst == s_qp.last_state && (int)blv == s_qp.last_level) {
         return;
     }
     s_qp.last_pct = pct;
     s_qp.last_state = (int)bst;
+    s_qp.last_level = (int)blv;
     const flex_batt_kind_t kind = ui_batt_kind(bst, blv);
     flex_battery_icon_set(s_qp.batt_icon, kind, pct);
     flex_battery_icon_set(s_qp.batt_tile_icon, kind, pct);
@@ -115,6 +120,12 @@ static void tick_cb(lv_timer_t *t)
 {
     (void)t;
     update();
+}
+
+static void power_cb(lv_obj_t *root, const watch_power_snapshot_t *snap)
+{
+    (void)root;
+    update_battery(snap);
 }
 
 static lv_obj_t *tile(lv_obj_t *parent, int32_t x, int32_t y, flex_icon_t icon, uint32_t accent,
@@ -211,6 +222,7 @@ static void build(void)
     s_qp.last_time_key = INT64_MIN;
     s_qp.last_pct = -2;
     s_qp.last_state = -1;
+    s_qp.last_level = -1;
 
     lv_obj_t *root = lv_obj_create(lv_layer_top());
     lv_obj_remove_style_all(root);
@@ -281,6 +293,8 @@ static void build(void)
     lv_obj_remove_flag(pill, LV_OBJ_FLAG_CLICKABLE);
 
     update();
+    update_battery(NULL);
+    ui_power_listen(root, power_cb);
     s_qp.timer = lv_timer_create(tick_cb, QP_TICK_MS, NULL);
 }
 

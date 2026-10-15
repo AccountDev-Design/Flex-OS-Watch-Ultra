@@ -9,6 +9,7 @@ B2 avanza en bloques pequeños. **Ningún bloque escribe registros del AXP2101.*
 | B2-3 | Indicador de batería del tema: icono vectorial con 7 estados (normal, bajo, crítico, cargando, completa, externa, sin datos/sin batería) | implementado · compilado · pruebas en PC · prueba física pendiente |
 | B2-4 | Animación de carga (anillo hasta el % real, ~2,3 s, se cierra con un toque) disparada una vez por cada inicio de carga confirmado que venga de un estado conocido; `ui_system` lee el servicio una sola vez para todas las pantallas | implementado · compilado · pruebas en PC y de ciclo de vida en la vista previa · prueba física pendiente |
 | B2-5 | Avisos de batería baja o crítica: un aviso por episodio y clase, solo descargando, enfriamiento de 10 min; umbrales provisionales aislados en `battery_thresholds.h` | implementado · compilado · pruebas en PC y de ciclo de vida · prueba física pendiente |
+| **B2-6** | Respuesta rápida al enchufar y desenchufar: sondeo ligero, confirmación con tiempo mínimo y notificación por eventos a la interfaz (corrige "tarda en reaccionar" y "no se ve hasta tocar") | implementado · compilado · pruebas en PC y en la vista previa · prueba física pendiente (T41) |
 
 ## B2-1. Auditoría frente al datasheet del AXP2101
 
@@ -134,3 +135,63 @@ Siguen siendo provisionales (D4) hasta medir una descarga real.
 | T20 | Animación de carga | conectar el USB con la batería no llena; desconectar y volver a conectar; reiniciar con el USB conectado | Una animación por conexión (≤ 4 s tras conectar). **Ninguna** al arrancar ya conectado. Se cierra con un toque |
 | T21 | Aviso de batería baja | usar el reloj sin USB hasta ≤ 15 % | Un solo aviso ámbar; no se repite mientras siga bajo; no aparece cargando |
 | T22 | Aviso crítico (opcional) | seguir hasta ≤ 5 % | Un aviso rojo. **Precaución:** el PMIC puede apagar el reloj al vaciarse; no es necesario agotarla |
+
+## B2-6. Respuesta rápida de carga
+
+### Qué se observó en el reloj (2026-10-15)
+
+En el vídeo de la prueba y según el usuario:
+- al enchufar, el reloj tardaba en reaccionar;
+- a veces el estado no aparecía hasta tocar la pantalla.
+
+### Causa: latencias en cadena
+
+| Paso | Latencia |
+|---|---|
+| Muestreo del servicio | cada 2 s |
+| Confirmación | 2 muestras: 2 s más |
+| `ui_system` | consultaba cada 0,5 s |
+| Cada pantalla | consultaba `ui_system` cada 1 s |
+
+En el peor caso eran unos 6 s. Si en ese intervalo se tocaba la pantalla, parecía que el toque provocaba la actualización.
+
+### Solución (sin escribir en el AXP2101)
+
+- **Sondeo ligero** (`power_sched.c`, puro):
+  - cada 0,5 s se lee solo el registro 00h (VBUS y batería presentes);
+  - la muestra completa pasa a ser cada 3 s y a 5 lecturas, porque el 00h, el identificador y los registros 18h y 30h ya no se leen en cada muestra.
+  - En reposo el tráfico I2C **baja** de ~4,5 a ~3,7 lecturas por segundo (prueba de PC).
+- **Modo rápido:** si el sondeo ve un cambio o hay un estado sin confirmar, hay muestras completas cada 200 ms durante 3 s.
+- **Confirmación por tiempo además de por muestras** (`batt_hold_ms`):
+
+  | Transición | Tiempo mínimo |
+  |---|---|
+  | Enchufar con carga, desenchufar | 150 ms |
+  | Descarga a "externa sin carga" | 1,2 s, para dar tiempo a que arranque el cargador y no mostrar un estado intermedio |
+  | Salir de "cargando" con el USB conectado | 4 s: la misma histéresis de B2-1 contra el parpadeo al final de la carga |
+  | "Completa", "sin batería" y "sin datos" | 1 s |
+
+  Con muestras cada 2 s, el comportamiento es idéntico al de antes: las pruebas anteriores pasan sin cambios.
+- **Notificación:**
+  - el servicio incrementa un contador atómico (`watch_power_generation`) cuando cambia algo visible;
+  - `ui_system` lo mira cada 100 ms sin bloquear;
+  - solo cuando cambia copia la instantánea y avisa **en el mismo ciclo** a las pantallas suscritas (`ui_power_listen`): esfera, panel rápido, Ajustes y Batería.
+  - Ninguna pantalla sondea ya la batería por su cuenta.
+- **Pila de la tarea:** de 3072 a 4096 B. El reloj mostró 656 B libres como mínimo; el umbral de aviso es 512 B.
+
+### Comprobado en el PC
+
+| Prueba | Resultado |
+|---|---|
+| Enchufar con carga inmediata | "Cargando" confirmado en ≤ 0,9 s |
+| Cargador que tarda 0,8 s en arrancar | Confirmado ≤ 0,9 s después, sin pasar por "externa" |
+| Batería llena | "Externa sin carga" |
+| Fin de carga oscilando cada 0,6 s durante 6 s con muestras cada 200 ms | Sigue "cargando"; pasa a "externa" solo tras 4 s estables |
+| Tráfico I2C en reposo | ≤ 4,5 lecturas/s |
+| Vista previa, sin ningún toque | Un cambio llega a la esfera en 60 ms y la animación de carga empieza en ≤ 110 ms tras el evento |
+
+### Prueba en el reloj
+
+| # | Prueba | Cómo | Resultado esperado |
+|---|---|---|---|
+| T41 | Respuesta al enchufar | con la esfera visible, conectar y desconectar el USB 3 veces **sin tocar la pantalla** | "Cargando" y la animación en ~1 s tras conectar; "Descargando" en ~1 s tras desconectar; nunca hace falta tocar la pantalla. En el registro serie: `transicion CONFIRMADA a 'cargando'` |

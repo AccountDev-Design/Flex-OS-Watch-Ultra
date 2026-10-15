@@ -18,6 +18,15 @@ void ui_system_start(bool power_ok);
 /** Copia de la última instantánea de batería. false si todavía no hay ninguna. */
 bool ui_system_power(watch_power_snapshot_t *out);
 
+/**
+ * Suscripción a los cambios de batería: cb se llama en la tarea de LVGL en
+ * cuanto ui_system detecta una instantánea nueva (y una vez al suscribirse si
+ * ya hay datos). Se anula sola al borrarse obj. false si no hay hueco.
+ */
+typedef void (*ui_power_cb_t)(lv_obj_t *obj, const watch_power_snapshot_t *snap);
+bool ui_power_listen(lv_obj_t *obj, ui_power_cb_t cb);
+int ui_power_listener_count(void);
+
 /* ---- ui_charge_anim: animación de inicio de carga (lv_layer_top) ---- */
 
 /** Reproduce la animación una vez (si ya hay una en curso, no hace nada). */

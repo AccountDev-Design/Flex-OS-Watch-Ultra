@@ -10,6 +10,7 @@
 #include "watch_power.h"
 
 #include <string.h>
+#include "power_sched.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -21,7 +22,9 @@
 static const char *TAG = "watch_power";
 
 #define I2C_TIMEOUT_MS   50
-#define TASK_STACK       3072
+/* 3072 dejaba 656 B libres en el reloj (Diagnóstico, 2026-10-15): margen escaso
+ * con el registro por serie. */
+#define TASK_STACK       4096
 #define TASK_PRIO        2
 #define TASK_CORE        0
 /* Registro por serie: siempre que cambie algo y, como mínimo, cada 10 s. */
@@ -29,7 +32,7 @@ static const char *TAG = "watch_power";
 /* Configuración del cargador (solo lectura): al arrancar y cada 60 s. Puede
  * cambiar sin que lo haga este firmware: el AXP2101 conserva sus registros
  * mientras tenga batería, aunque otro firmware los haya escrito antes. */
-#define CFG_EVERY_SAMPLES (60000 / WATCH_POWER_PERIOD_MS)
+#define CFG_EVERY_US      (60 * 1000 * 1000)
 /* Aviso si la pila de la tarea queda con menos margen que esto. */
 #define STACK_WARN_BYTES  512
 
@@ -43,22 +46,21 @@ static i2c_master_dev_handle_t s_dev;
 static SemaphoreHandle_t s_lock;
 static watch_power_snapshot_t s_snap;
 static bool s_started;
+static uint32_t s_gen; /* cambia cuando cambia algo que la interfaz muestra */
 
 static esp_err_t rd(uint8_t reg, uint8_t *val)
 {
     return i2c_master_transmit_receive(s_dev, &reg, 1, val, 1, I2C_TIMEOUT_MS);
 }
 
-/* Lee todos los registros de una muestra. VBAT ocupa dos registros que se leen
- * por separado (como XPowersLib); para no mezclar el byte alto de una
- * conversión con el bajo de otra se relee el alto y se repite si cambió. */
+/* Muestra completa. 00h llega del sondeo ligero; el identificador, 18h y 30h
+ * se leen con la configuración (cada 60 s) y se reutilizan aquí. VBAT ocupa
+ * dos registros que se leen por separado (como XPowersLib); para no mezclar el
+ * byte alto de una conversión con el bajo de otra se relee el alto y se
+ * repite si cambió. 5 lecturas en el caso normal. */
 static esp_err_t sample(axp2101_regs_t *r)
 {
-    ESP_RETURN_ON_ERROR(rd(AXP2101_REG_CHIP_ID, &r->chip_id), TAG, "id");
-    ESP_RETURN_ON_ERROR(rd(AXP2101_REG_STATUS1, &r->status1), TAG, "status1");
     ESP_RETURN_ON_ERROR(rd(AXP2101_REG_STATUS2, &r->status2), TAG, "status2");
-    ESP_RETURN_ON_ERROR(rd(AXP2101_REG_GAUGE_CTRL, &r->gauge_ctrl), TAG, "gauge");
-    ESP_RETURN_ON_ERROR(rd(AXP2101_REG_ADC_CTRL, &r->adc_ctrl), TAG, "adc");
     for (int i = 0; i < 3; i++) {
         uint8_t h2;
         ESP_RETURN_ON_ERROR(rd(AXP2101_REG_VBAT_H, &r->vbat_h), TAG, "vbat_h");
@@ -73,8 +75,9 @@ static esp_err_t sample(axp2101_regs_t *r)
 }
 
 /* Registros de configuración del cargador: solo lectura, para diagnóstico. */
-static esp_err_t read_cfg(axp2101_cfg_regs_t *c)
+static esp_err_t read_cfg(axp2101_cfg_regs_t *c, uint8_t *chip_id)
 {
+    ESP_RETURN_ON_ERROR(rd(AXP2101_REG_CHIP_ID, chip_id), TAG, "id");
     ESP_RETURN_ON_ERROR(rd(AXP2101_REG_VINDPM, &c->vindpm), TAG, "0x15");
     ESP_RETURN_ON_ERROR(rd(AXP2101_REG_IIN_LIM, &c->iin_lim), TAG, "0x16");
     ESP_RETURN_ON_ERROR(rd(AXP2101_REG_GAUGE_CTRL, &c->gauge_ctrl), TAG, "0x18");
@@ -119,36 +122,80 @@ static void log_sample(const watch_power_snapshot_t *s)
              (unsigned long)s->stack_free_min);
 }
 
+static uint32_t now_ms(void)
+{
+    return (uint32_t)(esp_timer_get_time() / 1000);
+}
+
+/* Lo que la interfaz muestra: si cambia, se incrementa s_gen. */
+static bool visible_changed(const watch_power_snapshot_t *a, const watch_power_snapshot_t *b)
+{
+    return a->track.state != b->track.state || a->track.percent != b->track.percent ||
+           a->track.level != b->track.level || a->track.vbat_mv / 10 != b->track.vbat_mv / 10 ||
+           a->track.charge_events != b->track.charge_events || a->raw.vbus_present != b->raw.vbus_present ||
+           a->raw.vindpm != b->raw.vindpm || a->driver_ok != b->driver_ok || a->cfg_ok != b->cfg_ok;
+}
+
 static void power_task(void *arg)
 {
     (void)arg;
     batt_state_t last_state = BATT_STATE_UNKNOWN;
     int last_pct = -2;
     int64_t last_log = 0;
+    int64_t last_cfg = 0;
+    uint8_t chip_id = AXP2101_CHIP_ID_VALUE; /* leído en watch_power_start() */
+    uint8_t gauge_ctrl = 0, adc_ctrl = 0;
+    power_sched_t ps;
+    power_sched_init(&ps);
 
-    uint32_t cycle = 0;
     for (;;) {
+        /* Sondeo ligero: solo 00h (VBUS y batería presentes). */
+        uint8_t status1 = 0;
+        const esp_err_t perr = rd(AXP2101_REG_STATUS1, &status1);
+        const uint32_t t_ms = now_ms();
+        if (!power_sched_need_full(&ps, t_ms, perr == ESP_OK, status1, batt_tracker_pending(&s_snap.track))) {
+            vTaskDelay(pdMS_TO_TICKS(power_sched_delay_ms(&ps, t_ms, batt_tracker_pending(&s_snap.track))));
+            continue;
+        }
+
+        /* Configuración del cargador (solo lectura): al arrancar y cada 60 s,
+         * fuera del bloqueo de la instantánea. Trae también el identificador
+         * y los bits de gauge y ADC que necesita la decodificación. */
+        axp2101_cfg_regs_t cfg_regs = {0};
+        const int64_t t_us = esp_timer_get_time();
+        const bool cfg_due = !s_snap.cfg_ok || t_us - last_cfg >= CFG_EVERY_US;
+        bool cfg_ok = false;
+        if (cfg_due && perr == ESP_OK) {
+            cfg_ok = read_cfg(&cfg_regs, &chip_id) == ESP_OK;
+            last_cfg = t_us;
+            if (cfg_ok) {
+                gauge_ctrl = cfg_regs.gauge_ctrl;
+                adc_ctrl = cfg_regs.adc_ctrl;
+            }
+        }
+
         axp2101_regs_t regs = {0};
         const int64_t t0 = esp_timer_get_time();
-        const esp_err_t err = sample(&regs);
+        esp_err_t err = perr;
+        if (err == ESP_OK) {
+            err = sample(&regs);
+        }
         const uint32_t dt = (uint32_t)(esp_timer_get_time() - t0);
+        regs.status1 = status1;
+        regs.chip_id = chip_id;
+        regs.gauge_ctrl = gauge_ctrl;
+        regs.adc_ctrl = adc_ctrl;
         axp2101_status_t dec = {0};
         if (err == ESP_OK) {
             axp2101_decode(&regs, &dec);
         }
         const bool ok = (err == ESP_OK) && dec.chip_ok;
 
-        /* Configuración: lectura aparte, fuera del bloqueo de la instantánea. */
-        axp2101_cfg_regs_t cfg_regs = {0};
-        /* s_snap.cfg_ok solo lo escribe esta tarea: se puede leer sin bloqueo. */
-        const bool cfg_due = ok && (!s_snap.cfg_ok || cycle % CFG_EVERY_SAMPLES == 0);
-        const bool cfg_ok = cfg_due && read_cfg(&cfg_regs) == ESP_OK;
-        cycle++;
-
         const uint32_t stack_free = (uint32_t)uxTaskGetStackHighWaterMark(NULL);
         bool cfg_changed = false;
 
         xSemaphoreTake(s_lock, portMAX_DELAY);
+        const watch_power_snapshot_t before = s_snap;
         if (ok) {
             s_snap.regs = regs;
             s_snap.raw = dec;
@@ -172,9 +219,15 @@ static void power_task(void *arg)
         if (s_snap.stack_free_min == 0 || stack_free < s_snap.stack_free_min) {
             s_snap.stack_free_min = stack_free;
         }
-        batt_tracker_update(&s_snap.track, &dec, ok);
+        batt_tracker_update_at(&s_snap.track, &dec, ok, now_ms());
+        const bool state_changed = s_snap.track.state != before.track.state;
+        const bool pending = batt_tracker_pending(&s_snap.track);
+        if (visible_changed(&before, &s_snap)) {
+            __atomic_add_fetch(&s_gen, 1, __ATOMIC_RELEASE);
+        }
         const watch_power_snapshot_t copy = s_snap;
         xSemaphoreGive(s_lock);
+        power_sched_full_done(&ps, t_ms, state_changed, pending);
 
         if (cfg_changed) {
             log_cfg(&copy.cfg_regs, &copy.cfg);
@@ -200,7 +253,7 @@ static void power_task(void *arg)
             last_pct = copy.track.percent;
             last_log = now;
         }
-        vTaskDelay(pdMS_TO_TICKS(WATCH_POWER_PERIOD_MS));
+        vTaskDelay(pdMS_TO_TICKS(power_sched_delay_ms(&ps, now_ms(), pending)));
     }
 }
 
@@ -239,6 +292,11 @@ esp_err_t watch_power_start(i2c_master_bus_handle_t bus)
     ESP_RETURN_ON_FALSE(ok == pdPASS, ESP_ERR_NO_MEM, TAG, "tarea");
     s_started = true;
     return ESP_OK;
+}
+
+uint32_t watch_power_generation(void)
+{
+    return __atomic_load_n(&s_gen, __ATOMIC_ACQUIRE);
 }
 
 bool watch_power_get(watch_power_snapshot_t *out)
