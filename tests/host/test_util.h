@@ -12,3 +12,4 @@ extern int g_checks, g_fail;
 /* Suites de los demás archivos */
 void test_ui_all(void);
 void test_alerts_all(void);
+void test_time_all(void);

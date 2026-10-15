@@ -503,6 +503,7 @@ int main(void)
     test_wallpaper();
     test_ui_all();
     test_alerts_all();
+    test_time_all();
     printf("%d comprobaciones, %d fallos\n", g_checks, g_fail);
     return g_fail ? 1 : 0;
 }

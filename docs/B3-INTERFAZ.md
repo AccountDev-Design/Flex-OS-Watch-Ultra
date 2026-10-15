@@ -8,7 +8,7 @@ físicas de la tabla final.
 | Bloque | Contenido | Estado |
 |---|---|---|
 | **B3-1** | Identidad consolidada: 9 iconos vectoriales nuevos, estados de los controles de vidrio (pulsado, activo, no disponible), cabecera estándar, lista y fila de Ajustes | implementado · compilado · pruebas en la vista previa · prueba física pendiente |
-| B3-2 | Servicio de hora en solo lectura (RTC PCF85063) y esfera del reloj | pendiente |
+| **B3-2** | Servicio de hora en solo lectura (RTC PCF85063) y esfera del reloj | servicio: implementado · compilado · pruebas en PC · prueba física pendiente. Esfera: en curso |
 | B3-3 | Navegación: pila de pantallas, transiciones 210/190 ms, volver, gestos | pendiente |
 | B3-4 | Panel rápido (solo controles con función real) | pendiente |
 | B3-5 | Ajustes: Pantalla, Batería, Diagnóstico, Acerca de | pendiente |
@@ -69,3 +69,43 @@ Los componentes aparecerán en pantalla con B3-4 y B3-5. Estas pruebas se harán
 | T23 | Iconos y textos legibles | abrir Ajustes y el panel rápido | Iconos nítidos, sin cortes en los bordes; textos sin solaparse con el chevron ni con la zona "volver" |
 | T24 | Respuesta al toque | mantener el dedo sobre una fila y sobre la zona "volver" | Se aclaran mientras se pulsa; al soltar, abren o vuelven una sola vez |
 | T25 | Filas "Pendiente" | tocar Wi-Fi y Bluetooth | No hacen nada y se ven apagadas |
+
+## B3-2. Hora (RTC PCF85063, solo lectura) y esfera
+
+### Auditoría previa
+
+- **BSP oficial:** no tiene soporte de RTC; los `0x51` que aparecen en él son el comando de brillo del panel.
+- **Auditoría de la Fase 0:** el PCF85063 está en 0x51 del bus I2C compartido, con INT en GPIO39. Su reserva de alimentación sale del AXP2101; no se sabe si hay pila o supercondensador.
+- **Referencia (`FlexOS_Ultra_Clock.h`):** guarda la hora como una época UTC con la zona fija de Lima (UTC-5) y, sin hora, usa una **semilla de fábrica inventada** (4-7-2026 13:23). Aquí **no** se copia la semilla: sin hora fiable se dice que no hay hora.
+- **Driver:** propio y mínimo, en lugar de SensorLib, para no añadir dependencias. Solo hace falta leer 11 registros.
+
+### Servicio `watch_time`
+
+- **Lectura:** una transacción I2C lee los registros 00h-0Ah. El chip congela los contadores durante la lectura, así que la hora no se lee a medias.
+  - Se lee al arrancar y cada 10 min; si falla, se reintenta cada 30 s.
+  - Entre lecturas la hora avanza con `esp_timer`: la interfaz nunca espera al bus.
+- **Validez:** la hora se da por **no configurada** cuando:
+  - el bit OS indica que el oscilador se paró;
+  - el bit STOP está activo;
+  - hay una cifra BCD o un campo fuera de rango (incluido el 31 de noviembre o el 29 de febrero de un año no bisiesto);
+  - la fecha es anterior a 2025.
+  - El día de la semana del chip (asignable por el usuario) no se usa: se calcula de la fecha.
+- **Solo lectura:** no escribe el RTC ni el reloj del sistema. Poner en hora, SNTP y zona horaria son F4.2.
+- **Zona horaria (D17):** provisionalmente, la hora del RTC se muestra como hora local.
+- **Registro serie:** fecha y hora leídas, motivo si no es fiable, y los 11 registros en crudo al arrancar o cuando cambia el estado.
+
+### Comprobado en el PC (servicio)
+
+- **`tests/host`:** 459 comprobaciones, 0 fallos (+96).
+  - Calendario de ±8000 años y días de la semana conocidos.
+  - Cambio de día y de año; segundos antes de 1970.
+  - Textos en español con tildes y recortes seguros.
+  - PCF85063: OS, STOP, modo 12 h (12 AM/PM), 14 campos imposibles, 29 de febrero, bordes y fechas anteriores a 2025.
+- **Firmware completo:** sin avisos. App: 830 816 B.
+
+### Pruebas en el reloj (pendientes)
+
+| # | Prueba | Cómo | Resultado esperado |
+|---|---|---|---|
+| T26 | Lectura del RTC | arrancar con el monitor serie | Una línea `watch_time: RTC aaaa-mm-dd hh:mm:ss (ok)`, o `RTC sin hora fiable: …` más los registros en crudo. Cualquiera de las dos es válida; **envía el registro** |
+| T27 | Deriva | si T26 dio una hora válida, compararla con un reloj de referencia al arrancar y 15 min después | Diferencia ≤ 2 s entre ambas comparaciones |

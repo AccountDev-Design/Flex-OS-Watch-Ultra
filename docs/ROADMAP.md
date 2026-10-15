@@ -142,6 +142,8 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | D14 | Nombre "Liquid Glass" (denominación de terceros) en el producto | F3 |
 | D15 | Alcance de "funciones temporales" (cronómetro, temporizador...) | F4.3 |
 | D16 | ¿Bloqueo con código? (no acordado) | — |
+| D17 | Zona horaria y contenido del RTC: hoy la hora del RTC se muestra como hora local; ¿guardar UTC más la zona, como la referencia (Lima, UTC-5)? | F4.2 |
+| D18 | Formato de hora: 24 h por defecto ("9:05"); ¿ofrecer 12 h? | F4.2 |
 
 ## Verificaciones pendientes en el reloj
 

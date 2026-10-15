@@ -7,8 +7,9 @@
  *   2. pantalla CO5300 + LVGL (watch_display)
  *   3. táctil FT3168 (watch_touch)        — si falla, se sigue sin táctil
  *   4. AXP2101 en solo lectura (watch_power) — si falla, batería "sin datos"
- *   5. sonda de flash de solo lectura (watch_diag)
- *   6. pantalla de inicio (watch_ui)
+ *   5. RTC PCF85063 en solo lectura (watch_time) — si falla, hora "no disponible"
+ *   6. sonda de flash de solo lectura (watch_diag)
+ *   7. pantalla de inicio (watch_ui)
  */
 #include "esp_app_desc.h"
 #include "esp_err.h"
@@ -18,6 +19,7 @@
 #include "watch_diag.h"
 #include "watch_display.h"
 #include "watch_power.h"
+#include "watch_time.h"
 #include "watch_touch.h"
 #include "watch_ui.h"
 
@@ -48,6 +50,11 @@ void app_main(void)
     boot.power_ok = (err == ESP_OK);
     if (!boot.power_ok) {
         ESP_LOGE(TAG, "AXP2101 no disponible: %s", esp_err_to_name(err));
+    }
+
+    err = watch_time_start(bsp_i2c_get_handle());
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "servicio de hora no disponible: %s", esp_err_to_name(err));
     }
 
     watch_diag_flash_probe(&boot.flash);
