@@ -19,10 +19,11 @@ Detalles, archivos generados y avisos: [`Flex OS Ultra Watch/README.md`](Flex%20
 
 ## Estado
 
-**Progreso global: 18 %**, del que un 7 % está verificado en el reloj.
+**Progreso global: 28,5 %**, del que un 7 % está verificado en el reloj.
 
 - Referencia única: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Ahí están el plan completo, los pesos, las decisiones pendientes y el historial.
-- En curso: B2-1, auditoría de batería ([docs/B2-ENERGIA.md](docs/B2-ENERGIA.md)).
+- F2 (batería y energía) y F3 (interfaz, tema y navegación) están hechas en software: compilan y pasan las pruebas de PC y de la vista previa.
+- Esperan las pruebas físicas en el reloj: [docs/B2-ENERGIA.md](docs/B2-ENERGIA.md) y [docs/B3-INTERFAZ.md](docs/B3-INTERFAZ.md).
 
 ## Estructura del repositorio
 
@@ -41,9 +42,31 @@ Las herramientas de fuera usan el código de `Flex OS Ultra Watch/` sin copiarlo
 
 Ninguna escribe dentro de la carpeta del firmware.
 
+## Pruebas de PC
+
+```bash
+# Lógica pura (ASan + UBSan): batería, avisos, hora, RTC, gestos, textos...
+make -C tests/host
+
+# Vista previa de la interfaz con LVGL 9.5 real: renderiza las pantallas a
+# PNG, simula el dedo y comprueba navegación, gestos, fugas, glifos y una
+# prueba "mono" de 600 acciones aleatorias reproducibles.
+make -C tools/sim LVGL_DIR=/ruta/a/lvgl-9.5.0
+tools/sim/build/sim tools/sim/out && python3 tools/sim/to_png.py tools/sim/out
+
+# La misma vista previa con ASan + UBSan, y otra semilla para la prueba mono
+make -C tools/sim LVGL_DIR=/ruta/a/lvgl-9.5.0 SAN=1
+SIM_SEED=7 tools/sim/build-san/sim tools/sim/out
+```
+
+Los datos de la vista previa (batería, hora, memoria) son **escenarios
+simulados**: sirven para probar la interfaz, no el hardware.
+
 ## Documentación
 
 - [docs/ROADMAP.md](docs/ROADMAP.md): hoja de ruta y progreso global
+- [docs/PRUEBAS-RELOJ.md](docs/PRUEBAS-RELOJ.md): **próxima prueba en el reloj**, todas las pruebas pendientes en orden
+- [docs/B3-INTERFAZ.md](docs/B3-INTERFAZ.md): interfaz, tema, hora, navegación, panel rápido y Ajustes (B3)
 - [docs/B2-ENERGIA.md](docs/B2-ENERGIA.md): batería y energía (B2)
 - [docs/B1-ARRANQUE.md](docs/B1-ARRANQUE.md): contenido de B1, dependencias, pruebas físicas
 - [docs/FLASH-32MB.md](docs/FLASH-32MB.md): capacidad, acceso y tabla de particiones de 32 MB

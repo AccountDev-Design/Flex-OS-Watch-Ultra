@@ -4,10 +4,19 @@
 PROGRESO GLOBAL: 28,5 %   [██████░░░░░░░░░░░░░░]   (verificado en el reloj: 7 %)
 ```
 
-- **Completado:** auditoría y plan (F0); proyecto ESP-IDF flasheado y arrancando en el reloj (F1.1). Software de F2 (lecturas, estados, indicador, animación y avisos) hecho y probado en el PC.
-- **En curso:** F3 (interfaz, tema y navegación): B3-1 a B3-5 hechos en software; queda B3-6 (integración). F2 y F3 esperan las pruebas físicas.
-- **Falta:** las pruebas físicas de B1/B2-1, el resto de batería, la esfera, el panel rápido, los ajustes, los servicios, Flex Phone, el navegador, OTA, la seguridad y las pruebas finales.
-- **Siguiente:** flashear B2-1 y enviar el registro serie de las pruebas T14-T18 (`docs/B2-ENERGIA.md`).
+- **Completado:**
+  - Auditoría y plan (F0).
+  - Proyecto ESP-IDF flasheado y arrancando en el reloj (F1.1).
+  - Software de F2: lecturas del AXP2101, estados, indicador, animación de carga y avisos.
+  - Software de F3: identidad, hora del RTC y esfera, navegación y arranque, panel rápido y Ajustes.
+  - F2 y F3 están compilados y probados en el PC, incluidos ASan/UBSan y la prueba "mono".
+- **En curso:** pruebas físicas de F2 y F3.
+- **Falta:**
+  - Las pruebas físicas T1-T40.
+  - B2-2: ADC y pin TS (❓ D1).
+  - La calibración de umbrales (❓ D4).
+  - Los servicios (F4), Flex Phone, el navegador, OTA, la seguridad y las pruebas finales.
+- **Siguiente:** flashear el firmware actual y seguir `docs/PRUEBAS-RELOJ.md` (T1-T40 en una sesión), enviando el registro serie.
 
 ## Cómo se calcula
 
@@ -167,4 +176,5 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-15 | 23,5 % | +2,5 | F3.2 (servicio de hora de solo lectura y esfera) compila y pasa las pruebas de PC y de la vista previa: 50 % de 5 |
 | 2026-10-15 | 23,5 % | 0 | B3-3 (navegación y arranque) es parte de F3.4, que no suma hasta tener también los Ajustes (B3-5) |
 | 2026-10-15 | 26 % | +2,5 | F3.3 (panel rápido) compila y pasa las pruebas de PC y de la vista previa: 50 % de 5 |
-| 2026-10-15 | **28,5 %** | +2,5 | F3.4 (navegación, arranque y páginas de Ajustes) compila y pasa las pruebas de PC y de la vista previa: 50 % de 5 |
+| 2026-10-15 | 28,5 % | +2,5 | F3.4 (navegación, arranque y páginas de Ajustes) compila y pasa las pruebas de PC y de la vista previa: 50 % de 5 |
+| 2026-10-15 | **28,5 %** | 0 | B3-6 (integración y robustez en el PC) no añade tareas: las de F2 y F3 solo suben con las pruebas físicas |

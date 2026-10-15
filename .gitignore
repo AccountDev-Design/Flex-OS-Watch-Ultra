@@ -12,4 +12,5 @@ tests/host/build/
 .DS_Store
 .claude/
 tools/sim/build/
+tools/sim/build-san/
 tools/sim/out/

@@ -105,6 +105,56 @@ void sim_drag(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int n, uint32_t st
     }
 }
 
+static int next_cp(const char **s)
+{
+    const unsigned char *p = (const unsigned char *)*s;
+    int cp, n;
+    if (p[0] < 0x80) {
+        cp = p[0];
+        n = 1;
+    } else if ((p[0] & 0xE0) == 0xC0) {
+        cp = ((p[0] & 0x1F) << 6) | (p[1] & 0x3F);
+        n = 2;
+    } else if ((p[0] & 0xF0) == 0xE0) {
+        cp = ((p[0] & 0x0F) << 12) | ((p[1] & 0x3F) << 6) | (p[2] & 0x3F);
+        n = 3;
+    } else {
+        cp = ((p[0] & 0x07) << 18) | ((p[1] & 0x3F) << 12) | ((p[2] & 0x3F) << 6) | (p[3] & 0x3F);
+        n = 4;
+    }
+    *s += n;
+    return cp;
+}
+
+/* Cuenta los caracteres de las etiquetas que su fuente no puede dibujar. */
+int sim_missing_glyphs(lv_obj_t *obj, const char *where)
+{
+    int missing = 0;
+    if (lv_obj_check_type(obj, &lv_label_class)) {
+        const lv_font_t *font = lv_obj_get_style_text_font(obj, LV_PART_MAIN);
+        const char *t = lv_label_get_text(obj);
+        while (t && *t) {
+            const int cp = next_cp(&t);
+            lv_font_glyph_dsc_t g;
+            const bool ok = lv_font_get_glyph_dsc(font, &g, (uint32_t)cp, 0) && !g.is_placeholder;
+            if (cp != '\n' && !ok) {
+                printf("  sin glifo U+%04X en \"%s\" (%s)\n", cp, lv_label_get_text(obj), where);
+                missing++;
+            }
+        }
+    }
+    for (uint32_t i = 0; i < lv_obj_get_child_count(obj); i++) {
+        missing += sim_missing_glyphs(lv_obj_get_child(obj, (int32_t)i), where);
+    }
+    return missing;
+}
+
+void sim_check_glyphs(lv_obj_t *obj, const char *where)
+{
+    const int m = sim_missing_glyphs(obj, where);
+    EXPECT(m == 0, "%s: %d caracteres sin glifo", where, m);
+}
+
 size_t sim_mem_used(void)
 {
     lv_mem_monitor_t m;
@@ -235,6 +285,7 @@ int main(int argc, char **argv)
     sim_suite_nav(out);
     sim_suite_qp(out);
     sim_suite_settings(out);
+    sim_suite_monkey(out);
 
     printf("%s (%d fallos)\n", sim_fails ? "FALLOS" : "TODO OK", sim_fails);
     return sim_fails ? 1 : 0;

@@ -77,7 +77,7 @@ version.txt             versión de la app (0.1.0-b1)
 sdkconfig.defaults      configuración: ESP32-S3R8, PSRAM octal, flash de 32 MB, LVGL 9.5
 partitions.csv          particiones de 32 MB (ver ../docs/FLASH-32MB.md)
 main/                   app_main.c + idf_component.yml (BSP oficial 2.0.0, LVGL 9.5.0)
-components/             watch_display, watch_touch, watch_power, watch_theme, watch_diag, watch_ui
+components/             watch_display, watch_touch, watch_power, watch_time, watch_theme, watch_diag, watch_ui
 assets/fonts/           Outfit-Regular.ttf + OFL.txt (origen de las fuentes LVGL)
 tools/gen_fonts.sh      regenera components/watch_theme/fonts/ a partir de assets/fonts/
 THIRD_PARTY_NOTICES.md  licencias

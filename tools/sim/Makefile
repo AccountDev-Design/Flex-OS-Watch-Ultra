@@ -2,16 +2,27 @@
 #   make -C tools/sim LVGL_DIR=/ruta/a/lvgl-v9.5.0
 #   tools/sim/build/sim tools/sim/out && python3 tools/sim/to_png.py tools/sim/out
 #
+# Con SAN=1 todo (LVGL incluido) se compila con AddressSanitizer y
+# UndefinedBehaviorSanitizer en build-san/: detecta usos tras liberar,
+# desbordes y comportamiento indefinido en el código de la interfaz.
+#   make -C tools/sim LVGL_DIR=... SAN=1 && tools/sim/build-san/sim tools/sim/out
+#
 # El firmware vive en "Flex OS Ultra Watch/". Make no maneja rutas con
 # espacios en sus funciones, así que se accede a través del enlace
 # simbólico build/fw, creado al leer este Makefile.
 LVGL_DIR ?= $(error define LVGL_DIR con la ruta a LVGL v9.5.0)
 CC ?= cc
+ifeq ($(SAN),1)
+BUILD := build-san
+SANFLAGS := -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined
+else
 BUILD := build
+SANFLAGS :=
+endif
 FW := $(BUILD)/fw
 $(shell mkdir -p $(BUILD) && ln -sfn "../../../Flex OS Ultra Watch" $(FW))
 
-CFLAGS := -std=gnu11 -O1 -g -Wall -DLV_CONF_INCLUDE_SIMPLE -DLV_LVGL_H_INCLUDE_SIMPLE \
+CFLAGS := -std=gnu11 -O1 -g -Wall $(SANFLAGS) -DLV_CONF_INCLUDE_SIMPLE -DLV_LVGL_H_INCLUDE_SIMPLE \
           -I. -Istubs -I$(LVGL_DIR) -I$(LVGL_DIR)/src \
           -I$(FW)/components/watch_ui -I$(FW)/components/watch_ui/include -I$(FW)/components/watch_theme/include \
           -I$(FW)/components/watch_power/include -I$(FW)/components/watch_diag/include \
@@ -44,4 +55,4 @@ $(BUILD)/sim: $(APP_SRC) $(APP_HDR) $(LVGL_OBJ)
 	@$(CC) $(CFLAGS) -Werror $(APP_SRC) $(LVGL_OBJ) -lm -o $@
 
 clean:
-	rm -rf $(BUILD) out
+	rm -rf build build-san out

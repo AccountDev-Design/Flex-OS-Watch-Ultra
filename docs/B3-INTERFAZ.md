@@ -12,7 +12,7 @@ físicas de la tabla final.
 | **B3-3** | Navegación: pila de páginas, transiciones 210/190 ms, volver (botón y gesto desde el borde), arranque con splash | implementado · compilado · pruebas en PC y en la vista previa · prueba física tras B3-5 |
 | **B3-4** | Panel rápido (solo controles con función real) y raíz de Ajustes | implementado · compilado · pruebas en PC y en la vista previa · prueba física pendiente |
 | **B3-5** | Ajustes: Pantalla, Batería, Diagnóstico (con la prueba de pantalla y táctil), Acerca de | implementado · compilado · pruebas en PC y en la vista previa · prueba física pendiente |
-| B3-6 | Pruebas de integración en la vista previa (gestos, fugas, animaciones) | pendiente |
+| **B3-6** | Integración: vista previa completa con ASan/UBSan, prueba "mono" de 600 acciones reproducibles con invariantes, superposiciones durante la navegación | hecho (pruebas de PC) |
 
 ## B3-1. Identidad: iconos y componentes
 
@@ -305,3 +305,47 @@ Los componentes aparecerán en pantalla con B3-4 y B3-5. Estas pruebas se harán
 | T38 | Batería | Ajustes > Batería; desplazar hasta el final | Nivel, tensión y USB coinciden con el registro serie de `watch_power`; la configuración del cargador coincide con la línea `config` del registro; los umbrales dicen "provisionales" |
 | T39 | Diagnóstico | Ajustes > Diagnóstico | RAM y PSRAM libres coinciden con el registro serie; el estado del RTC coincide con T26 |
 | T40 | Prueba de pantalla (= T2 y T3 de B1) | Diagnóstico > Prueba de pantalla; mirar los bordes y tocar las 4 esquinas y el centro | Marco azul de 1 px en los 4 bordes; coordenadas cerca de (0,0), (409,0), (0,501), (409,501) y (205,251) |
+
+## B3-6. Integración
+
+### Qué se comprueba
+
+- **Vista previa entera con ASan y UBSan** (`make -C tools/sim SAN=1`), incluido LVGL: sin usos tras liberar, desbordes, comportamiento indefinido ni fugas al salir.
+- **Prueba "mono"** (`sim_monkey.c`): 600 acciones pseudoaleatorias con semilla fija; con `SIM_SEED` se prueba otra.
+  - **Acciones:**
+    - toques en cualquier punto;
+    - gestos desde el borde y desde arriba;
+    - arrastres hacia arriba;
+    - "volver";
+    - aperturas de páginas sin esperar a que termine la animación anterior;
+    - cambios de batería que disparan la animación de carga y los avisos;
+    - cambios del estado de la hora.
+  - **Invariantes, cada 10 acciones en reposo:**
+    - navegación quieta;
+    - una sola página visible y en su sitio;
+    - profundidad entre 1 y 6;
+    - panel rápido cerrado o abierto del todo y solo sobre la esfera;
+    - sin animaciones vivas salvo los avisos;
+    - todos los textos con glifo.
+  - **Al terminar:** los mismos bloques de memoria y temporizadores que al empezar.
+- **Superposiciones**, de forma determinista:
+  - el aviso de batería baja aparece encima del panel rápido abierto, se cierra con un toque y el panel sigue funcionando;
+  - la animación de carga aparece encima de Ajustes > Batería, se cierra con un toque y la página sigue debajo con el estado nuevo.
+  - El aviso bajo respeta su enfriamiento de 10 minutos: la prueba tuvo que dejarlo pasar para que volviera a sonar.
+
+### Resultados
+
+| Prueba | Resultado |
+|---|---|
+| `tests/host` (ASan + UBSan) | 557 comprobaciones, 0 fallos |
+| `tools/sim`, todas las baterías | 0 fallos |
+| `tools/sim` con ASan + UBSan | 0 fallos, sin informes de los sanitizadores |
+| Prueba mono, 30 semillas × 600 acciones (18 000 acciones) | 0 fallos. En cada semilla, entre 10 y 36 de 61 comprobaciones en una página (profundidad máxima 6) y entre 4 y 19 con el panel abierto |
+| Prueba mono con ASan + UBSan, 5 semillas | 0 fallos, sin informes |
+
+Vistas previas: `docs/img/f3_aviso_sobre_panel.png` y `f3_carga_sobre_pagina.png`.
+
+**Límite de estas pruebas:**
+
+- Comprueban la lógica y el ciclo de vida de la interfaz con LVGL real, pero **no** el reloj: ni la fluidez (FPS), ni el consumo, ni el táctil físico, ni los tiempos reales del bus I2C. Nada de eso se ha medido.
+- Las pruebas T14-T40 lo verificarán.

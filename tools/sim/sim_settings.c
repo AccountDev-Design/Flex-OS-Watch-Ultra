@@ -15,56 +15,6 @@
 #define BACK_X   (FLEX_HDR_X + FLEX_HDR_ZONE / 2)
 #define BACK_Y   (FLEX_SAFE_TOP + FLEX_HDR_ZONE / 2)
 
-static int next_cp(const char **s)
-{
-    const unsigned char *p = (const unsigned char *)*s;
-    int cp, n;
-    if (p[0] < 0x80) {
-        cp = p[0];
-        n = 1;
-    } else if ((p[0] & 0xE0) == 0xC0) {
-        cp = ((p[0] & 0x1F) << 6) | (p[1] & 0x3F);
-        n = 2;
-    } else if ((p[0] & 0xF0) == 0xE0) {
-        cp = ((p[0] & 0x0F) << 12) | ((p[1] & 0x3F) << 6) | (p[2] & 0x3F);
-        n = 3;
-    } else {
-        cp = ((p[0] & 0x07) << 18) | ((p[1] & 0x3F) << 12) | ((p[2] & 0x3F) << 6) | (p[3] & 0x3F);
-        n = 4;
-    }
-    *s += n;
-    return cp;
-}
-
-/* Cuenta los caracteres de las etiquetas que su fuente no puede dibujar. */
-static int missing_glyphs(lv_obj_t *obj, const char *where)
-{
-    int missing = 0;
-    if (lv_obj_check_type(obj, &lv_label_class)) {
-        const lv_font_t *font = lv_obj_get_style_text_font(obj, LV_PART_MAIN);
-        const char *t = lv_label_get_text(obj);
-        while (t && *t) {
-            const int cp = next_cp(&t);
-            lv_font_glyph_dsc_t g;
-            const bool ok = lv_font_get_glyph_dsc(font, &g, (uint32_t)cp, 0) && !g.is_placeholder;
-            if (cp != '\n' && !ok) {
-                printf("  sin glifo U+%04X en \"%s\" (%s)\n", cp, lv_label_get_text(obj), where);
-                missing++;
-            }
-        }
-    }
-    for (uint32_t i = 0; i < lv_obj_get_child_count(obj); i++) {
-        missing += missing_glyphs(lv_obj_get_child(obj, (int32_t)i), where);
-    }
-    return missing;
-}
-
-static void check_glyphs(lv_obj_t *obj, const char *where)
-{
-    const int m = missing_glyphs(obj, where);
-    EXPECT(m == 0, "%s: %d caracteres sin glifo", where, m);
-}
-
 static void open_row(int i, const char *title)
 {
     sim_tap(205, ROW_Y(i));
@@ -100,10 +50,10 @@ void sim_suite_settings(const char *out)
     sim_power.stack_free_min = 1100;
     sim_run(1100);
     EXPECT(ui_nav_depth() == 1, "no se empieza en la esfera");
-    check_glyphs(ui_nav_top(), "esfera");
+    sim_check_glyphs(ui_nav_top(), "esfera");
     ui_qp_open();
     sim_run(300);
-    check_glyphs(ui_qp_obj(), "panel rapido");
+    sim_check_glyphs(ui_qp_obj(), "panel rapido");
     ui_qp_close();
     sim_run(300);
 
@@ -116,13 +66,13 @@ void sim_suite_settings(const char *out)
     EXPECT(sim_find_label(set, "Brillo 70 %"), "Ajustes no muestra el brillo");
     EXPECT(sim_find_label(set, "84 %"), "Ajustes no muestra la bateria");
     EXPECT(!sim_find_label(set, "Pendiente"), "quedan filas pendientes en Ajustes");
-    check_glyphs(set, "ajustes");
+    sim_check_glyphs(set, "ajustes");
     sim_save(out, "f3_ajustes_raiz");
 
     /* ---- Pantalla ---- */
     open_row(0, "Pantalla");
     sim_save(out, "f3_pantalla");
-    check_glyphs(ui_nav_top(), "pantalla");
+    sim_check_glyphs(ui_nav_top(), "pantalla");
     EXPECT(sim_find_label(ui_nav_top(), "Pendiente"), "Apagado automatico no esta marcado pendiente");
     /* Brillo desde la página (control a la altura de la sección "Brillo") */
     lv_obj_t *sl = NULL;
@@ -158,7 +108,7 @@ void sim_suite_settings(const char *out)
     EXPECT(sim_find_label(bp, "Avisos (umbrales provisionales)"), "los umbrales no se marcan provisionales");
     EXPECT(sim_find_label(bp, "200 mA"), "Bateria no muestra la corriente de carga");
     EXPECT(sim_find_label(bp, "4,20 V"), "Bateria no muestra la tension de carga");
-    check_glyphs(bp, "bateria");
+    sim_check_glyphs(bp, "bateria");
     sim_save(out, "f3_bateria");
     /* Desplazar la lista: no navega ni dispara el gesto volver. */
     sim_drag(205, 440, 205, 120, 10, 20);
@@ -185,7 +135,7 @@ void sim_suite_settings(const char *out)
     EXPECT(sim_find_label(dp, "Correcta"), "Diagnostico no muestra el estado del RTC");
     EXPECT(sim_find_label(dp, "180 KB"), "Diagnostico no muestra la RAM libre");
     EXPECT(sim_find_label(dp, "sin aliasing"), "Diagnostico no muestra la sonda de flash");
-    check_glyphs(dp, "diagnostico");
+    sim_check_glyphs(dp, "diagnostico");
     sim_save(out, "f3_diagnostico");
     sim_tap(205, ROW_Y(0));
     sim_run(300);
@@ -198,7 +148,7 @@ void sim_suite_settings(const char *out)
     sim_release();
     sim_run(60);
     EXPECT(ui_nav_depth() == 4, "tocar el borde de la prueba navego");
-    check_glyphs(ui_nav_top(), "prueba de pantalla");
+    sim_check_glyphs(ui_nav_top(), "prueba de pantalla");
     back();
     EXPECT(ui_nav_depth() == 3, "no se volvio de la prueba");
     back();
@@ -207,7 +157,7 @@ void sim_suite_settings(const char *out)
     open_row(3, "Acerca de");
     EXPECT(sim_find_label(ui_nav_top(), "0.1.0-b1"), "Acerca de no muestra la version");
     EXPECT(sim_find_label(ui_nav_top(), "8,0 MB"), "Acerca de no muestra la PSRAM");
-    check_glyphs(ui_nav_top(), "acerca de");
+    sim_check_glyphs(ui_nav_top(), "acerca de");
     sim_save(out, "f3_acerca_de");
     back();
 

@@ -55,6 +55,11 @@ uint32_t sim_flush_count(void);
 /** Busca en el árbol de obj una etiqueta con exactamente ese texto. */
 lv_obj_t *sim_find_label(lv_obj_t *obj, const char *text);
 
+/** Caracteres de las etiquetas de obj (y sus hijos) que su fuente no puede dibujar. */
+int sim_missing_glyphs(lv_obj_t *obj, const char *where);
+/** EXPECT de que no falte ningún glifo. */
+void sim_check_glyphs(lv_obj_t *obj, const char *where);
+
 /** Número de temporizadores de LVGL vivos. */
 int sim_timer_count(void);
 
@@ -76,5 +81,6 @@ void sim_suite_power(const char *out);
 void sim_suite_nav(const char *out);
 void sim_suite_qp(const char *out);
 void sim_suite_settings(const char *out);
+void sim_suite_monkey(const char *out);
 void sim_suite_theme(const char *out);
 void sim_suite_face(const char *out);
