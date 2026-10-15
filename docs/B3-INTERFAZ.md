@@ -9,7 +9,7 @@ físicas de la tabla final.
 |---|---|---|
 | **B3-1** | Identidad consolidada: 9 iconos vectoriales nuevos, estados de los controles de vidrio (pulsado, activo, no disponible), cabecera estándar, lista y fila de Ajustes | implementado · compilado · pruebas en la vista previa · prueba física pendiente |
 | **B3-2** | Servicio de hora en solo lectura (RTC PCF85063) y esfera del reloj | implementado · compilado · pruebas en PC y en la vista previa · prueba física pendiente |
-| B3-3 | Navegación: pila de pantallas, transiciones 210/190 ms, volver, gestos | pendiente |
+| **B3-3** | Navegación: pila de páginas, transiciones 210/190 ms, volver (botón y gesto desde el borde), arranque con splash | implementado · compilado · pruebas en PC y en la vista previa · prueba física tras B3-5 |
 | B3-4 | Panel rápido (solo controles con función real) | pendiente |
 | B3-5 | Ajustes: Pantalla, Batería, Diagnóstico, Acerca de | pendiente |
 | B3-6 | Pruebas de integración en la vista previa (gestos, fugas, animaciones) | pendiente |
@@ -147,3 +147,60 @@ Los componentes aparecerán en pantalla con B3-4 y B3-5. Estas pruebas se harán
 |---|---|---|---|
 | T28 | Esfera con hora | arrancar | La hora y la fecha coinciden con la línea `watch_time: RTC …` de T26, el día de la semana es correcto y la batería coincide con el registro de `watch_power`. Si T26 dio "sin hora fiable", se ve "--:--" y "Hora sin configurar" |
 | T29 | Cambio de minuto | mirar la esfera al cambiar el minuto | Cambia como mucho ~2 s después que el reloj de referencia, sin parpadeos del resto de la pantalla |
+
+## B3-3. Navegación y arranque
+
+### Criterios de aceptación
+
+| # | Criterio | Cómo se comprueba |
+|---|---|---|
+| N1 | Pila de páginas con la esfera como raíz; abrir en 210 ms y volver en 190 ms, ease-out cúbico (curva `appTrP` de la referencia) y paralaje del 30 % en la página de debajo | vista previa: a los 180 ms sigue animando y a los 260 ms está en reposo; posición intermedia con paralaje |
+| N2 | Volver con el botón de la cabecera y con un arrastre desde el borde izquierdo que **sigue al dedo** y, al soltar, se completa o se cancela | `tests/host` (reconocedor) y vista previa con el dedo simulado |
+| N3 | Los gestos no interfieren: un toque sigue siendo un toque, un arrastre vertical desde el borde no navega y el gesto solo se reconoce en una franja de 20 px bajo la cabecera (no tapa el botón volver) | `tests/host` y vista previa |
+| N4 | Sin callbacks duplicados: abrir durante una animación se ignora (un doble toque no abre dos páginas); volver durante una apertura la termina en el acto y vuelve | vista previa |
+| N5 | Sin fugas ni animaciones huérfanas: en reposo, 0 animaciones, una sola página visible (las de debajo, ocultas: LVGL no las dibuja) y los temporizadores de cada página se borran con ella | vista previa: 20 ciclos abrir/volver con botón y gesto, mismos bloques y temporizadores |
+| N6 | Arranque sin pantallas congeladas: pantalla por defecto en negro antes de encender el brillo, splash animado mientras arrancan los servicios y paso a la esfera sin esperas artificiales | vista previa: el splash se anima a los 300 ms y la esfera entra en ≤ 240 ms |
+| N7 | Interfaces para F4 sin implementarlo: `ui_nav_push/back/home`, `ui_page_new` y el reconocedor `ui_gesture` reutilizable para la cortina del panel rápido | código |
+
+### Decisiones
+
+- **Transición: deslizar con paralaje** (la de Ajustes en la referencia) en lugar del zoom desde el icono de las apps de la referencia.
+  - El zoom de una página entera exige en LVGL una capa con transformación a pantalla completa (≈ 800 KB y un remuestreo por cuadro).
+  - Deslizar solo mueve las dos páginas.
+- **Páginas dentro de una sola pantalla de LVGL.** Una sola animación mueve las dos páginas con la curva propia; la carga de pantallas de LVGL es lineal.
+  - Las animaciones van ligadas al estado de la navegación y no a la pantalla, porque `lv_screen_load()` borra las animaciones de la pantalla que carga.
+  - La vista previa encontró ese fallo en el splash, que se quedaba sin animación; está corregido.
+- **Umbrales del gesto** (provisionales hasta probarlos en la muñeca):
+  - margen de 12 px antes de decidir;
+  - se completa al 35 % del recorrido o con 700 px/s (con al menos un 8 %);
+  - se cancela si el dedo vuelve a 300 px/s;
+  - la animación final dura lo proporcional a lo que falta, con un mínimo de 60 ms (`ATR_MIN_MS` de la referencia).
+- **Franja del gesto.** Mide 20 px y tapa los 4 px izquierdos de las filas de las listas: un toque en esos 4 px no abre la fila.
+- **Arranque.**
+  - El splash es el de la referencia ("Flex OS" que aparece sobre negro en 600 ms) sin su pausa fija de 2 s.
+  - Solo cambia la opacidad del texto, lo que redibuja un área pequeña.
+  - La pantalla por defecto de LVGL (tema claro, blanca) se pone en negro antes de encender el brillo.
+
+### Comprobado en el PC
+
+- **`tests/host`:** 527 comprobaciones, 0 fallos (+45 del reconocedor).
+  - Toque, margen, eje, sentido y diagonal.
+  - Límites del recorrido.
+  - Completar por recorrido o por lanzamiento.
+  - Cancelar por recorrido corto o al volver deprisa.
+  - Velocidad a 10 y 33 ms entre muestras, y con el reloj dando la vuelta.
+  - Duración restante y curva.
+- **`tools/sim`:** arranque, esfera y navegación: 0 fallos.
+  - Navegación: 165 → 165 bloques de LVGL y los mismos temporizadores tras 20 ciclos.
+  - Vistas previas: `docs/img/f3_splash.png`, `f3_nav_apertura.png` y `f3_nav_gesto.png`.
+- **Firmware completo:** sin avisos.
+  - App: 863 056 B.
+  - DIRAM: 86 967 B.
+
+### Pruebas en el reloj
+
+| # | Prueba | Cómo | Resultado esperado |
+|---|---|---|---|
+| T30 | Arranque | encender o reiniciar mirando la pantalla | Sin destello blanco ni basura. "Flex OS" aparece sobre negro y la esfera entra en cuanto arranca (sin pantalla congelada) |
+| T31 | Abrir y volver (tras B3-5) | abrir Ajustes y una categoría; volver con el botón | Transiciones suaves de ~0,2 s, sin parpadeos; la página de debajo se mueve menos (paralaje) |
+| T32 | Gesto volver (tras B3-5) | arrastrar desde el borde izquierdo: corto y lento, largo, y rápido | Corto y lento vuelve a su sitio; largo o rápido vuelve a la página anterior. Un desplazamiento vertical de la lista no navega |

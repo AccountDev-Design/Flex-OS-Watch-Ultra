@@ -13,15 +13,19 @@
 #include "sim.h"
 #include "ui_internal.h"
 
+/* La esfera se prueba en una pantalla propia, fuera de la navegación. */
+static lv_obj_t *s_tmp;
+
 static lv_obj_t *show_face(void)
 {
-    lv_obj_t *old = lv_screen_active();
-    lv_obj_t *scr = ui_face_create();
-    lv_screen_load(scr);
+    lv_obj_t *old = s_tmp;
+    s_tmp = lv_obj_create(NULL);
+    lv_obj_t *page = ui_face_create(s_tmp);
+    lv_screen_load(s_tmp);
     if (old) {
         lv_obj_delete(old);
     }
-    return scr;
+    return page;
 }
 
 void sim_suite_face(const char *out)
@@ -96,5 +100,8 @@ void sim_suite_face(const char *out)
     printf("esfera: %u -> %u bloques de LVGL (%zu B -> %zu B), %d temporizadores\n", (unsigned)blocks,
            (unsigned)sim_mem_blocks(), mem, sim_mem_used(), sim_timer_count());
 
+    lv_screen_load(ui_nav_screen());
+    lv_obj_delete(s_tmp);
+    s_tmp = NULL;
     printf("esfera B3-2: %s\n", sim_fails == f0 ? "OK" : "FALLOS");
 }

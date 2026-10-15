@@ -1,24 +1,17 @@
 /*
- * Pruebas de B1/B2 en la vista previa: pantalla de inicio con cada estado de
- * batería, avisos de batería baja/crítica y animación de inicio de carga.
+ * Pruebas de B2 en la vista previa: esfera con cada estado de batería, avisos
+ * de batería baja/crítica y animación de inicio de carga.
  */
 #include <stdio.h>
 
 #include "sim.h"
 #include "ui_internal.h"
-#include "watch_ui.h"
 
 void sim_suite_power(const char *out)
 {
-    watch_ui_boot_info_t boot = {0};
-    boot.touch_ok = true;
-    boot.power_ok = true;
-    boot.flash.configured_size = 32u * 1024 * 1024;
-    boot.flash.verdict = FLASH_PROBE_UPPER_DISTINCT;
-
+    /* La interfaz ya arrancó en sim_suite_boot(): esfera con hora válida. */
     sim_set_time(WATCH_TIME_OK, 2026, 10, 15, 9, 41, 0);
     sim_scenario(84, 4085, BATT_STATE_DISCHARGING, BATT_LEVEL_NORMAL, false);
-    watch_ui_home_create(&boot);
     sim_run(1200);
     sim_save(out, "b1_descargando");
 

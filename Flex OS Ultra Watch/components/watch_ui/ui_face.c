@@ -7,6 +7,7 @@
  *    reescribe una etiqueta cuando cambia lo que muestra: la hora una vez por
  *    minuto, la fecha una vez al día y la batería cuando cambia su estado.
  *  - Geometría del panel real de 410x502.
+ *  - Es la página raíz de ui_nav.
  */
 #include "ui_internal.h"
 
@@ -98,7 +99,7 @@ static void delete_cb(lv_event_t *e)
     lv_free(f);
 }
 
-lv_obj_t *ui_face_create(void)
+lv_obj_t *ui_face_create(lv_obj_t *parent)
 {
     watch_theme_init();
     face_t *f = lv_malloc_zeroed(sizeof(*f));
@@ -108,8 +109,7 @@ lv_obj_t *ui_face_create(void)
     f->last_state = -1;
     f->last_level = -1;
 
-    lv_obj_t *scr = lv_obj_create(NULL);
-    lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *scr = ui_page_new(parent);
     watch_theme_apply_background(scr);
 
     f->time = watch_theme_label(scr, FLEX_FONT_CLOCK, FLEX_C_MUTE, "--:--");

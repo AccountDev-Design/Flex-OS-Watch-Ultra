@@ -23,9 +23,9 @@
 /* Geometría (px del panel de 410x502) */
 #define CARD_X      20
 #define CARD_W      (FLEX_SCREEN_W - 2 * CARD_X)
-#define BATT_CARD_Y 186
+#define BATT_CARD_Y (FLEX_HDR_H + 8)
 #define BATT_CARD_H 136
-#define SYS_CARD_Y  334
+#define SYS_CARD_Y  (BATT_CARD_Y + BATT_CARD_H + 12)
 #define SYS_CARD_H  110
 #define CARD_PAD    18
 #define TEXT_W      (CARD_W - 2 * CARD_PAD)
@@ -188,7 +188,13 @@ static void touch_cb(lv_event_t *e)
     }
 }
 
-lv_obj_t *ui_diag_create(void)
+static void back_cb(lv_event_t *e)
+{
+    (void)e;
+    ui_nav_back();
+}
+
+lv_obj_t *ui_diag_create(lv_obj_t *parent)
 {
     const watch_ui_boot_info_t *info = ui_boot_info();
     if (s_home.timer) {
@@ -203,8 +209,7 @@ lv_obj_t *ui_diag_create(void)
 
     watch_theme_init();
 
-    lv_obj_t *scr = lv_obj_create(NULL);
-    lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *scr = ui_page_new(parent);
     watch_theme_apply_background(scr);
 
     /* Marco de 1 px en el borde exacto del panel: si el desfase de columna
@@ -217,17 +222,14 @@ lv_obj_t *ui_diag_create(void)
     lv_obj_set_style_border_opa(frame, LV_OPA_70, 0);
     lv_obj_remove_flag(frame, LV_OBJ_FLAG_CLICKABLE);
 
-    /* Barra de estado */
-    lv_obj_t *brand = watch_theme_label(scr, FLEX_FONT_SMALL, FLEX_C_TXT2, "Flex OS");
-    lv_obj_set_pos(brand, FLEX_SAFE_X, FLEX_SAFE_TOP + 2);
+    /* Cabecera con "volver" y estado de la batería a la derecha */
+    watch_theme_header(scr, "Diagnóstico", back_cb, NULL);
     const int32_t icon_x = FLEX_SCREEN_W - FLEX_SAFE_X - ICON_W - 3;
     s_home.batt_icon = flex_battery_icon_create(scr, ICON_W + 3, ICON_H);
-    lv_obj_set_pos(s_home.batt_icon, icon_x, FLEX_SAFE_TOP + 6);
+    lv_obj_set_pos(s_home.batt_icon, icon_x, FLEX_SAFE_TOP + (FLEX_HDR_ZONE - ICON_H) / 2);
     s_home.status_pct = watch_theme_label(scr, FLEX_FONT_SMALL, FLEX_C_TXT, "--");
-    lv_obj_align(s_home.status_pct, LV_ALIGN_TOP_RIGHT, -(FLEX_SAFE_X + ICON_W + 3 + 8), FLEX_SAFE_TOP + 2);
-
-    lv_obj_t *title = watch_theme_label(scr, FLEX_FONT_TITLE, FLEX_C_TXT, "Diagnóstico");
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 96);
+    lv_obj_align(s_home.status_pct, LV_ALIGN_TOP_RIGHT, -(FLEX_SAFE_X + ICON_W + 3 + 8),
+                 FLEX_SAFE_TOP + (FLEX_HDR_ZONE - lv_font_get_line_height(FLEX_FONT_SMALL)) / 2);
 
     /* Tarjeta de batería */
     lv_obj_t *bc = watch_theme_glass_card(scr, CARD_X, BATT_CARD_Y, CARD_W, BATT_CARD_H);

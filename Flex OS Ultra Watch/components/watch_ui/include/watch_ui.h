@@ -21,7 +21,14 @@ typedef struct {
     watch_flash_report_t flash;
 } watch_ui_boot_info_t;
 
-/** Arranca la interfaz y carga la esfera. Llamar con LVGL bloqueado. */
+/**
+ * Muestra el splash de arranque (negro con "Flex OS" que aparece). Llamar con
+ * LVGL bloqueado justo después de iniciar la pantalla, antes del resto de
+ * servicios, para que la pantalla nunca se quede congelada ni en blanco.
+ */
+void watch_ui_boot_splash(void);
+
+/** Arranca la interfaz y pasa del splash a la esfera. Llamar con LVGL bloqueado. */
 void watch_ui_home_create(const watch_ui_boot_info_t *info);
 
 #ifdef __cplusplus

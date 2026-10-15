@@ -13,3 +13,4 @@ extern int g_checks, g_fail;
 void test_ui_all(void);
 void test_alerts_all(void);
 void test_time_all(void);
+void test_gesture_all(void);

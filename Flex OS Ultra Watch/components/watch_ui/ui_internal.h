@@ -30,13 +30,36 @@ bool ui_charge_anim_active(void);
 void ui_banner_show_battery(batt_alert_t alert, int percent);
 bool ui_banner_active(void);
 
-/* ---- Pantallas ---- */
+/* ---- Navegación (ui_nav) ----
+ * Las páginas son hijas de una sola pantalla. Una función de creación recibe
+ * el contenedor padre y devuelve la página (ui_page_new) o NULL si no pudo. */
+typedef lv_obj_t *(*ui_page_create_t)(lv_obj_t *parent);
+
+/** Contenedor de página a pantalla completa, sin estilo ni desplazamiento. */
+lv_obj_t *ui_page_new(lv_obj_t *parent);
+/** Crea la pantalla de navegación con su página raíz (sin cargarla). */
+lv_obj_t *ui_nav_start(ui_page_create_t root);
+/** Abre una página encima (210 ms). false si hay una transición en curso o no cabe. */
+bool ui_nav_push(ui_page_create_t create);
+/** Vuelve a la página anterior (190 ms). false en la raíz. */
+bool ui_nav_back(void);
+/** Vuelve a la raíz (la esfera) con una sola animación. */
+void ui_nav_home(void);
+int ui_nav_depth(void);
+bool ui_nav_busy(void);
+lv_obj_t *ui_nav_top(void);
+lv_obj_t *ui_nav_screen(void);
+
+/* ---- Páginas ---- */
 
 /** Datos del arranque (táctil, batería, flash) guardados por watch_ui_home_create(). */
 const watch_ui_boot_info_t *ui_boot_info(void);
 
-/** Esfera: hora, fecha y batería. Devuelve la pantalla sin cargarla. */
-lv_obj_t *ui_face_create(void);
+/** Esfera: hora, fecha y batería (página raíz). */
+lv_obj_t *ui_face_create(lv_obj_t *parent);
 
 /** Diagnóstico (antigua pantalla de inicio de B1). NULL si ya existe una. */
-lv_obj_t *ui_diag_create(void);
+lv_obj_t *ui_diag_create(lv_obj_t *parent);
+
+/** Splash de arranque activo (watch_ui_boot_splash). */
+bool ui_splash_active(void);

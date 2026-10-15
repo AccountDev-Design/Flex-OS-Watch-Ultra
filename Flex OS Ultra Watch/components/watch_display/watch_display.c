@@ -116,6 +116,15 @@ esp_err_t watch_display_start(lv_display_t **out_disp)
     ESP_RETURN_ON_FALSE(disp, ESP_FAIL, TAG, "lvgl_port_add_disp");
     lv_display_add_event_cb(disp, rounder_cb, LV_EVENT_INVALIDATE_AREA, NULL);
 
+    /* La pantalla por defecto del tema claro de LVGL es blanca: se pone en
+     * negro antes de encender el brillo para que el arranque no destelle. */
+    if (lvgl_port_lock(0)) {
+        lv_obj_t *scr = lv_display_get_screen_active(disp);
+        lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
+        lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
+        lvgl_port_unlock();
+    }
+
     if (watch_display_set_brightness(DEFAULT_BRIGHTNESS) != ESP_OK) {
         ESP_LOGW(TAG, "no se pudo fijar el brillo inicial");
     }

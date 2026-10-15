@@ -27,6 +27,9 @@ extern watch_power_snapshot_t sim_power;
         }                                                    \
     } while (0)
 
+/* Salida del splash: 200 ms como mucho, más un cuadro de margen. */
+#define SIM_SPLASH_OUT_MAX_MS (FLEX_ANIM_BOOT_FADE_MS / 3 + 40)
+
 /** Avanza el reloj simulado ms milisegundos, ejecutando LVGL cada 5 ms. */
 void sim_run(uint32_t ms);
 /** Guarda el búfer de pantalla como <dir>/<name>.rgb565 (to_png.py lo convierte). */
@@ -37,6 +40,8 @@ void sim_press(int32_t x, int32_t y);
 void sim_release(void);
 /** Toque corto: pulsa, espera 60 ms, suelta y deja correr 60 ms. */
 void sim_tap(int32_t x, int32_t y);
+/** Arrastre en línea recta en n pasos de step_ms; no suelta el dedo. */
+void sim_drag(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int n, uint32_t step_ms);
 
 /** Escenario de batería que devolverá watch_power_get(). */
 void sim_scenario(int pct, int mv, batt_state_t st, batt_level_t lv, bool vbus);
@@ -60,6 +65,8 @@ size_t sim_mem_used(void);
 uint32_t sim_mem_blocks(void);
 
 /* Baterías de pruebas */
+void sim_suite_boot(const char *out);
 void sim_suite_power(const char *out);
+void sim_suite_nav(const char *out);
 void sim_suite_theme(const char *out);
 void sim_suite_face(const char *out);

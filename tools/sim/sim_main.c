@@ -95,6 +95,16 @@ void sim_tap(int32_t x, int32_t y)
     sim_run(60);
 }
 
+void sim_drag(int32_t x0, int32_t y0, int32_t x1, int32_t y1, int n, uint32_t step_ms)
+{
+    sim_press(x0, y0);
+    sim_run(step_ms);
+    for (int i = 1; i <= n; i++) {
+        sim_press(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n);
+        sim_run(step_ms);
+    }
+}
+
 size_t sim_mem_used(void)
 {
     lv_mem_monitor_t m;
@@ -196,8 +206,10 @@ int main(int argc, char **argv)
     lv_indev_set_read_cb(touch, touch_read_cb);
 
     sim_suite_theme(out);
+    sim_suite_boot(out);
     sim_suite_power(out);
     sim_suite_face(out);
+    sim_suite_nav(out);
 
     printf("%s (%d fallos)\n", sim_fails ? "FALLOS" : "TODO OK", sim_fails);
     return sim_fails ? 1 : 0;

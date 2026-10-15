@@ -4,12 +4,12 @@
  *
  * Orden de arranque:
  *   1. bus I2C compartido (BSP oficial)
- *   2. pantalla CO5300 + LVGL (watch_display)
+ *   2. pantalla CO5300 + LVGL (watch_display) y splash de arranque (watch_ui)
  *   3. táctil FT3168 (watch_touch)        — si falla, se sigue sin táctil
  *   4. AXP2101 en solo lectura (watch_power) — si falla, batería "sin datos"
  *   5. RTC PCF85063 en solo lectura (watch_time) — si falla, hora "no disponible"
  *   6. sonda de flash de solo lectura (watch_diag)
- *   7. pantalla de inicio (watch_ui)
+ *   7. interfaz: del splash a la esfera (watch_ui)
  */
 #include "esp_app_desc.h"
 #include "esp_err.h"
@@ -36,6 +36,12 @@ void app_main(void)
     lv_display_t *disp = NULL;
     ESP_ERROR_CHECK(watch_display_start(&disp));
     watch_diag_log_mem("tras pantalla y LVGL");
+
+    /* Splash animado mientras arranca el resto (la pantalla nunca queda congelada). */
+    if (watch_display_lock(0)) {
+        watch_ui_boot_splash();
+        watch_display_unlock();
+    }
 
     watch_ui_boot_info_t boot = {0};
 
