@@ -1,6 +1,5 @@
 idf_component_register(
-    SRCS "watch_home.c"
+    SRCS "watch_home.c" "ui_logic.c"
     INCLUDE_DIRS "include"
-    REQUIRES watch_diag
-    PRIV_REQUIRES watch_theme watch_power
+    REQUIRES watch_diag watch_power watch_theme
 )

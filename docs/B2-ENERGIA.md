@@ -6,7 +6,7 @@ B2 avanza en bloques pequeños. **Ningún bloque escribe registros del AXP2101.*
 |---|---|---|
 | **B2-1** | Auditoría de las lecturas frente al datasheet, decodificación corregida, configuración del cargador en solo lectura, histéresis de fin de carga y contador de eventos de carga | implementado · compilado · 168/168 en PC · **prueba física pendiente** |
 | B2-2 | Decidir, con los registros reales, si se activa el ADC de VBAT y se desactiva el pin TS como hace el código oficial (decisión D1 de `ROADMAP.md`) | pendiente de T14 |
-| B2-3 | Indicador de batería del tema (estados, colores, pantalla de batería) | pendiente |
+| B2-3 | Indicador de batería del tema: icono vectorial con 7 estados (normal, bajo, crítico, cargando, completa, externa, sin datos/sin batería) | implementado · compilado · pruebas en PC · prueba física pendiente |
 | B2-4 | Animación de carga disparada por `charge_events` | pendiente |
 | B2-5 | Avisos de batería baja o crítica | pendiente |
 

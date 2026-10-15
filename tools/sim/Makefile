@@ -18,11 +18,10 @@ CFLAGS := -std=gnu11 -O1 -g -Wall -DLV_CONF_INCLUDE_SIMPLE -DLV_LVGL_H_INCLUDE_S
 
 LVGL_SRC := $(shell find $(LVGL_DIR)/src -name '*.c')
 APP_SRC := sim_main.c \
-           $(FW)/components/watch_ui/watch_home.c \
-           $(FW)/components/watch_theme/watch_theme.c \
-           $(FW)/components/watch_theme/flex_wallpaper.c \
-           $(FW)/components/watch_theme/flex_glass_math.c \
-           $(wildcard $(FW)/components/watch_theme/fonts/*.c)
+           $(wildcard $(FW)/components/watch_ui/*.c) \
+           $(wildcard $(FW)/components/watch_theme/*.c) \
+           $(wildcard $(FW)/components/watch_theme/fonts/*.c) \
+           $(FW)/components/watch_power/battery_model.c
 
 LVGL_OBJ := $(patsubst $(LVGL_DIR)/%.c,$(BUILD)/lvgl/%.o,$(LVGL_SRC))
 

@@ -9,6 +9,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "flex_battery_icon.h"
+#include "ui_logic.h"
 #include "watch_power.h"
 #include "watch_theme.h"
 
@@ -29,8 +31,7 @@
 
 typedef struct {
     lv_obj_t *status_pct;
-    lv_obj_t *icon_fill;
-    lv_obj_t *icon_body;
+    lv_obj_t *batt_icon;
     lv_obj_t *clock;
     lv_obj_t *batt_pct;
     lv_obj_t *batt_state;
@@ -55,65 +56,10 @@ typedef struct {
 
 static home_t s_home;
 
-static const char *state_text(batt_state_t st)
+/* Color del texto de estado: el del relleno del indicador, salvo en reposo. */
+static uint32_t state_color(flex_batt_kind_t kind)
 {
-    switch (st) {
-    case BATT_STATE_NO_BATTERY:    return "Sin batería";
-    case BATT_STATE_DISCHARGING:   return "Descargando";
-    case BATT_STATE_CHARGING:      return "Cargando";
-    case BATT_STATE_FULL:          return "Carga completa";
-    case BATT_STATE_EXTERNAL_IDLE: return "Externa sin carga";
-    default:                       return "Sin datos";
-    }
-}
-
-static uint32_t state_color(batt_state_t st, batt_level_t lv)
-{
-    if (st == BATT_STATE_CHARGING || st == BATT_STATE_FULL) {
-        return FLEX_C_OK;
-    }
-    if (lv == BATT_LEVEL_CRITICAL) {
-        return FLEX_C_ERR;
-    }
-    if (lv == BATT_LEVEL_LOW) {
-        return FLEX_C_WARN;
-    }
-    return FLEX_C_TXT2;
-}
-
-/* Icono de batería con el trazo de drawBattery() de Flex OS Ultra
- * (FlexOS_Ultra_Icons.h:342): contorno redondeado, polo + y relleno
- * proporcional. Sin dato: solo contorno (criterio de la rama IDF). */
-static void build_battery_icon(lv_obj_t *parent, int32_t x, int32_t y)
-{
-    lv_obj_t *body = lv_obj_create(parent);
-    lv_obj_remove_style_all(body);
-    lv_obj_set_pos(body, x, y);
-    lv_obj_set_size(body, ICON_W, ICON_H);
-    lv_obj_set_style_radius(body, 4, 0);
-    lv_obj_set_style_border_width(body, 2, 0);
-    lv_obj_set_style_border_color(body, flex_color(FLEX_C_TXT), 0);
-    lv_obj_set_style_border_opa(body, LV_OPA_COVER, 0);
-    lv_obj_remove_flag(body, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-    s_home.icon_body = body;
-
-    lv_obj_t *pin = lv_obj_create(parent);
-    lv_obj_remove_style_all(pin);
-    lv_obj_set_pos(pin, x + ICON_W, y + ICON_H / 3);
-    lv_obj_set_size(pin, 3, ICON_H / 3 + 1);
-    lv_obj_set_style_bg_color(pin, flex_color(FLEX_C_TXT), 0);
-    lv_obj_set_style_bg_opa(pin, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(pin, 1, 0);
-
-    lv_obj_t *fill = lv_obj_create(body);
-    lv_obj_remove_style_all(fill);
-    lv_obj_set_pos(fill, 2, 2);
-    lv_obj_set_size(fill, 0, ICON_H - 8);
-    lv_obj_set_style_radius(fill, 2, 0);
-    lv_obj_set_style_bg_opa(fill, LV_OPA_COVER, 0);
-    lv_obj_set_style_bg_color(fill, flex_color(FLEX_C_TXT), 0);
-    lv_obj_add_flag(fill, LV_OBJ_FLAG_HIDDEN);
-    s_home.icon_fill = fill;
+    return (kind == FLEX_BATT_NORMAL || kind == FLEX_BATT_UNKNOWN) ? FLEX_C_TXT2 : flex_batt_fill_rgb(kind);
 }
 
 static void update_battery(void)
@@ -138,23 +84,15 @@ static void update_battery(void)
     s_home.last_vbus = vbus;
 
     char buf[96];
-    const uint32_t col = state_color(st, lv);
+    const flex_batt_kind_t kind = ui_batt_kind(st, lv);
+    const uint32_t col = state_color(kind);
 
     /* barra de estado */
+    flex_battery_icon_set(s_home.batt_icon, kind, pct);
     if (pct >= 0) {
         lv_label_set_text_fmt(s_home.status_pct, "%d %%", pct);
-        const int inner = ICON_W - 8;
-        int fw = inner * pct / 100;
-        if (fw < 2) {
-            fw = 2;
-        }
-        lv_obj_set_width(s_home.icon_fill, fw);
-        lv_obj_set_style_bg_color(s_home.icon_fill,
-                                  flex_color(col == FLEX_C_TXT2 ? FLEX_C_TXT : col), 0);
-        lv_obj_remove_flag(s_home.icon_fill, LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_label_set_text(s_home.status_pct, "--");
-        lv_obj_add_flag(s_home.icon_fill, LV_OBJ_FLAG_HIDDEN);
     }
 
     /* tarjeta de batería */
@@ -163,7 +101,7 @@ static void update_battery(void)
     } else {
         lv_label_set_text(s_home.batt_pct, "--");
     }
-    lv_label_set_text(s_home.batt_state, state_text(st));
+    lv_label_set_text(s_home.batt_state, ui_batt_state_text(st));
     lv_obj_set_style_text_color(s_home.batt_state, flex_color(col), 0);
 
     if (!have) {
@@ -269,7 +207,8 @@ void watch_ui_home_create(const watch_ui_boot_info_t *info)
     lv_obj_t *brand = watch_theme_label(scr, FLEX_FONT_SMALL, FLEX_C_TXT2, "Flex OS");
     lv_obj_set_pos(brand, FLEX_SAFE_X, FLEX_SAFE_TOP + 2);
     const int32_t icon_x = FLEX_SCREEN_W - FLEX_SAFE_X - ICON_W - 3;
-    build_battery_icon(scr, icon_x, FLEX_SAFE_TOP + 6);
+    s_home.batt_icon = flex_battery_icon_create(scr, ICON_W + 3, ICON_H);
+    lv_obj_set_pos(s_home.batt_icon, icon_x, FLEX_SAFE_TOP + 6);
     s_home.status_pct = watch_theme_label(scr, FLEX_FONT_SMALL, FLEX_C_TXT, "--");
     lv_obj_align(s_home.status_pct, LV_ALIGN_TOP_RIGHT, -(FLEX_SAFE_X + ICON_W + 3 + 8), FLEX_SAFE_TOP + 2);
 

@@ -12,12 +12,9 @@
 #include "flex_tokens.h"
 #include "flex_wallpaper.h"
 
-static int g_checks, g_fail;
+#include "test_util.h"
 
-#define CHECK(cond) do { g_checks++; if (!(cond)) { g_fail++; \
-    fprintf(stderr, "FALLO %s:%d: %s\n", __FILE__, __LINE__, #cond); } } while (0)
-#define CHECK_EQ(a, b) do { long _a = (long)(a), _b = (long)(b); g_checks++; if (_a != _b) { g_fail++; \
-    fprintf(stderr, "FALLO %s:%d: %s = %ld, esperado %ld\n", __FILE__, __LINE__, #a, _a, _b); } } while (0)
+int g_checks, g_fail;
 
 /* Registros base: chip correcto, batería presente, ADC VBAT y gauge activos. */
 static axp2101_regs_t regs_base(void)
@@ -504,6 +501,7 @@ int main(void)
     test_flash_probe();
     test_glass();
     test_wallpaper();
+    test_ui_all();
     printf("%d comprobaciones, %d fallos\n", g_checks, g_fail);
     return g_fail ? 1 : 0;
 }

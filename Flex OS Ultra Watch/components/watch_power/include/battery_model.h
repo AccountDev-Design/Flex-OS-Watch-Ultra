@@ -186,6 +186,7 @@ batt_level_t batt_level_next(batt_level_t cur, int pct);
 typedef struct {
     /* salidas */
     batt_state_t state;       /**< estado confirmado */
+    batt_state_t prev_state;  /**< estado confirmado anterior (antes de la última transición) */
     int percent;              /**< % mostrado (-1 = no disponible) */
     int vbat_mv;              /**< VBAT filtrada (-1 = no disponible) */
     batt_level_t level;

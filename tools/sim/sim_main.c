@@ -121,5 +121,17 @@ int main(int argc, char **argv)
     s_sim.driver_ok = false;
     run(1200);
     save_png(out, "b1_sin_datos");
+
+    scenario(98, 4180, BATT_STATE_FULL, BATT_LEVEL_NORMAL, true);
+    run(1200);
+    save_png(out, "b2_completa");
+
+    scenario(97, 4170, BATT_STATE_EXTERNAL_IDLE, BATT_LEVEL_NORMAL, true);
+    run(1200);
+    save_png(out, "b2_externa");
+
+    scenario(4, 3450, BATT_STATE_DISCHARGING, BATT_LEVEL_CRITICAL, false);
+    run(1200);
+    save_png(out, "b2_critica");
     return 0;
 }

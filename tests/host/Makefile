@@ -11,12 +11,15 @@ $(shell mkdir -p $(BUILD) && ln -sfn "../../../Flex OS Ultra Watch" $(FW))
 
 INC := -I$(FW)/components/watch_power/include \
        -I$(FW)/components/watch_diag/include \
-       -I$(FW)/components/watch_theme/include
-SRC := test_main.c \
+       -I$(FW)/components/watch_theme/include \
+       -I$(FW)/components/watch_ui/include
+SRC := test_main.c test_ui.c \
        $(FW)/components/watch_power/battery_model.c \
        $(FW)/components/watch_diag/flash_probe_logic.c \
        $(FW)/components/watch_theme/flex_glass_math.c \
-       $(FW)/components/watch_theme/flex_wallpaper.c
+       $(FW)/components/watch_theme/flex_wallpaper.c \
+       $(FW)/components/watch_theme/flex_batt_style.c \
+       $(FW)/components/watch_ui/ui_logic.c
 
 .PHONY: all test clean
 all: test

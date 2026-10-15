@@ -102,6 +102,7 @@ void batt_tracker_init(batt_tracker_t *t)
 {
     memset(t, 0, sizeof(*t));
     t->state = BATT_STATE_UNKNOWN;
+    t->prev_state = BATT_STATE_UNKNOWN;
     t->pending = BATT_STATE_UNKNOWN;
     t->percent = -1;
     t->vbat_mv = -1;
@@ -184,6 +185,7 @@ void batt_tracker_update(batt_tracker_t *t, const axp2101_status_t *s, bool read
     } else if (raw == t->pending) {
         if (++t->pending_count >= samples_needed(t->state, raw) - 1) {
             const batt_state_t prev = t->state;
+            t->prev_state = prev;
             t->state = raw;
             t->pending_count = 0;
             if (raw == BATT_STATE_CHARGING && prev != BATT_STATE_CHARGING) {

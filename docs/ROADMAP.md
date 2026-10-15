@@ -5,7 +5,7 @@ PROGRESO GLOBAL: 18 %   [████░░░░░░░░░░░░░░�
 ```
 
 - **Completado:** auditoría y plan (F0); proyecto ESP-IDF flasheado y arrancando en el reloj (F1.1).
-- **En curso:** B2-1, auditoría de batería frente al datasheet. Implementado y probado en el PC; falta la prueba física.
+- **En curso:** F2.2. B2-3 (indicador de batería) está hecho; siguen B2-4 (animación de carga) y B2-5 (avisos de batería baja).
 - **Falta:** las pruebas físicas de B1/B2-1, el resto de batería, la esfera, el panel rápido, los ajustes, los servicios, Flex Phone, el navegador, OTA, la seguridad y las pruebas finales.
 - **Siguiente:** flashear B2-1 y enviar el registro serie de las pruebas T14-T18 (`docs/B2-ENERGIA.md`).
 
@@ -43,7 +43,7 @@ Estados: ✅ verificado en el reloj · 🟡 compilado y probado en PC · 🔄 en
 | Tarea | Peso | Estado | Puntos |
 |---|---|---|---|
 | F2.1 Lectura del AXP2101 y estados (porcentaje, VBAT, USB, carga, completa, externa sin carga; filtrado, histéresis, errores). B1 + **B2-1** | 9 | 🔄🟡 faltan T4-T8 y T14-T18 | 4,5 |
-| F2.2 Indicador de batería en el tema y animación de carga (B2-3, B2-4) | 6 | ⬜ | 0 |
+| F2.2 Indicador de batería, animación de carga y avisos de batería baja (B2-3, B2-4, B2-5) | 6 | 🔄 B2-3 hecho en PC | 0 (cuenta al terminar los tres) |
 
 Dentro de F2 también:
 - **B2-2:** decisión sobre el ADC y el pin TS (❓ D1).
