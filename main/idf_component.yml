@@ -1,0 +1,16 @@
+## Flex OS Watch Ultra — dependencias (Registro de Componentes de Espressif).
+##
+## - BSP oficial de Waveshare para este reloj. Arrastra sus propias
+##   dependencias: esp_lcd_sh8601 (CO5300), esp_lcd_touch_ft5x06 (FT3168),
+##   esp_lvgl_port ^2, esp_codec_dev ~1.5, esp_lcd_panel_io_additions ^1.
+## - LVGL 9.5.0: la versión que declara el ejemplo oficial 02_lvgl_demo_v9 y
+##   que su CI compila con ESP-IDF v5.5.5. Su dependencies.lock (lvgl 9.2.0,
+##   BSP 1.0.3) es una resolución antigua que nunca se regeneró.
+##
+## El dependencies.lock que genere tu primera compilación es la resolución
+## real: súbelo al repositorio (ver docs/B1-ARRANQUE.md).
+dependencies:
+  idf: ">=5.5.5,<5.6"
+  waveshare/esp32_s3_touch_amoled_2_06: "2.0.0"
+  lvgl/lvgl: "9.5.0"
+  espressif/esp_lvgl_port: "^2"

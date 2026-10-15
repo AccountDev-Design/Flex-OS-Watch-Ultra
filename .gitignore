@@ -1,0 +1,15 @@
+# Salidas de ESP-IDF
+build/
+managed_components/
+sdkconfig
+sdkconfig.old
+
+# Pruebas de PC
+tests/host/build/
+
+# Editores / sistema
+.vscode/*.log
+.DS_Store
+.claude/
+tools/sim/build/
+tools/sim/out/

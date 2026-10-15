@@ -1,0 +1,56 @@
+# Flex OS Watch Ultra — Waveshare ESP32-S3-Touch-AMOLED-2.06
+# ESP32-S3R8 (PSRAM octal de 8 MB en el encapsulado) + flash GD25Q256 (32 MB).
+# Base: ejemplo oficial 02_lvgl_demo_v9 (waveshareteam/ESP32-S3-Touch-AMOLED-2.06
+# @ b099739), salvo lo indicado.
+CONFIG_IDF_TARGET="esp32s3"
+
+# ---------------------------------------------------------------------------
+# Flash: 32 MB físicos (docs/FLASH-32MB.md).
+# DIFERENCIA con el oficial (que declara 16 MB): se declaran los 32 MB reales
+# para poder ubicar datos por encima de 16 MB. El código sigue por debajo de
+# 16 MB y NO se activa CONFIG_BOOTLOADER_CACHE_32BIT_ADDR_QUAD_FLASH
+# (experimental en ESP-IDF 5.5.5).
+# ---------------------------------------------------------------------------
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_OFFSET=0x8000
+
+# CPU y PSRAM (como el ejemplo oficial; XIP_FROM_PSRAM es el nombre en 5.5.5
+# de SPIRAM_FETCH_INSTRUCTIONS + SPIRAM_RODATA)
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_XIP_FROM_PSRAM=y
+CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
+CONFIG_FREERTOS_HZ=1000
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# Volcado de memoria a la partición "coredump" para diagnosticar fallos
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+
+# ---------------------------------------------------------------------------
+# LVGL 9.5.0
+# ---------------------------------------------------------------------------
+CONFIG_LV_COLOR_DEPTH_16=y
+CONFIG_LV_USE_CLIB_MALLOC=y
+CONFIG_LV_USE_CLIB_STRING=y
+CONFIG_LV_USE_CLIB_SPRINTF=y
+CONFIG_LV_DEF_REFR_PERIOD=16
+# DIFERENCIA con el oficial: sin LVGL en IRAM. Medido en la compilación de B1:
+# con la opción, la RAM interna estática usada sube de 86 KB a 194 KB (deja
+# 148 KB en vez de 255 KB). Esa RAM la necesitan los buffers DMA de pantalla
+# y, en fases siguientes, Wi-Fi/BLE/TLS. Se revisará con los FPS medidos.
+# CONFIG_LV_ATTRIBUTE_FAST_MEM_USE_IRAM is not set
+CONFIG_LV_GRADIENT_MAX_STOPS=4
+CONFIG_LV_USE_LOG=y
+CONFIG_LV_LOG_LEVEL_WARN=y
+# Medidor de FPS/CPU en pantalla: solo para medir en B1 (se retirará)
+CONFIG_LV_USE_SYSMON=y
+CONFIG_LV_USE_PERF_MONITOR=y
+CONFIG_LV_PERF_MONITOR_ALIGN_BOTTOM_MID=y
+CONFIG_LV_BUILD_EXAMPLES=n

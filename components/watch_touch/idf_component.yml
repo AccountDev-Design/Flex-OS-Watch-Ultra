@@ -1,0 +1,10 @@
+dependencies:
+  waveshare/esp32_s3_touch_amoled_2_06: "2.0.0"
+  lvgl/lvgl:
+    version: "9.5.0"
+    public: true
+  espressif/esp_lvgl_port: "^2"
+  # Explícito para que esp_lvgl_port exponga lvgl_port_add_touch() y para
+  # que bsp/touch.h vea esp_lcd_touch_handle_t. Ya es dependencia del BSP
+  # (vía esp_lcd_touch_ft5x06), así que no cambia la resolución.
+  espressif/esp_lcd_touch: "^1"

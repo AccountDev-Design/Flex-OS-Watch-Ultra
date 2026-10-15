@@ -1,0 +1,18 @@
+# Flex OS Watch Ultra — tabla de particiones para la flash GD25Q256 (32 MB).
+# Justificación completa y comprobaciones pendientes: docs/FLASH-32MB.md
+#
+# Regla: TODO lo que la CPU ejecuta o mapea por caché (apps, recursos mmap)
+# vive por DEBAJO de 16 MB (0x1000000). Sin CONFIG_BOOTLOADER_CACHE_32BIT_ADDR_QUAD_FLASH
+# (experimental, desactivada) la caché solo direcciona 24 bits. Por encima de
+# 16 MB solo hay datos accedidos con esp_partition_read/write (comandos de 4
+# bytes del driver GigaDevice), y el firmware NO escribe ahí hasta que la
+# sonda de solo lectura de B1 confirme en el reloj que no hay aliasing.
+#
+# Name,    Type, SubType,  Offset,    Size,      Flags
+nvs,       data, nvs,      0x9000,    0x5000,
+otadata,   data, ota,      0xE000,    0x2000,
+ota_0,     app,  ota_0,    0x10000,   0x600000,
+ota_1,     app,  ota_1,    0x610000,  0x600000,
+coredump,  data, coredump, 0xC10000,  0x10000,
+assets,    data, 0x40,     0xC20000,  0x3E0000,
+storage,   data, littlefs, 0x1000000, 0x1000000,
