@@ -1,8 +1,12 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 37 %   [███████░░░░░░░░░░░░░]   (verificado en el reloj: 10,5 %)
+PROGRESO GLOBAL: 30,3 %   [██████░░░░░░░░░░░░░░]   69,7 % pendiente   (verificado en el reloj: 8,6 %)
 ```
+
+El 2026-10-16 el alcance creció con el prompt maestro de migración (iconos y fondos originales, todas las apps del
+inventario, BLE como canal principal con el teléfono): el peso total pasó de 100 a 122. Ningún trabajo hecho se perdió;
+el porcentaje baja porque ahora mide más trabajo. Detalle en el historial del final.
 
 - **Completado:**
   - Auditoría y plan (F0).
@@ -33,7 +37,7 @@ PROGRESO GLOBAL: 37 %   [███████░░░░░░░░░░░�
 
 ## Cómo se calcula
 
-- Cada fase tiene un **peso fijo** desde la Fase 0, que suma 100. Dentro de cada fase, las tareas reparten ese peso según su complejidad e importancia.
+- Cada fase tiene un **peso fijo** desde la Fase 0 (suma 100). La ampliación del alcance del 2026-10-16 añadió 22 (total 122). El global es la suma de puntos dividida entre el peso total. Dentro de cada fase, las tareas reparten ese peso según su complejidad e importancia.
 - Una tarea vale:
   - **0 %** si solo está planificada o escrita sin compilar;
   - **50 %** si compila y pasa las pruebas de PC;
@@ -72,13 +76,15 @@ Dentro de F2 queda:
 - Calibración de los umbrales con la batería real (❓ D4).
 - F2.1 y F2.2 siguen al 50 %. B2-6 y B4-C2 cambiaron el muestreo y la animación después de la prueba, así que hay que repetirla (T41, T43). Los estados "completa" y "externa sin carga" no tienen resultado físico.
 
-### F3 · Interfaz, tema y navegación — 10 / 20
+### F3 · Interfaz, tema y navegación — 10 / 25
 | Tarea | Peso | Estado | Puntos |
 |---|---|---|---|
 | F3.1 Identidad Flex OS Ultra: paleta, Outfit, iconos, radios, fondo Onyx, **Liquid Glass** base (tinte adaptativo, brillo, sombra, bordes). **B3-1:** 12 iconos vectoriales, estados pulsado/activo/no disponible, cabecera, lista y fila de Ajustes (`docs/B3-INTERFAZ.md`). Pendiente: fondo pre-desenfocado para fondos con detalle | 5 | 🟡 faltan T2, T13 y T23-T25 | 2,5 |
 | F3.2 Esfera del reloj: hora y fecha reales del RTC (servicio de solo lectura; poner en hora es F4.2), batería real, estados sin datos (B3-2) | 5 | 🟡 faltan T26-T29 | 2,5 |
 | F3.3 Panel rápido: cortina que sigue al dedo, brillo real (mín. 10 %), batería real, acceso a Ajustes, Wi-Fi/Bluetooth marcados "Pendiente" (B3-4) | 5 | 🟡 faltan T33-T36 | 2,5 |
 | F3.4 Ajustes (Pantalla, Batería, Diagnóstico, Acerca de), navegación por gestos y **animaciones/transiciones** (apertura y cierre 210/190 ms, volver, arranque) (B3-3, B3-5) | 5 | 🟡 faltan T30-T32 y T37-T40 | 2,5 |
+| F3.5 **Iconos originales** de las apps (`drawAppIcon`, Icons.h) prerenderizados a su tamaño físico + **lanzador en rejilla** como la Caja de aplicaciones (`docs/MIGRACION.md` §3) | 3 | ⬜ | 0 |
+| F3.6 **Fondos originales** (los 8 de Wallpaper.h) a 410×502, uno en PSRAM a la vez, selector en Ajustes | 2 | ⬜ | 0 |
 
 ### F4 · Servicios del sistema — 5 / 10
 
@@ -92,14 +98,14 @@ Detalle y pruebas en `docs/F4-SERVICIOS.md`.
 | F4.5 Apagado de pantalla por inactividad (atenuada, DISPOFF, vuelta a la esfera), botón lateral, despertar por toque, alarma y USB. Sin reposo ligero de la CPU (F8.4, medir antes) | 1,5 | 🟡 faltan T56-T59 |
 | F4.6 Almacenamiento LittleFS en `storage` (> 16 MB): puerta por la sonda de 32 MB, prueba de escritura del sector, formateo confirmado, montaje y archivo atómico (`FLASH-32MB.md` §6) | 1 | 🟡 faltan T63-T66 |
 
-### F5 · Conectividad y Flex Phone — 0 / 15
+### F5 · Conectividad y Flex Phone — 0 / 17
 | Tarea | Peso | Estado |
 |---|---|---|
 | F5.1 Wi-Fi STA: conexión, credenciales, reconexión, sin bloquear la interfaz | 3 | ⬜ |
 | F5.2 `flex_link`: cliente compatible con Flex Link v2 (descubrimiento, emparejamiento, sesión, reconexión) reutilizando los módulos puros | 4 | ⬜ |
 | F5.3 Notificaciones desde Flex Phone (recibir, listar, descartar) | 3 | ⬜ |
 | F5.4 Otras funciones del protocolo (batería del móvil, multimedia, buscar teléfono...) | 2 | ❓ D10 |
-| F5.5 Segunda topología: punto de acceso del reloj o BLE | 1 | ❓ D5, D6 |
+| F5.5 **Transporte BLE** con Flex Phone (canal principal): central NimBLE contra el `GattServer.kt` de la app (servicio `f1580001-…`), vínculo cifrado, reconexión, BLE independiente del Wi-Fi | 3 | ⬜ |
 | F5.6 Seguridad del enlace (v3 con ECDH + cifrado autenticado; requiere cambios en Flex Phone, en su repositorio) | 2 | ❓ D7, D8 |
 
 ### F6 · Navegador (renderizado remoto) — 0 / 8
@@ -126,6 +132,21 @@ Limitación conocida: sin servidor de renderizado o sin el móvil, no hay web. N
 | F8.3 Protección de credenciales: cifrado de NVS y flash | 2 | ❓ D12 |
 | F8.4 Consumo medido y optimización (pantalla, radio, sondeos) | 2 | ⬜ |
 | F8.5 Pruebas finales: 24 h de estabilidad, memoria y regresión completa en el reloj | 3 | ⬜ |
+
+### F9 · Apps de Flex OS Ultra (inventario: `docs/INVENTARIO-APPS.md`) — 0 / 15
+| Tarea | Peso | Estado |
+|---|---|---|
+| F9.1 Reloj (agrupa Alarmas, Cronómetro y Temporizador con el icono original) | 1 | ⬜ |
+| F9.2 Calculadora (lógica de `calcKey` transcrita, rejilla 5×4) | 1,5 | ⬜ |
+| F9.3 Calendario (vista de mes, hoy resaltado, cambio de mes) | 1 | ⬜ |
+| F9.4 Flex Compass (pantalla de requisito sin magnetómetro + cabeceo/alabeo reales) | 1 | ⬜ |
+| F9.5 Device Care (estado real, memoria, almacenamiento, pruebas) | 2 | ⬜ |
+| F9.6 Almacenamiento: explorador de LittleFS | 1 | ⬜ |
+| F9.7 Notas (lista y lectura en LittleFS; teclado compacto) | 2 | ⬜ |
+| F9.8 Clima (Open-Meteo por Wi-Fi, estado sin conexión) | 2 | ⬜ |
+| F9.9 Flex Phone (estado del enlace, emparejar, notificaciones) | 1,5 | ⬜ |
+| F9.10 Música (control de la música del teléfono) | 1 | ⬜ |
+| F9.11 Paint (lienzo reducido) | 1 | ⬜ |
 
 ### Acordado sin peso asignado
 
@@ -155,7 +176,7 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | D2 | Parámetros de carga: no se escriben mientras no se conozca la capacidad de la batería | — |
 | D3 | ✅ Resuelta: en "carga completa" se muestra el valor real del gauge | — |
 | D4 | Calibrar los umbrales de batería baja y crítica (hoy provisionales: 15 % y 5 %, aislados en `battery_thresholds.h`) | calibración |
-| D5 | Transporte con Flex Phone: Wi-Fi, BLE o ambos | F5.5 |
+| D5 | ✅ Resuelta (prompt maestro, 2026-10-16): BLE con el teléfono; Wi-Fi solo para Internet, encendido cuando una función lo necesita | — |
 | D6 | Topología prioritaria: misma red, hotspot del móvil o punto de acceso del reloj | F5.5 |
 | D7 | Protocolo: Flex Link v2 (en claro) o v3 cifrado | F5.6 |
 | D8 | Cambios en Flex Phone (Android): varios dispositivos y tipo "reloj" | F5.6 |
@@ -201,3 +222,4 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-16 | 35,75 % | +0,75 | F4.5 (apagado de pantalla y botón lateral) compila y pasa las pruebas de PC y de la vista previa: 50 % de 1,5 |
 | 2026-10-16 | 36,5 % | +0,75 | F4.4 (IMU QMI8658 y app Sensores) compila y pasa las pruebas de PC y de la vista previa: 50 % de 1,5 |
 | 2026-10-16 | **37 %** | +0,5 | F4.6 (LittleFS en storage) compila y pasa las pruebas de PC y de la vista previa: 50 % de 1. Todas las tareas de F4 están implementadas y probadas en el PC; falta la prueba física |
+| 2026-10-16 | **30,3 %** | −6,7 | **Ampliación del alcance** (prompt maestro de migración): F3 sube de 20 a 25 (F3.5 iconos originales y lanzador, F3.6 fondos originales), F5 de 15 a 17 (F5.5 pasa a ser el transporte BLE, canal principal: 1 → 3) y se añade F9 (apps del inventario, 15). Peso total 122; puntos sin cambios (37). Global = 37 / 122. Verificado en el reloj = 10,5 / 122 = 8,6 % |

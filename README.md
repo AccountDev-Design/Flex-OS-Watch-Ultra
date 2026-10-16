@@ -19,7 +19,7 @@ Detalles, archivos generados y avisos: [`Flex OS Ultra Watch/README.md`](Flex%20
 
 ## Estado
 
-**Progreso global: 37 %**, del que un 10,5 % está verificado en el reloj.
+**Progreso global: 30,3 %** (69,7 % pendiente), del que un 8,6 % está verificado en el reloj. El alcance se amplió el 2026-10-16 (iconos y fondos originales, todas las apps del inventario, BLE): ver el historial de [docs/ROADMAP.md](docs/ROADMAP.md).
 
 - Referencia única: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Ahí están el plan completo, los pesos, las decisiones pendientes y el historial.
 - F2 (batería y energía), F3 (interfaz, tema y navegación) y F4 (servicios) están hechas en software: compilan y pasan las pruebas de PC y de la vista previa.
@@ -75,6 +75,8 @@ simulados**: sirven para probar la interfaz, no el hardware.
 ## Documentación
 
 - [docs/ROADMAP.md](docs/ROADMAP.md): hoja de ruta y progreso global
+- [docs/MIGRACION.md](docs/MIGRACION.md): mapa de migración desde Flex OS Ultra (componente por componente)
+- [docs/INVENTARIO-APPS.md](docs/INVENTARIO-APPS.md): inventario de las 19 apps de Flex OS Ultra y su estado en el reloj
 - [docs/PRUEBAS-RELOJ.md](docs/PRUEBAS-RELOJ.md): **próxima prueba en el reloj**, todas las pruebas pendientes en orden
 - [docs/F4-SERVICIOS.md](docs/F4-SERVICIOS.md): ajustes, hora, apps de tiempo, sensores, apagado de pantalla y almacenamiento (F4)
 - [docs/B4-CALIDAD.md](docs/B4-CALIDAD.md): respuesta de carga, rendimiento, negro AMOLED, esquinas e integridad visual (B4)
