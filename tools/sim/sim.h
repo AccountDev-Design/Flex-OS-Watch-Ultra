@@ -74,6 +74,13 @@ extern wt_set_result_t sim_time_set_result;
 extern int sim_ws_updates;
 void sim_ws_reset(const watch_settings_t *s); /* NULL = valores por defecto */
 
+extern bool sim_display_on;
+extern int sim_display_level;
+extern int sim_button;
+bool sim_display_power_cb(bool on);
+bool sim_display_level_cb(int percent);
+int sim_button_level(void);
+
 extern int sim_brightness;
 extern int sim_brightness_calls;
 int sim_brightness_get(void);
@@ -98,3 +105,4 @@ void sim_suite_theme(const char *out);
 void sim_suite_face(const char *out);
 void sim_suite_datetime(const char *out);
 void sim_suite_apps(const char *out);
+void sim_suite_screen(const char *out);

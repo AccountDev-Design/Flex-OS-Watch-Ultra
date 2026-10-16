@@ -18,3 +18,4 @@ void test_power_sched_all(void);
 void test_safe_all(void);
 void test_settings_all(void);
 void test_clock_all(void);
+void test_screen_all(void);

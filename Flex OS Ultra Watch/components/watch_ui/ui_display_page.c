@@ -3,7 +3,9 @@
  *  - brillo real (el mismo control del panel rápido), guardado al soltar;
  *  - fondo: negro AMOLED (píxeles apagados) u Onyx. Se guarda y la esfera se
  *    rehace al momento;
- *  - el apagado automático llega con F4.5 y se marca "Pendiente".
+ *  - apagado por inactividad: 5, 10, 15, 30 o 60 s (cada toque pasa al
+ *    siguiente). Se atenúa los últimos segundos; un toque, el botón lateral,
+ *    una alarma o el USB la encienden (ui_screen.c, F4.5).
  * Todo se guarda con watch_settings (F4.1). Si NVS no está disponible, la
  * nota lo dice: los cambios valen hasta reiniciar.
  */
@@ -33,6 +35,22 @@ static void wall_cb(lv_event_t *e)
     watch_theme_set_wallpaper((flex_wall_t)ws.wallpaper);
     watch_theme_row_set_value(row, wall_name(ws.wallpaper));
     ui_nav_replace_root(ui_face_create); /* la esfera, debajo, con el fondo nuevo */
+}
+
+static void timeout_cb(lv_event_t *e)
+{
+    lv_obj_t *row = lv_event_get_current_target(e);
+    watch_settings_t ws;
+    watch_settings_get(&ws);
+    size_t i = 0;
+    while (i < ws_screen_timeout_count && ws_screen_timeouts[i] != ws.screen_to_s) {
+        i++;
+    }
+    ws.screen_to_s = ws_screen_timeouts[(i + 1) % ws_screen_timeout_count];
+    watch_settings_update(&ws);
+    char t[8];
+    lv_snprintf(t, sizeof(t), "%u s", (unsigned)ws.screen_to_s);
+    watch_theme_row_set_value(row, t);
 }
 
 lv_obj_t *ui_display_page_create(lv_obj_t *parent)
@@ -66,7 +84,9 @@ lv_obj_t *ui_display_page_create(lv_obj_t *parent)
 
     watch_theme_section(list, "Panel");
     watch_theme_info_row(list, "Pantalla", "AMOLED 410 × 502");
-    lv_obj_t *off = watch_theme_list_row(list, FLEX_ICON_MOON, FLEX_C_CAT_SUN, "Apagado", NULL, false);
-    watch_theme_row_set_pending(off);
+    char t[8];
+    lv_snprintf(t, sizeof(t), "%u s", (unsigned)ws.screen_to_s);
+    lv_obj_t *off = watch_theme_list_row(list, FLEX_ICON_MOON, FLEX_C_CAT_SUN, "Apagado", t, false);
+    lv_obj_add_event_cb(off, timeout_cb, LV_EVENT_CLICKED, NULL);
     return page;
 }

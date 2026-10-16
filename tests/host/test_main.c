@@ -509,6 +509,7 @@ int main(void)
     test_safe_all();
     test_settings_all();
     test_clock_all();
+    test_screen_all();
     printf("%d comprobaciones, %d fallos\n", g_checks, g_fail);
     return g_fail ? 1 : 0;
 }

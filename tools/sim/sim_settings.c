@@ -87,7 +87,7 @@ void sim_suite_settings(const char *out)
     open_row(0, "Pantalla");
     sim_save(out, "f3_pantalla");
     sim_check_glyphs(ui_nav_top(), "pantalla");
-    EXPECT(sim_find_label(ui_nav_top(), "Pendiente"), "Apagado automatico no esta marcado pendiente");
+    EXPECT(sim_find_label(ui_nav_top(), "15 s"), "Pantalla no muestra el apagado de 15 s (F4.5)");
     /* Brillo desde la página (control a la altura de la sección "Brillo") */
     lv_obj_t *sl = NULL;
     for (lv_obj_t *o = sim_find_label(ui_nav_top(), "70 %"); o; o = lv_obj_get_parent(o)) {

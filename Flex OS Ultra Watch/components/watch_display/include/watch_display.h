@@ -48,8 +48,22 @@ void watch_display_unlock(void);
 /** Brillo 0..100 % mediante el comando DCS 0x51 del panel (vía BSP). */
 esp_err_t watch_display_set_brightness(int percent);
 
-/** Último brillo aplicado con éxito (0..100), o -1 si nunca se aplicó. No se guarda (F4.1). */
+/** Último brillo del usuario aplicado con éxito (0..100), o -1 si nunca se aplicó. */
 int watch_display_get_brightness(void);
+
+/**
+ * Brillo momentáneo (atenuar antes de apagar, F4.5) SIN cambiar el del
+ * usuario; percent < 0 vuelve al del usuario. Llamar con LVGL bloqueado o
+ * desde su tarea.
+ */
+esp_err_t watch_display_set_level(int percent);
+
+/**
+ * Enciende (DISPON + brillo del usuario) o apaga (brillo 0 + DISPOFF) el
+ * panel. El contenido se conserva en la RAM del panel. Llamar con LVGL
+ * bloqueado o desde su tarea (comparte el bus QSPI con el envío de imagen).
+ */
+esp_err_t watch_display_set_power(bool on);
 
 void watch_display_get_info(watch_display_info_t *out);
 

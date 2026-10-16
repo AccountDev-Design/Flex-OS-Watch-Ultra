@@ -16,6 +16,7 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "driver/gpio.h"
 #include "bsp/esp-bsp.h"
 #include "watch_diag.h"
 #include "watch_display.h"
@@ -32,6 +33,42 @@ static const char *TAG = "flex_watch";
 static bool ui_brightness_set(int percent)
 {
     return watch_display_set_brightness(percent) == ESP_OK;
+}
+
+/* Apagado de pantalla (F4.5): la interfaz llama desde la tarea de LVGL. */
+static bool ui_display_power(bool on)
+{
+    return watch_display_set_power(on) == ESP_OK;
+}
+
+static bool ui_display_level(int percent)
+{
+    return watch_display_set_level(percent) == ESP_OK;
+}
+
+/* Botón lateral PWR: el AXP2101 lo lleva a PWRON y un BSS138 lo refleja en
+ * GPIO10 (SYS_OUT, pull-up de 10k en la placa). La polaridad no está
+ * verificada: la interfaz aprende el nivel en reposo y solo mira cambios.
+ * Solo lectura: GPIO10 no se configura como salida ni con pull interno. */
+#define PWR_KEY_GPIO GPIO_NUM_10
+static bool s_pwr_key_ok;
+
+static int ui_button_level(void)
+{
+    return s_pwr_key_ok ? gpio_get_level(PWR_KEY_GPIO) : -1;
+}
+
+static void pwr_key_init(void)
+{
+    const gpio_config_t cfg = {
+        .pin_bit_mask = 1ULL << PWR_KEY_GPIO,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    s_pwr_key_ok = gpio_config(&cfg) == ESP_OK;
+    ESP_LOGI(TAG, "boton PWR (GPIO10): nivel al arrancar %d", s_pwr_key_ok ? gpio_get_level(PWR_KEY_GPIO) : -1);
 }
 
 void app_main(void)
@@ -65,6 +102,10 @@ void app_main(void)
     watch_ui_boot_info_t boot = {0};
     boot.brightness_get = watch_display_get_brightness;
     boot.brightness_set = ui_brightness_set;
+    boot.display_power = ui_display_power;
+    boot.display_level = ui_display_level;
+    pwr_key_init();
+    boot.button_level = ui_button_level;
     boot.fw_version = app->version;
     boot.idf_version = esp_get_idf_version();
     watch_display_info_t dinfo;

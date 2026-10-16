@@ -120,6 +120,7 @@ lv_obj_t *ui_touchtest_create(lv_obj_t *parent)
     lv_obj_set_style_border_opa(frame, LV_OPA_70, 0);
     lv_obj_remove_flag(frame, LV_OBJ_FLAG_CLICKABLE);
 
+    ui_screen_hold_page(page); /* mientras se prueba, la pantalla no se apaga */
     guides_create(page);
     watch_theme_header(page, "Prueba de pantalla", back_cb, NULL);
 

@@ -109,8 +109,17 @@ lv_obj_t *ui_alarms_create(lv_obj_t *parent);
 lv_obj_t *ui_alarm_edit_create(lv_obj_t *parent);
 /** Rodillo con el estilo del sistema (3 filas visibles, la elegida resaltada). */
 lv_obj_t *ui_roller(lv_obj_t *parent, const char *opts, lv_roller_mode_t mode, const lv_font_t *font, int32_t w);
-/** Enciende la pantalla si estaba apagada (F4.5). */
-void ui_screen_wake(void);
+/* Apagado de pantalla (F4.5, ui_screen.c) */
+void ui_screen_init(void);
+void ui_screen_tick(void);              /**< cada 100 ms (ui_system) */
+void ui_screen_wake(void);              /**< enciende (o mantiene encendida) la pantalla */
+void ui_screen_enable(bool on);         /**< false: no se apaga (pruebas) */
+bool ui_screen_is_on(void);
+int ui_screen_state(void);              /**< scr_state_t */
+uint32_t ui_screen_offs(void);          /**< veces que se apagó */
+uint32_t ui_screen_wakes(void);         /**< veces que se encendió */
+int ui_screen_button_idle(void);        /**< nivel en reposo aprendido del botón (-1 = aún no) */
+void ui_screen_hold_page(lv_obj_t *page); /**< no apagar mientras exista esta página */
 
 /* Fecha y hora (F4.2): lista, zona horaria y poner en hora */
 lv_obj_t *ui_datetime_create(lv_obj_t *parent);

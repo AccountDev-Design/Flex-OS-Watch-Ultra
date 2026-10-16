@@ -176,6 +176,31 @@ uint32_t sim_mem_blocks(void)
     return m.used_cnt;
 }
 
+/* Pantalla (F4.5): encendida/apagada y brillo momentáneo (-1 = el del usuario) */
+bool sim_display_on = true;
+int sim_display_level = -1;
+int sim_button = 0;
+
+bool sim_display_power_cb(bool on)
+{
+    sim_display_on = on;
+    if (on) {
+        sim_display_level = -1;
+    }
+    return true;
+}
+
+bool sim_display_level_cb(int percent)
+{
+    sim_display_level = percent;
+    return true;
+}
+
+int sim_button_level(void)
+{
+    return sim_button;
+}
+
 int sim_brightness = 70;
 int sim_brightness_calls;
 
@@ -355,6 +380,7 @@ int main(int argc, char **argv)
         {"tema", sim_suite_theme},       {"arranque", sim_suite_boot}, {"energia", sim_suite_power},
         {"esfera", sim_suite_face},      {"nav", sim_suite_nav},       {"panel", sim_suite_qp},
         {"ajustes", sim_suite_settings}, {"hora", sim_suite_datetime}, {"apps", sim_suite_apps},
+        {"pantalla", sim_suite_screen},
         {"mono", sim_suite_monkey},      {"visual", sim_suite_visual}, {"banco", sim_suite_bench},
     };
     for (size_t i = 0; i < sizeof(suites) / sizeof(suites[0]); i++) {

@@ -24,6 +24,10 @@ typedef struct {
      * el panel rápido lo muestra como no disponible. */
     int (*brightness_get)(void);        /**< 0..100, o < 0 si se desconoce */
     bool (*brightness_set)(int percent); /**< true si se aplicó */
+    /* Apagado de pantalla (F4.5). NULL = la pantalla no se apaga nunca. */
+    bool (*display_power)(bool on);      /**< DISPON/DISPOFF con el brillo del usuario */
+    bool (*display_level)(int percent);  /**< brillo momentáneo (atenuar); < 0 = el del usuario */
+    int (*button_level)(void);           /**< nivel del botón lateral (0/1), o -1 sin botón */
     /* Para Acerca de y Diagnóstico (NULL / 0 = no disponible) */
     const char *fw_version;              /**< versión del firmware (esp_app_desc) */
     const char *idf_version;

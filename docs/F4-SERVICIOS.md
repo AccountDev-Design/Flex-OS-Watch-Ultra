@@ -8,7 +8,7 @@ Estado de cada bloque de F4 (pesos de `ROADMAP.md`). Las referencias son la audi
 | F4.2 | Poner en hora el RTC, zona horaria, 12/24 h | implementado · pruebas de PC · prueba física pendiente (T48-T51) |
 | F4.3 | Cronómetro, temporizador, alarmas y lanzador de apps | implementado · pruebas de PC · prueba física pendiente (T52-T55) |
 | F4.4 | IMU QMI8658 y app de sensores | pendiente |
-| F4.5 | Apagado de pantalla por inactividad | pendiente |
+| F4.5 | Apagado de pantalla por inactividad, botón lateral | implementado · pruebas de PC · prueba física pendiente (T56-T59) |
 | F4.6 | LittleFS en `storage` | pendiente |
 
 ## F4.1. Ajustes persistentes
@@ -171,3 +171,53 @@ Estado de cada bloque de F4 (pesos de `ROADMAP.md`). Las referencias son la audi
 | T53 | Cronómetro | Inicia, marca 3 vueltas, pausa, sal de la app 1 min y vuelve | Sigue contando fuera de la app; la mejor vuelta en verde y la peor en rojo; anota FPS del medidor con el cronómetro en marcha |
 | T54 | Temporizador | Atajo "1", Iniciar, sal a la esfera | Al minuto, "Tiempo agotado" sobre la esfera; "+1 min" vuelve a contar; "Detener" lo cierra |
 | T55 | Alarma | Crea una alarma para dentro de 2 min, una vez, y espera en la esfera | Suena a su hora (aviso en pantalla, sin sonido); queda "Desactivada"; tras reiniciar el reloj, la alarma sigue en la lista |
+
+## F4.5. Apagado de pantalla e inactividad
+
+La referencia no apaga la pantalla sola (`Touch.h:278`, `QuickPanel.h:262`). Este diseño es nuevo y reutiliza sus reglas: cualquier toque reinicia la cuenta y el toque que despierta no actúa (`Touch.h:292-300`).
+
+**Política** (pura, con pruebas de PC: `ui_screen_logic.c`):
+- **Encendida → atenuada → apagada.** El tiempo se elige en Ajustes > Pantalla > Apagado: 5, 10, 15, 30 o 60 s; 15 por defecto, guardado.
+- **Atenuada:** los últimos 3 s (un tercio del tiempo si es corto), con un tercio del brillo del usuario. No cambia el brillo guardado.
+- **Apagada:** brillo 0 y **DISPOFF** (0x28): los píxeles del AMOLED se apagan. El contenido queda en la RAM del panel.
+  - Sin SLPIN (0x10): el driver del CO5300 no lo implementa y su temporización no está documentada.
+  - Brillo 0 solo no basta: el panel seguiría barriendo.
+- **Al apagarse vuelve a la esfera** y cierra el panel rápido. Es el "bloqueo por inactividad"; el bloqueo con código es D16 y no está acordado.
+- **No se apaga** mientras suena un aviso, se ve la animación de carga o está abierta la prueba de pantalla.
+
+**Se enciende con:**
+- **Un toque.** No llega a la interfaz: lo recoge una capa transparente sobre todo, también durante la atenuación. El táctil sigue con alimentación y en modo interrupción; no se duerme, porque un error de lectura del táctil reinicia el reloj (`esp_lvgl_port_touch.c:127`).
+- **El botón lateral (PWR → GPIO10).** Una pulsación corta apaga o enciende.
+  - No se supone la polaridad: tras el arranque se aprende el nivel en reposo y se cuentan los cambios. Diagnóstico muestra "reposo N · ahora N".
+  - Las pulsaciones de más de 2 s se ignoran: a los 4-6 s el AXP2101 apaga el reloj por hardware.
+  - Se lee cada 100 ms: una pulsación de menos de 0,1 s puede perderse.
+- **Una alarma o el temporizador.**
+- **Enchufar el USB** (animación de carga) **o un aviso de batería.**
+
+**Consumo en reposo.** Con la pantalla apagada:
+- la esfera solo cambia una vez por minuto;
+- el resto de la interfaz no dibuja nada (al apagarse vuelve a la esfera).
+
+La CPU **no** entra en reposo ligero automático (`CONFIG_PM_ENABLE`). Exige medir en el reloj el consumo, el despertar del táctil (GPIO38) y el bus QSPI, y queda para F8.4. **No se ha medido el consumo.**
+
+**Diagnóstico:** veces que se apagó y se encendió, y nivel del botón lateral.
+
+**Vista previa:** batería "apagado de pantalla F4.5".
+- Atenuada a los 12 s sin tocar el brillo del usuario.
+- El toque que la saca no abre la fila.
+- Apagada a los 15 s, de vuelta a la esfera.
+- El toque que la enciende no abre las apps.
+- Botón con pulsación corta y larga.
+- La encienden el aviso del temporizador y el USB.
+- La prueba de pantalla la mantiene encendida.
+- Apagado a 5 s desde Ajustes.
+- Sin fugas.
+
+### Pruebas en el reloj
+
+| # | Prueba | Cómo | Resultado esperado |
+|---|---|---|---|
+| T56 | Apagado | Deja el reloj en Ajustes sin tocarlo | A los 12 s se atenúa; a los 15 s se apaga del todo (negro, sin brillo residual en una habitación oscura). Al tocarlo se enciende en la esfera y el toque no abre nada |
+| T57 | Botón lateral | Ajustes > Diagnóstico > Pantalla y botón lateral: anota "reposo N". Luego pulsa el botón PWR brevemente dos veces | El reposo se aprende (0 o 1) y "ahora" cambia al pulsar. La 1.ª pulsación apaga y la 2.ª enciende. **No** mantengas el botón 4 s: apaga el reloj |
+| T58 | Despertar | Con la pantalla apagada: conecta el USB; y en otra prueba, espera a que suene un temporizador de 1 min | Se enciende sola en ambos casos |
+| T59 | Imagen tras encender | Apaga y enciende 10 veces | La imagen vuelve completa, sin basura ni franjas, y el táctil responde al momento. En el registro: `pantalla apagada (DISPOFF)` / `pantalla encendida`, sin errores |

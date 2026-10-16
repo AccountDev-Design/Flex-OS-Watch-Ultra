@@ -1,7 +1,7 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 35 %   [███████░░░░░░░░░░░░░]   (verificado en el reloj: 10,5 %)
+PROGRESO GLOBAL: 35,75 %   [███████░░░░░░░░░░░░░]   (verificado en el reloj: 10,5 %)
 ```
 
 - **Completado:**
@@ -22,7 +22,7 @@ PROGRESO GLOBAL: 35 %   [███████░░░░░░░░░░░�
   - Pruebas físicas de F2/F3 sobre el firmware con B4 (T41-T45 y las T de F2/F3 aún sin resultado).
   - La calibración de umbrales (❓ D4).
   - Flex Phone, el navegador, OTA, la seguridad y las pruebas finales.
-- **Siguiente:** F4.5 (apagado de pantalla por inactividad) y F4.4 (IMU y app de sensores).
+- **Siguiente:** F4.4 (IMU QMI8658 y app de sensores) y F4.6 (LittleFS).
 
 ## Cómo se calcula
 
@@ -73,7 +73,7 @@ Dentro de F2 queda:
 | F3.3 Panel rápido: cortina que sigue al dedo, brillo real (mín. 10 %), batería real, acceso a Ajustes, Wi-Fi/Bluetooth marcados "Pendiente" (B3-4) | 5 | 🟡 faltan T33-T36 | 2,5 |
 | F3.4 Ajustes (Pantalla, Batería, Diagnóstico, Acerca de), navegación por gestos y **animaciones/transiciones** (apertura y cierre 210/190 ms, volver, arranque) (B3-3, B3-5) | 5 | 🟡 faltan T30-T32 y T37-T40 | 2,5 |
 
-### F4 · Servicios del sistema — 3 / 10
+### F4 · Servicios del sistema — 3,75 / 10
 
 Detalle y pruebas en `docs/F4-SERVICIOS.md`.
 | Tarea | Peso | Estado |
@@ -82,7 +82,7 @@ Detalle y pruebas en `docs/F4-SERVICIOS.md`.
 | F4.2 Hora: poner en hora el RTC PCF85063 (UTC + marca, verificado), zona horaria, 12/24 h. SNTP llega con el Wi-Fi (F5) | 2 | 🟡 faltan T48-T51 |
 | F4.3 Cronómetro, temporizador y alarmas (aviso visual), con lanzador de apps (D15) | 2 | 🟡 faltan T52-T55 |
 | F4.4 IMU QMI8658 + información de batería y sensores | 1,5 | ⬜ |
-| F4.5 Suspensión de pantalla, brillo, bloqueo por inactividad, consumo en reposo | 1,5 | ⬜ |
+| F4.5 Apagado de pantalla por inactividad (atenuada, DISPOFF, vuelta a la esfera), botón lateral, despertar por toque, alarma y USB. Sin reposo ligero de la CPU (F8.4, medir antes) | 1,5 | 🟡 faltan T56-T59 |
 | F4.6 Almacenamiento LittleFS en `storage` (> 16 MB): prueba de escritura y montaje (`FLASH-32MB.md` §6) | 1 | ⬜ |
 
 ### F5 · Conectividad y Flex Phone — 0 / 15
@@ -190,4 +190,5 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-15 | 32 % | +3,5 | Prueba física del usuario (fotos y vídeo): F1.2, F1.3 y F1.4 pasan de 50 % a 100 %. F1.5 no tiene prueba larga. B4 (C1-C4) corrige lo visto en esa prueba y no suma: mejora tareas que ya contaban |
 | 2026-10-16 | 33 % | +1 | F4.1 (ajustes persistentes en NVS) compila y pasa las pruebas de PC y de la vista previa: 50 % de 2 |
 | 2026-10-16 | 34 % | +1 | F4.2 (poner en hora, zona horaria y 12/24 h) compila y pasa las pruebas de PC y de la vista previa: 50 % de 2 |
-| 2026-10-16 | **35 %** | +1 | F4.3 (cronómetro, temporizador, alarmas y lanzador) compila y pasa las pruebas de PC y de la vista previa: 50 % de 2 |
+| 2026-10-16 | 35 % | +1 | F4.3 (cronómetro, temporizador, alarmas y lanzador) compila y pasa las pruebas de PC y de la vista previa: 50 % de 2 |
+| 2026-10-16 | **35,75 %** | +0,75 | F4.5 (apagado de pantalla y botón lateral) compila y pasa las pruebas de PC y de la vista previa: 50 % de 1,5 |

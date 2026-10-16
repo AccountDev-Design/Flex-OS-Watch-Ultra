@@ -44,7 +44,8 @@ static void notify(void)
 static void sys_tick(lv_timer_t *t)
 {
     (void)t;
-    ui_clock_tick(); /* temporizador y alarmas: también sin datos de batería */
+    ui_clock_tick();  /* temporizador y alarmas: también sin datos de batería */
+    ui_screen_tick(); /* apagado por inactividad y botón lateral */
     if (!s_sys.power_ok) {
         return;
     }
@@ -55,6 +56,7 @@ static void sys_tick(lv_timer_t *t)
         const batt_tracker_t *tr = &s_sys.snap.track;
         const batt_alert_t alert = batt_alert_update(&s_sys.alerts, tr->state, tr->level, lv_tick_get());
         if (alert != BATT_ALERT_NONE) {
+            ui_screen_wake();
             ui_banner_show_battery(alert, tr->percent);
         }
         return;
@@ -66,10 +68,12 @@ static void sys_tick(lv_timer_t *t)
     s_sys.have = true;
     const batt_tracker_t *tr = &s_sys.snap.track;
     if (ui_charge_gate_update(&s_sys.gate, tr->charge_events, tr->prev_state, tr->state)) {
+        ui_screen_wake(); /* enchufar enciende la pantalla */
         ui_charge_anim_play(tr->percent);
     }
     const batt_alert_t alert = batt_alert_update(&s_sys.alerts, tr->state, tr->level, lv_tick_get());
     if (alert != BATT_ALERT_NONE) {
+        ui_screen_wake();
         ui_banner_show_battery(alert, tr->percent);
     }
     notify();
@@ -85,6 +89,7 @@ void ui_system_start(bool power_ok)
     ui_charge_gate_init(&s_sys.gate);
     batt_alert_init(&s_sys.alerts);
     ui_clock_init();
+    ui_screen_init();
     s_sys.timer = lv_timer_create(sys_tick, SYS_TICK_MS, NULL);
     sys_tick(s_sys.timer);
 }
@@ -133,10 +138,4 @@ int ui_power_listener_count(void)
         n += s_sys.listeners[i].obj != NULL;
     }
     return n;
-}
-
-/* F4.5 la sustituye por el encendido real; hasta entonces la pantalla no se
- * apaga nunca, así que no hay nada que encender. */
-void ui_screen_wake(void)
-{
 }

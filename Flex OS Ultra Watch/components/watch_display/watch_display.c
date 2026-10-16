@@ -31,7 +31,9 @@ static const char *TAG = "watch_display";
 #define DEFAULT_BRIGHTNESS 70
 
 static watch_display_info_t s_info;
-static int s_brightness = -1;
+static int s_brightness = -1;           /* brillo del usuario (el que se guarda) */
+static esp_lcd_panel_handle_t s_panel;  /* para encender y apagar el panel (F4.5) */
+static bool s_panel_on = true;
 
 /* El CO5300 solo acepta ventanas que empiezan en coordenada par y terminan en
  * impar (mismo criterio que rounder_event_cb del BSP oficial). Con 410x502 los
@@ -85,6 +87,7 @@ esp_err_t watch_display_start(lv_display_t **out_disp)
         .max_transfer_sz = (int)s_info.buf_bytes,
     };
     ESP_RETURN_ON_ERROR(bsp_display_new(&bsp_cfg, &panel, &io), TAG, "bsp_display_new");
+    s_panel = panel;
 
     lvgl_port_cfg_t port_cfg = ESP_LVGL_PORT_INIT_CONFIG();
     port_cfg.task_priority = LVGL_TASK_PRIO;
@@ -161,6 +164,50 @@ esp_err_t watch_display_set_brightness(int percent)
 int watch_display_get_brightness(void)
 {
     return s_brightness;
+}
+
+esp_err_t watch_display_set_level(int percent)
+{
+    if (percent < 0) {
+        percent = s_brightness >= 0 ? s_brightness : DEFAULT_BRIGHTNESS;
+    } else if (percent > 100) {
+        percent = 100;
+    }
+    return bsp_display_brightness_set(percent);
+}
+
+esp_err_t watch_display_set_power(bool on)
+{
+    if (!s_panel) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (on == s_panel_on) {
+        return ESP_OK;
+    }
+    esp_err_t err;
+    if (on) {
+        /* DISPON y después el brillo del usuario: sin destello. */
+        err = esp_lcd_panel_disp_on_off(s_panel, true);
+        if (err == ESP_OK) {
+            err = watch_display_set_level(-1);
+        }
+    } else {
+        /* Brillo 0 no basta: el AMOLED seguiría barriendo. Brillo 0 y DISPOFF
+         * (0x28): los píxeles se apagan y el contenido queda en la RAM del
+         * panel. Sin SLPIN (0x10): el controlador del CO5300 no tiene función
+         * de reposo en el driver y su temporización no está documentada. */
+        err = bsp_display_brightness_set(0);
+        if (err == ESP_OK) {
+            err = esp_lcd_panel_disp_on_off(s_panel, false);
+        }
+    }
+    if (err == ESP_OK) {
+        s_panel_on = on;
+        ESP_LOGI(TAG, "pantalla %s", on ? "encendida" : "apagada (DISPOFF)");
+    } else {
+        ESP_LOGW(TAG, "no se pudo %s la pantalla: %s", on ? "encender" : "apagar", esp_err_to_name(err));
+    }
+    return err;
 }
 
 void watch_display_get_info(watch_display_info_t *out)

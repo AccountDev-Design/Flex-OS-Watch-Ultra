@@ -36,6 +36,8 @@ typedef struct {
     lv_obj_t *pwr_stack;
     lv_obj_t *ws_state;
     lv_obj_t *ws_writes;
+    lv_obj_t *scr_count;
+    lv_obj_t *scr_button;
 } diag_t;
 
 static void back_cb(lv_event_t *e)
@@ -123,6 +125,19 @@ static void refresh_settings(diag_t *d)
     watch_theme_info_set(d->ws_state, buf);
     snprintf(buf, sizeof(buf), "%lu · errores %lu", (unsigned long)st.commits, (unsigned long)st.errors);
     watch_theme_info_set(d->ws_writes, buf);
+
+    snprintf(buf, sizeof(buf), "%lu apagados · %lu encendidos", (unsigned long)ui_screen_offs(),
+             (unsigned long)ui_screen_wakes());
+    watch_theme_info_set(d->scr_count, buf);
+    const int idle = ui_screen_button_idle();
+    if (!ui_boot_info()->button_level) {
+        snprintf(buf, sizeof(buf), "no disponible");
+    } else if (idle < 0) {
+        snprintf(buf, sizeof(buf), "aprendiendo el reposo");
+    } else {
+        snprintf(buf, sizeof(buf), "reposo %d · ahora %d", idle, ui_boot_info()->button_level());
+    }
+    watch_theme_info_set(d->scr_button, buf);
 }
 
 static void tick_cb(lv_timer_t *t)
@@ -194,6 +209,10 @@ lv_obj_t *ui_diag_create(lv_obj_t *parent)
     watch_theme_section(list, "Ajustes guardados (NVS)");
     d->ws_state = watch_theme_info_row(list, "Estado", "--");
     d->ws_writes = watch_theme_info_row(list, "Escrituras", "--");
+
+    watch_theme_section(list, "Pantalla y botón lateral");
+    d->scr_count = watch_theme_info_row(list, "Pantalla", "--");
+    d->scr_button = watch_theme_info_row(list, "Botón (GPIO10)", "--");
 
     refresh(d);
     refresh_settings(d);
