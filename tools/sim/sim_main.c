@@ -227,6 +227,11 @@ void sim_set_time(watch_time_state_t st, int y, int mo, int d, int h, int mi, in
     s_time.base_ms = s_ms;
 }
 
+int64_t esp_timer_get_time(void)
+{
+    return (int64_t)s_ms * 1000;
+}
+
 /* ---- Datos simulados que sustituyen a watch_power / watch_time / watch_diag ---- */
 /* La hora simulada (s_time) es LOCAL; la zona solo convierte a/desde UTC. */
 static int s_tz = -300;
@@ -340,17 +345,23 @@ int main(int argc, char **argv)
     lv_indev_set_type(touch, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(touch, touch_read_cb);
 
-    sim_suite_theme(out);
-    sim_suite_boot(out);
-    sim_suite_power(out);
-    sim_suite_face(out);
-    sim_suite_nav(out);
-    sim_suite_qp(out);
-    sim_suite_settings(out);
-    sim_suite_datetime(out);
-    sim_suite_monkey(out);
-    sim_suite_visual(out);
-    sim_suite_bench(out);
+    /* SIM_ONLY=nombre: solo esa batería (tras el arranque, que crea la
+     * interfaz). Para repetir deprisa una prueba concreta. */
+    const char *only = getenv("SIM_ONLY");
+    static const struct {
+        const char *name;
+        void (*run)(const char *);
+    } suites[] = {
+        {"tema", sim_suite_theme},       {"arranque", sim_suite_boot}, {"energia", sim_suite_power},
+        {"esfera", sim_suite_face},      {"nav", sim_suite_nav},       {"panel", sim_suite_qp},
+        {"ajustes", sim_suite_settings}, {"hora", sim_suite_datetime}, {"apps", sim_suite_apps},
+        {"mono", sim_suite_monkey},      {"visual", sim_suite_visual}, {"banco", sim_suite_bench},
+    };
+    for (size_t i = 0; i < sizeof(suites) / sizeof(suites[0]); i++) {
+        if (!only || strcmp(only, suites[i].name) == 0 || strcmp(suites[i].name, "arranque") == 0) {
+            suites[i].run(out);
+        }
+    }
 
     printf("%s (%d fallos)\n", sim_fails ? "FALLOS" : "TODO OK", sim_fails);
     return sim_fails ? 1 : 0;

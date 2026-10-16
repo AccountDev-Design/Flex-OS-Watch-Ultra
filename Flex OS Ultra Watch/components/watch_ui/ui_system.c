@@ -44,6 +44,7 @@ static void notify(void)
 static void sys_tick(lv_timer_t *t)
 {
     (void)t;
+    ui_clock_tick(); /* temporizador y alarmas: también sin datos de batería */
     if (!s_sys.power_ok) {
         return;
     }
@@ -83,6 +84,7 @@ void ui_system_start(bool power_ok)
     s_sys.gen = 0;
     ui_charge_gate_init(&s_sys.gate);
     batt_alert_init(&s_sys.alerts);
+    ui_clock_init();
     s_sys.timer = lv_timer_create(sys_tick, SYS_TICK_MS, NULL);
     sys_tick(s_sys.timer);
 }
@@ -131,4 +133,10 @@ int ui_power_listener_count(void)
         n += s_sys.listeners[i].obj != NULL;
     }
     return n;
+}
+
+/* F4.5 la sustituye por el encendido real; hasta entonces la pantalla no se
+ * apaga nunca, así que no hay nada que encender. */
+void ui_screen_wake(void)
+{
 }

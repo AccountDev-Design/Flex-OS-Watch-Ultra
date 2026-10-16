@@ -8,6 +8,7 @@
 #include "lvgl.h"
 #include "battery_alerts.h"
 #include "watch_power.h"
+#include "ui_clock_logic.h"
 #include "watch_ui.h"
 
 /* ---- ui_system: sondeo único del servicio de batería y capas globales ---- */
@@ -87,6 +88,30 @@ lv_obj_t *ui_settings_create(lv_obj_t *parent);
 lv_obj_t *ui_display_page_create(lv_obj_t *parent);
 lv_obj_t *ui_battery_page_create(lv_obj_t *parent);
 lv_obj_t *ui_about_create(lv_obj_t *parent);
+/* Apps de tiempo (F4.3): estado y motor (ui_clock_core), páginas */
+int64_t ui_mono_us(void);                 /**< reloj monótono (esp_timer) */
+sw_t *ui_sw(void);                        /**< el cronómetro (sigue fuera de su página) */
+tmr_t *ui_tmr(void);                      /**< el temporizador */
+const alarm_set_t *ui_alarms(void);
+void ui_alarms_set(const alarm_set_t *set); /**< aplica y guarda (watch_settings) */
+uint32_t ui_alarms_gen(void);             /**< cambia con cada cambio de alarmas */
+bool ui_clock_local_now(int64_t *local_s); /**< segundos locales; false sin hora */
+void ui_clock_init(void);                 /**< carga las alarmas guardadas */
+void ui_clock_tick(void);                 /**< cada 100 ms (ui_system): fin del temporizador y alarmas */
+bool ui_ring_active(void);                /**< aviso de alarma o temporizador en pantalla */
+lv_obj_t *ui_ring_obj(void);
+void ui_ring_dismiss(void);
+lv_obj_t *ui_apps_create(lv_obj_t *parent);
+void ui_apps_attach(lv_obj_t *face_page); /**< deslizar la esfera a la izquierda abre las apps */
+lv_obj_t *ui_stopwatch_create(lv_obj_t *parent);
+lv_obj_t *ui_timer_create(lv_obj_t *parent);
+lv_obj_t *ui_alarms_create(lv_obj_t *parent);
+lv_obj_t *ui_alarm_edit_create(lv_obj_t *parent);
+/** Rodillo con el estilo del sistema (3 filas visibles, la elegida resaltada). */
+lv_obj_t *ui_roller(lv_obj_t *parent, const char *opts, lv_roller_mode_t mode, const lv_font_t *font, int32_t w);
+/** Enciende la pantalla si estaba apagada (F4.5). */
+void ui_screen_wake(void);
+
 /* Fecha y hora (F4.2): lista, zona horaria y poner en hora */
 lv_obj_t *ui_datetime_create(lv_obj_t *parent);
 lv_obj_t *ui_tz_create(lv_obj_t *parent);

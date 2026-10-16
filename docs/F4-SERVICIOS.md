@@ -6,7 +6,7 @@ Estado de cada bloque de F4 (pesos de `ROADMAP.md`). Las referencias son la audi
 |---|---|---|
 | F4.1 | Ajustes persistentes en NVS, escritor único | implementado · pruebas de PC · prueba física pendiente (T46, T47) |
 | F4.2 | Poner en hora el RTC, zona horaria, 12/24 h | implementado · pruebas de PC · prueba física pendiente (T48-T51) |
-| F4.3 | Cronómetro, temporizador y alarmas | pendiente |
+| F4.3 | Cronómetro, temporizador, alarmas y lanzador de apps | implementado · pruebas de PC · prueba física pendiente (T52-T55) |
 | F4.4 | IMU QMI8658 y app de sensores | pendiente |
 | F4.5 | Apagado de pantalla por inactividad | pendiente |
 | F4.6 | LittleFS en `storage` | pendiente |
@@ -114,3 +114,60 @@ Estado de cada bloque de F4 (pesos de `ROADMAP.md`). Las referencias son la audi
 | T49 | Se conserva | Pulsa RESET. Luego apágalo y enciéndelo | La hora sigue bien tras ambos (la mantiene el RTC). Si tras apagar sale "Hora sin configurar", envíame la línea `registros 00h-0Ah` |
 | T50 | Precisión | Compara con el móvil a los 15 min y a las 24 h (amplía T27) | Anota la diferencia en segundos: sirve para decidir CAP_SEL |
 | T51 | Zona y 12 h | Cambia la zona (p. ej. UTC+01:00) y vuelve a UTC-05:00. Activa y desactiva "Formato 24 h" | La hora cambia con la zona y vuelve; los registros del RTC en Diagnóstico solo cambian en los segundos. En 12 h: "9:41" con "PM" en la esfera y "9:41 PM" en el panel |
+
+## F4.3. Apps de tiempo y lanzador
+
+**Alcance (cierra D15):** cronómetro, temporizador y alarmas.
+
+**Avisos solo visuales (D13).** El motor necesita escribir en el AXP2101 (ALDO3), y este firmware no escribe ese chip; además no se sabe si la placa lleva motor. El altavoz necesita ES8311/I2S. Las páginas lo dicen.
+
+**Lanzador.**
+- Se abre **deslizando la esfera hacia la izquierda**. Se vuelve con el gesto desde el borde izquierdo o con la cabecera.
+- Mosaicos de vidrio con el estado real de cada app: cronómetro en marcha, tiempo restante del temporizador y próxima alarma.
+- Mosaicos de Sensores (F4.4, "Pendiente" en esta versión) y Ajustes.
+
+**Cronómetro** (como la referencia, `AppChrono.h:107-209`):
+- Minutos y segundos con la fuente grande del reloj y las centésimas debajo.
+- Tabla con las 3 vueltas más recientes (número, parcial y total). La mejor sale en verde y la peor en rojo, desde 3 vueltas y si no son todas iguales.
+- Guarda hasta 20 vueltas; al llenarse descarta la más antigua sin renumerar.
+- Botones "Vuelta"/"Reiniciar" e "Iniciar"/"Pausa"/"Seguir".
+- Sigue contando fuera de su página.
+- Solo redibuja deprisa (30 Hz) las centésimas, y solo en marcha.
+
+**Temporizador.**
+- Rodillos de minutos (0-99) y segundos, y atajos de 1, 3, 5, 10 y 15 min.
+- En marcha muestra el tiempo restante en grande, una barra de progreso, "Pausa"/"Seguir" y "Cancelar".
+- Cuenta por instante de fin (`esp_timer`): no se desvía aunque la interfaz se retrase.
+- Al llegar a 0 sale el aviso **"Tiempo agotado"** en cualquier pantalla, con "+1 min" y "Detener".
+
+**Alarmas.**
+- Hasta 5, en hora local, con días de la semana (L M X J V S D) o una sola vez.
+- Se pueden activar, desactivar, editar y eliminar. La página muestra la próxima ("hoy 7:00", "mañana 7:30", "lun 7:30").
+- Se guardan en un bloque con versión y CRC de los ajustes persistentes (F4.1).
+- Las comprueba el tick de 100 ms del sistema, una vez por minuto local. Usa el día de la semana **local**, no el del RTC, que es UTC.
+- Una alarma "una vez" se desactiva al sonar.
+- "Posponer" = 5 min.
+- El aviso se cierra solo a los 3 min.
+- Si el reloj estaba apagado a esa hora, no suena después.
+
+**Pruebas.**
+- **PC:** lógica pura (`ui_clock_logic.c`, sin LVGL):
+  - cronómetro: vueltas, desbordamiento, mejor y peor, formato;
+  - temporizador: pausa, fin una sola vez, +1 min, tope de 99:59, redondeo;
+  - alarmas: coincidencia, próxima entre días y semanas, textos, empaquetado y datos dañados.
+- **Vista previa:** batería "apps de tiempo F4.3".
+  - Deslizar para abrir.
+  - Cronómetro completo.
+  - Temporizador con aviso en otra pantalla, +1 min y detener.
+  - Alarma creada, guardada, sonando a su hora, desactivada, pospuesta, editada y eliminada.
+  - Integridad visual y sin fugas.
+  - La prueba "mono" ahora también desliza a la izquierda y abre las apps.
+
+### Pruebas en el reloj
+
+| # | Prueba | Cómo | Resultado esperado |
+|---|---|---|---|
+| T52 | Lanzador | Desliza la esfera hacia la izquierda | Se abre "Aplicaciones" sin tirón; vuelves con el gesto desde el borde izquierdo |
+| T53 | Cronómetro | Inicia, marca 3 vueltas, pausa, sal de la app 1 min y vuelve | Sigue contando fuera de la app; la mejor vuelta en verde y la peor en rojo; anota FPS del medidor con el cronómetro en marcha |
+| T54 | Temporizador | Atajo "1", Iniciar, sal a la esfera | Al minuto, "Tiempo agotado" sobre la esfera; "+1 min" vuelve a contar; "Detener" lo cierra |
+| T55 | Alarma | Crea una alarma para dentro de 2 min, una vez, y espera en la esfera | Suena a su hora (aviso en pantalla, sin sonido); queda "Desactivada"; tras reiniciar el reloj, la alarma sigue en la lista |

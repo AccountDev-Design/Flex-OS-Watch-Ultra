@@ -106,6 +106,16 @@ lv_obj_t *watch_theme_glass_button(lv_obj_t *parent, int32_t x, int32_t y, int32
  */
 lv_obj_t *watch_theme_tile(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h);
 
+/**
+ * Botón en forma de pastilla con el texto centrado (hijo 0). bg_rgb es su
+ * color (FLEX_C_PRIMARY para la acción principal, FLEX_C_SURF2 para la
+ * secundaria, FLEX_C_DANGER para detener). Pulsable: quien lo crea escucha
+ * LV_EVENT_CLICKED. Con LV_STATE_DISABLED se atenúa y no responde.
+ */
+lv_obj_t *watch_theme_button(lv_obj_t *parent, const char *text, uint32_t bg_rgb, int32_t w, int32_t h);
+/** Cambia texto y color (NULL / 0 = no cambiar). */
+void watch_theme_button_set(lv_obj_t *btn, const char *text, uint32_t bg_rgb);
+
 /** Fondo plano de página (FLEX_C_PAGE) para las pantallas de lista. */
 void watch_theme_page(lv_obj_t *screen);
 

@@ -182,13 +182,19 @@ void sim_suite_monkey(const char *out)
     EXPECT(ui_nav_depth() == 1 && !ui_qp_active(), "la prueba no empieza en la esfera");
     const uint32_t blocks0 = sim_mem_blocks();
     const int timers0 = sim_timer_count();
-    int counts[8] = {0};
+    int counts[9] = {0};
 
     for (int step = 1; step <= STEPS; step++) {
         const uint32_t a = rnd(100);
-        if (a < 30) { /* toque en cualquier punto */
+        if (a < 25) { /* toque en cualquier punto */
             counts[0]++;
             sim_tap((int32_t)rnd(SIM_W), (int32_t)rnd(SIM_H));
+        } else if (a < 30) { /* deslizar hacia la izquierda (en la esfera abre las apps) */
+            counts[8]++;
+            const int32_t y = 90 + (int32_t)rnd(300);
+            const int32_t x0 = 200 + (int32_t)rnd(200);
+            sim_drag(x0, y, x0 - 60 - (int32_t)rnd(150), y + (int32_t)rnd(30) - 15, 2 + (int)rnd(8), 10 + rnd(30));
+            sim_release();
         } else if (a < 44) { /* gesto volver desde el borde, rápido o lento */
             counts[1]++;
             const int32_t y = FLEX_HDR_H + 10 + (int32_t)rnd(SIM_H - FLEX_HDR_H - 20);
@@ -213,9 +219,12 @@ void sim_suite_monkey(const char *out)
         } else if (a < 85) { /* abrir una página sin esperar (si el panel no está) */
             counts[5]++;
             if (!ui_qp_active()) {
-                static const ui_page_create_t pages[] = {ui_settings_create, ui_display_page_create,
-                                                         ui_battery_page_create, ui_diag_create, ui_about_create};
-                ui_nav_push(pages[rnd(5)]);
+                static const ui_page_create_t pages[] = {
+                    ui_settings_create, ui_display_page_create, ui_battery_page_create, ui_diag_create,
+                    ui_about_create,    ui_apps_create,         ui_stopwatch_create,    ui_timer_create,
+                    ui_alarms_create,   ui_datetime_create,     ui_tz_create,           ui_timeset_create,
+                };
+                ui_nav_push(pages[rnd(sizeof(pages) / sizeof(pages[0]))]);
             }
         } else if (a < 92) { /* batería: carga, avisos, sin datos */
             counts[6]++;
@@ -232,6 +241,11 @@ void sim_suite_monkey(const char *out)
         if (step % 10 == 0) {
             sim_release();
             sim_run(700);
+            /* Algunas páginas vuelven solas (p. ej. tras guardar la hora):
+             * en reposo es cuando ya no queda nada en marcha. */
+            for (int k = 0; k < 20 && ui_nav_busy(); k++) {
+                sim_run(100);
+            }
             check_rest(step);
         }
     }
@@ -243,6 +257,13 @@ void sim_suite_monkey(const char *out)
         ui_qp_close();
         sim_run(400);
     }
+    /* Lo que hayan dejado las apps de tiempo: aviso, temporizador,
+     * cronómetro y alarmas creadas al azar. */
+    ui_ring_dismiss();
+    tmr_cancel(ui_tmr());
+    sw_reset(ui_sw());
+    const alarm_set_t none = {0};
+    ui_alarms_set(&none);
     ui_nav_home();
     sim_run(400);
     /* Los toques pueden haber cambiado el fondo (Ajustes > Pantalla): se
@@ -266,9 +287,9 @@ void sim_suite_monkey(const char *out)
     EXPECT(sim_mem_blocks() == blocks0, "fuga tras %d acciones: %u -> %u bloques", STEPS, (unsigned)blocks0,
            (unsigned)sim_mem_blocks());
     EXPECT(sim_timer_count() == timers0, "temporizadores %d -> %d", timers0, sim_timer_count());
-    printf("mono: %d acciones (toques %d, borde %d, desde arriba %d, hacia arriba %d, volver %d, abrir %d, "
-           "bateria %d, hora %d); %u -> %u bloques\n",
-           STEPS, counts[0], counts[1], counts[2], counts[3], counts[4], counts[5], counts[6], counts[7],
+    printf("mono: %d acciones (toques %d, izquierda %d, borde %d, desde arriba %d, hacia arriba %d, volver %d, "
+           "abrir %d, bateria %d, hora %d); %u -> %u bloques\n",
+           STEPS, counts[0], counts[8], counts[1], counts[2], counts[3], counts[4], counts[5], counts[6], counts[7],
            (unsigned)blocks0, (unsigned)sim_mem_blocks());
     printf("mono: en reposo %d veces: en una pagina %d (profundidad maxima %d), panel abierto %d, "
            "con aviso o animacion de carga %d\n",

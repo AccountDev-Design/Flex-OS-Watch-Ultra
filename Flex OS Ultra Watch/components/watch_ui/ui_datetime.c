@@ -237,7 +237,7 @@ static void style_roller(lv_obj_t *r, const lv_font_t *font)
     lv_obj_set_style_text_font(r, font, LV_PART_SELECTED);
 }
 
-static lv_obj_t *roller(lv_obj_t *page, const char *opts, lv_roller_mode_t mode, const lv_font_t *font, int32_t w)
+lv_obj_t *ui_roller(lv_obj_t *page, const char *opts, lv_roller_mode_t mode, const lv_font_t *font, int32_t w)
 {
     lv_obj_t *r = lv_roller_create(page);
     style_roller(r, font);
@@ -377,11 +377,11 @@ lv_obj_t *ui_timeset_create(lv_obj_t *parent)
     }
 
     /* Hora: [HH] : [MM]; debajo, fecha: [día] [mes] [año] */
-    t->hour = roller(page, hours, LV_ROLLER_MODE_INFINITE, FLEX_FONT_TITLE, 96);
-    t->min = roller(page, mins, LV_ROLLER_MODE_INFINITE, FLEX_FONT_TITLE, 96);
-    t->day = roller(page, "1", LV_ROLLER_MODE_NORMAL, FLEX_FONT_BODY, 76);
-    t->month = roller(page, MONTHS, LV_ROLLER_MODE_NORMAL, FLEX_FONT_BODY, 100);
-    t->year = roller(page, years, LV_ROLLER_MODE_NORMAL, FLEX_FONT_BODY, 100);
+    t->hour = ui_roller(page, hours, LV_ROLLER_MODE_INFINITE, FLEX_FONT_TITLE, 96);
+    t->min = ui_roller(page, mins, LV_ROLLER_MODE_INFINITE, FLEX_FONT_TITLE, 96);
+    t->day = ui_roller(page, "1", LV_ROLLER_MODE_NORMAL, FLEX_FONT_BODY, 76);
+    t->month = ui_roller(page, MONTHS, LV_ROLLER_MODE_NORMAL, FLEX_FONT_BODY, 100);
+    t->year = ui_roller(page, years, LV_ROLLER_MODE_NORMAL, FLEX_FONT_BODY, 100);
     lv_obj_update_layout(page);
     const int32_t y_time = FLEX_HDR_H + 6;
     const int32_t h_time = lv_obj_get_height(t->hour);

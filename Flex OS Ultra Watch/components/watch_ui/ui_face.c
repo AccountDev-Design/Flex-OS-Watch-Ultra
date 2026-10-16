@@ -154,8 +154,10 @@ lv_obj_t *ui_face_create(lv_obj_t *parent)
     lv_obj_set_size(f->batt_state, LV_PCT(100), lv_font_get_line_height(FLEX_FONT_SMALL));
     lv_label_set_long_mode(f->batt_state, LV_LABEL_LONG_MODE_DOTS);
 
-    /* Arrastrar hacia abajo desde arriba abre el panel rápido. */
+    /* Arrastrar hacia abajo desde arriba abre el panel rápido; deslizar
+     * hacia la izquierda, las aplicaciones. */
     ui_qp_attach(scr);
+    ui_apps_attach(scr);
 
     f->timer = lv_timer_create(tick_cb, FACE_TICK_MS, f);
     lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, f);

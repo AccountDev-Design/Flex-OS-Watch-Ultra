@@ -17,4 +17,8 @@
 #define LV_USE_SYSMON 0
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_BUILD_EXAMPLES 0
+/* Una aserción de LVGL termina la vista previa (en vez de quedarse en un
+ * bucle infinito) para que el fallo se vea enseguida. */
+#define LV_ASSERT_HANDLER_INCLUDE <stdlib.h>
+#define LV_ASSERT_HANDLER abort();
 #endif

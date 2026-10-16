@@ -85,6 +85,7 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T40) en **una sola s
 | T49 | Tras RESET y tras apagar y encender, la hora se conserva |
 | T50 | Diferencia con el móvil a los 15 min y a las 24 h |
 | T51 | Cambiar zona y formato 12/24 h: la hora se ve bien y el RTC no cambia |
+| T52-T55 | Apps (desliza la esfera a la izquierda): cronómetro, temporizador con aviso, alarma que suena y se conserva tras reiniciar |
 
 ## Qué enviarme
 
