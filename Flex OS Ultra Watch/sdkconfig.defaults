@@ -65,3 +65,9 @@ CONFIG_LV_BUILD_EXAMPLES=n
 CONFIG_LITTLEFS_LOOKAHEAD_SIZE=512
 # Búferes de E/S de flash en RAM interna (no en PSRAM).
 CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL=y
+
+# ---------------------------------------------------------------------------
+# Wi-Fi (F5.1): búferes de Wi-Fi y lwIP en PSRAM cuando se pueda. La RAM
+# interna la necesitan los búferes DMA de la pantalla y, después, el BLE.
+# ---------------------------------------------------------------------------
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y

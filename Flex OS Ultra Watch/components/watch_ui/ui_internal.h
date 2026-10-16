@@ -108,6 +108,8 @@ lv_obj_t *ui_calc_create(lv_obj_t *parent);     /**< app Calculadora (F9.2) */
 lv_obj_t *ui_calendar_create(lv_obj_t *parent); /**< app Calendario (F9.3) */
 lv_obj_t *ui_compass_create(lv_obj_t *parent);  /**< app Flex Compass (F9.4) */
 lv_obj_t *ui_devcare_create(lv_obj_t *parent);  /**< app Device Care (F9.5) */
+lv_obj_t *ui_wifi_create(lv_obj_t *parent);     /**< Ajustes > Wi-Fi (F5.1) */
+lv_obj_t *ui_wifi_password_create(lv_obj_t *parent);
 void ui_apps_attach(lv_obj_t *face_page); /**< deslizar la esfera a la izquierda abre las apps */
 lv_obj_t *ui_stopwatch_create(lv_obj_t *parent);
 lv_obj_t *ui_timer_create(lv_obj_t *parent);

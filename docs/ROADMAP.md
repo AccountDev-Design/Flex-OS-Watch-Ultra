@@ -1,7 +1,7 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 35,0 %   [███████░░░░░░░░░░░░░]   65,0 % pendiente   (verificado en el reloj: 8,6 %)
+PROGRESO GLOBAL: 36,3 %   [███████░░░░░░░░░░░░░]   63,7 % pendiente   (verificado en el reloj: 8,6 %)
 ```
 
 El 2026-10-16 el alcance creció con el prompt maestro de migración (iconos y fondos originales, todas las apps del
@@ -98,10 +98,10 @@ Detalle y pruebas en `docs/F4-SERVICIOS.md`.
 | F4.5 Apagado de pantalla por inactividad (atenuada, DISPOFF, vuelta a la esfera), botón lateral, despertar por toque, alarma y USB. Sin reposo ligero de la CPU (F8.4, medir antes) | 1,5 | 🟡 faltan T56-T59 |
 | F4.6 Almacenamiento LittleFS en `storage` (> 16 MB): puerta por la sonda de 32 MB, prueba de escritura del sector, formateo confirmado, montaje y archivo atómico (`FLASH-32MB.md` §6) | 1 | 🟡 faltan T63-T66 |
 
-### F5 · Conectividad y Flex Phone — 0 / 17
+### F5 · Conectividad y Flex Phone — 1,5 / 17
 | Tarea | Peso | Estado |
 |---|---|---|
-| F5.1 Wi-Fi STA: conexión, credenciales, reconexión, sin bloquear la interfaz | 3 | ⬜ |
+| F5.1 Wi-Fi STA: conexión, credenciales, reconexión, sin bloquear la interfaz, hora por SNTP (`docs/F5-CONECTIVIDAD.md`) | 3 | 🟡 faltan T78-T83 |
 | F5.2 `flex_link`: cliente compatible con Flex Link v2 (descubrimiento, emparejamiento, sesión, reconexión) reutilizando los módulos puros | 4 | ⬜ |
 | F5.3 Notificaciones desde Flex Phone (recibir, listar, descartar) | 3 | ⬜ |
 | F5.4 Otras funciones del protocolo (batería del móvil, multimedia, buscar teléfono...) | 2 | ❓ D10 |
@@ -225,3 +225,4 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-16 | **30,3 %** | −6,7 | **Ampliación del alcance** (prompt maestro de migración): F3 sube de 20 a 25 (F3.5 iconos originales y lanzador, F3.6 fondos originales), F5 de 15 a 17 (F5.5 pasa a ser el transporte BLE, canal principal: 1 → 3) y se añade F9 (apps del inventario, 15). Peso total 122; puntos sin cambios (37). Global = 37 / 122. Verificado en el reloj = 10,5 / 122 = 8,6 % |
 | 2026-10-16 | **32,8 %** | +2,5 | F3.5 (iconos originales y lanzador, 50 % de 3), F3.6 (fondos originales y selector, 50 % de 2) y F9.1 (app Reloj, 50 % de 1) compilan y pasan las pruebas de PC y de la vista previa. Puntos 40 / 122 |
 | 2026-10-16 | **35,0 %** | +2,25 | F9.2 Calculadora (50 % de 1,5), F9.3 Calendario (50 % de 1), F9.4 Flex Compass (50 % de 1) y F9.5 Device Care (50 % de 2) compilan y pasan las pruebas de PC y de la vista previa. Puntos 42,75 / 122 |
+| 2026-10-16 | **36,3 %** | +1,5 | F5.1 Wi-Fi (watch_net: servicio de una tarea, redes guardadas con CRC, reintentos, SNTP al RTC, Ajustes > Wi-Fi con teclado propio y mosaico del panel) compila y pasa las pruebas de PC y de la vista previa: 50 % de 3. Puntos 44,25 / 122 |

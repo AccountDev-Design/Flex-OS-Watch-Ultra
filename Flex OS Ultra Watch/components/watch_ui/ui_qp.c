@@ -8,7 +8,9 @@
  *  - Ajustes: cierra el panel y abre la página de Ajustes.
  *  - Batería: el % y el estado reales (de la caché de ui_system); abre
  *    Ajustes > Batería.
- *  - Wi-Fi y Bluetooth: marcados "Pendiente" (F5); no reciben toques.
+ *  - Wi-Fi: tocarlo lo enciende o lo apaga; debajo, la red o el estado real
+ *    (watch_net, F5.1). Activo (acento) con el Wi-Fi encendido.
+ *  - Bluetooth: marcado "Pendiente" hasta F5.5; no recibe toques.
  *
  * Gestos (ui_gesture.c): arrastrar hacia abajo desde la franja superior de
  * la esfera abre; arrastrar hacia arriba en el panel o tocar el asa inferior
@@ -21,10 +23,13 @@
  */
 #include "ui_internal.h"
 
+#include <string.h>
+
 #include "flex_battery_icon.h"
 #include "flex_safe.h"
 #include "ui_gesture.h"
 #include "ui_logic.h"
+#include "watch_net.h"
 #include "watch_settings.h"
 #include "watch_theme.h"
 #include "watch_time.h"
@@ -67,6 +72,8 @@ static struct {
     lv_obj_t *batt_tile_icon;
     lv_obj_t *batt_tile_pct;
     lv_obj_t *batt_tile_state;
+    lv_obj_t *wifi_tile;
+    lv_obj_t *wifi_sub;
     lv_timer_t *timer;
     ui_drag_t drag;
     ui_page_create_t after_close; /* página que se abre al terminar de cerrar */
@@ -118,6 +125,21 @@ static void update(void)
         }
         lv_label_set_text(s_qp.date, d);
         fit_header();
+    }
+    if (s_qp.wifi_tile) {
+        watch_net_status_t ns;
+        watch_net_get(&ns);
+        const char *sub = ns.state == NET_CONNECTED ? ns.ssid : watch_net_state_text(&ns);
+        if (strcmp(lv_label_get_text(s_qp.wifi_sub), sub) != 0) {
+            lv_label_set_text(s_qp.wifi_sub, sub);
+        }
+        if (ns.enabled != lv_obj_has_state(s_qp.wifi_tile, LV_STATE_CHECKED)) {
+            if (ns.enabled) {
+                lv_obj_add_state(s_qp.wifi_tile, LV_STATE_CHECKED);
+            } else {
+                lv_obj_remove_state(s_qp.wifi_tile, LV_STATE_CHECKED);
+            }
+        }
     }
 
 }
@@ -192,6 +214,23 @@ static lv_obj_t *row_box(lv_obj_t *parent)
     return b;
 }
 
+/* Wi-Fi: tocar el mosaico lo enciende o lo apaga (QSID_WIFI es QT_TOGGLE). */
+static void wifi_cb(lv_event_t *e)
+{
+    (void)e;
+    watch_net_status_t ns;
+    watch_net_get(&ns);
+    watch_net_set_enabled(!ns.enabled);
+    /* Respuesta en el mismo toque; el refresco (1 s) pone después el estado real. */
+    if (ns.enabled) {
+        lv_obj_remove_state(s_qp.wifi_tile, LV_STATE_CHECKED);
+        lv_label_set_text(s_qp.wifi_sub, "Apagado");
+    } else {
+        lv_obj_add_state(s_qp.wifi_tile, LV_STATE_CHECKED);
+        lv_label_set_text(s_qp.wifi_sub, "Encendiendo");
+    }
+}
+
 static void tile_pending(lv_obj_t *t)
 {
     lv_obj_add_state(t, LV_STATE_DISABLED);
@@ -209,6 +248,8 @@ static void destroy(void)
         lv_timer_delete(s_qp.timer);
         s_qp.timer = NULL;
     }
+    s_qp.wifi_tile = NULL;
+    s_qp.wifi_sub = NULL;
     if (s_qp.root) {
         lv_obj_delete_async(s_qp.root);
         s_qp.root = NULL;
@@ -321,8 +362,8 @@ static void build(void)
     s_qp.batt_icon = flex_battery_icon_create(right, 37, 17);
 
     /* Mosaicos */
-    lv_obj_t *wifi = tile(root, TILE_X0, TILE_Y0, FLEX_ICON_WIFI, FLEX_C_CAT_NET, "Wi-Fi", "", NULL);
-    tile_pending(wifi);
+    s_qp.wifi_tile = tile(root, TILE_X0, TILE_Y0, FLEX_ICON_WIFI, FLEX_C_CAT_NET, "Wi-Fi", "", &s_qp.wifi_sub);
+    lv_obj_add_event_cb(s_qp.wifi_tile, wifi_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *bt = tile(root, TILE_X0 + TILE_W + TILE_GAP, TILE_Y0, FLEX_ICON_BLUETOOTH, FLEX_C_CAT_NET,
                         "Bluetooth", "", NULL);
     tile_pending(bt);

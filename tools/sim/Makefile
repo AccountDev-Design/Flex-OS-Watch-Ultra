@@ -28,7 +28,8 @@ CFLAGS := -std=gnu11 -O1 -g -Wall $(SANFLAGS) -DLV_CONF_INCLUDE_SIMPLE -DLV_LVGL
           -I$(FW)/components/watch_power/include -I$(FW)/components/watch_diag/include \
           -I$(FW)/components/watch_time/include -I$(FW)/components/watch_settings/include \
           -I$(FW)/components/watch_imu/include \
-          -I$(FW)/components/watch_storage/include
+          -I$(FW)/components/watch_storage/include \
+          -I$(FW)/components/watch_net/include
 
 LVGL_SRC := $(shell find $(LVGL_DIR)/src -name '*.c')
 APP_SRC := $(wildcard sim_*.c) \
@@ -42,6 +43,8 @@ APP_SRC := $(wildcard sim_*.c) \
            $(FW)/components/watch_settings/ws_logic.c \
            $(FW)/components/watch_imu/qmi8658.c \
            $(FW)/components/watch_storage/stg_logic.c \
+           $(FW)/components/watch_net/net_logic.c \
+           $(FW)/components/watch_net/net_text.c \
            $(FW)/components/watch_diag/flash_probe_logic.c
 
 LVGL_OBJ := $(patsubst $(LVGL_DIR)/%.c,$(BUILD)/lvgl/%.o,$(LVGL_SRC))

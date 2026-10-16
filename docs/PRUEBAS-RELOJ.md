@@ -11,6 +11,7 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | T46-T66 | [F4-SERVICIOS.md](F4-SERVICIOS.md) |
 | T67-T73 | [F3-IDENTIDAD-ORIGINAL.md](F3-IDENTIDAD-ORIGINAL.md) (iconos, lanzador, Reloj y fondos) |
 | T74-T77 | [F9-APPS.md](F9-APPS.md) (Calculadora, Calendario, Flex Compass, Device Care) |
+| T78-T83 | [F5-CONECTIVIDAD.md](F5-CONECTIVIDAD.md) (Wi-Fi) |
 | Flash de 32 MB | [FLASH-32MB.md](FLASH-32MB.md) |
 
 **Verificado en el reloj hasta ahora** (fotos y vídeo del 2026-10-15): pantalla, táctil, LVGL y la sonda de 32 MB (T10). Lo demás no. Compilar y pasar las pruebas de PC no prueba el reloj: cada resultado que me envíes es lo que convierte una tarea del 50 % al 100 %.
@@ -106,6 +107,12 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | Pruebas | Qué mirar |
 |---|---|
 | T74-T77 | Calculadora (25 + 10, 5 / 0), Calendario (hoy y cambio de mes), Flex Compass (Pitch/Roll al inclinar, sin rumbo), Device Care (puntuación y semáforos) |
+
+## 9. Wi-Fi (`F5-CONECTIVIDAD.md`)
+
+| Pruebas | Qué mirar |
+|---|---|
+| T78-T83 | Encender y listar redes, conectar con contraseña (y que reconecte tras reiniciar), contraseña mal, hora por Internet, señal perdida y reconexión, mosaico del panel. Copiar las líneas `watch_net` del registro |
 
 ## Qué enviarme
 

@@ -235,6 +235,25 @@ lv_obj_t *sim_find_label(lv_obj_t *obj, const char *text)
     return NULL;
 }
 
+static lv_obj_t *find_nth(lv_obj_t *obj, const char *text, int *n)
+{
+    if (lv_obj_check_type(obj, &lv_label_class) && strcmp(lv_label_get_text(obj), text) == 0 && (*n)-- == 0) {
+        return obj;
+    }
+    for (uint32_t i = 0; i < lv_obj_get_child_count(obj); i++) {
+        lv_obj_t *r = find_nth(lv_obj_get_child(obj, (int32_t)i), text, n);
+        if (r) {
+            return r;
+        }
+    }
+    return NULL;
+}
+
+lv_obj_t *sim_find_label_n(lv_obj_t *obj, const char *text, int nth)
+{
+    return find_nth(obj, text, &nth);
+}
+
 int sim_timer_count(void)
 {
     int n = 0;
@@ -443,7 +462,7 @@ int main(int argc, char **argv)
         {"tema", sim_suite_theme},       {"arranque", sim_suite_boot}, {"energia", sim_suite_power},
         {"esfera", sim_suite_face},      {"nav", sim_suite_nav},       {"panel", sim_suite_qp},
         {"ajustes", sim_suite_settings}, {"hora", sim_suite_datetime}, {"apps", sim_suite_apps},
-        {"pantalla", sim_suite_screen},
+        {"pantalla", sim_suite_screen},  {"wifi", sim_suite_wifi},
         {"mono", sim_suite_monkey},      {"visual", sim_suite_visual}, {"banco", sim_suite_bench},
     };
     for (size_t i = 0; i < sizeof(suites) / sizeof(suites[0]); i++) {

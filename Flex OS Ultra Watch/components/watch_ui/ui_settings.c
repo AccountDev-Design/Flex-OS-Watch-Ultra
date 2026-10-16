@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include "ui_logic.h"
+#include "watch_net.h"
 #include "watch_settings.h"
 #include "watch_theme.h"
 #include "watch_time.h"
@@ -14,6 +15,7 @@
 #define SETTINGS_TICK_MS 1000
 
 typedef struct {
+    lv_obj_t *wifi;
     lv_obj_t *display;
     lv_obj_t *time;
     lv_obj_t *battery;
@@ -68,6 +70,9 @@ static void refresh(settings_t *s)
     } else {
         watch_theme_row_set_value(s->time, "Sin configurar");
     }
+    watch_net_status_t ns;
+    watch_net_get(&ns);
+    watch_theme_row_set_value(s->wifi, ns.state == NET_CONNECTED ? ns.ssid : watch_net_state_text(&ns));
     watch_power_snapshot_t snap;
     if (ui_system_power(&snap) && snap.track.percent >= 0) {
         snprintf(buf, sizeof(buf), "%d %%", snap.track.percent);
@@ -102,6 +107,7 @@ lv_obj_t *ui_settings_create(lv_obj_t *parent)
     watch_theme_page(page);
     watch_theme_header(page, "Ajustes", back_cb, NULL);
     lv_obj_t *list = watch_theme_list(page);
+    s->wifi = row(list, FLEX_ICON_WIFI, FLEX_C_CAT_NET, "Wi-Fi", "", ui_wifi_create);
     s->display = row(list, FLEX_ICON_SUN, FLEX_C_CAT_SUN, "Pantalla", "", ui_display_page_create);
     s->time = row(list, FLEX_ICON_CLOCK, FLEX_C_CAT_BLUE, "Fecha y hora", "", ui_datetime_create);
     s->battery = row(list, FLEX_ICON_BOLT, FLEX_C_CAT_GREEN, "Batería", "", ui_battery_page_create);

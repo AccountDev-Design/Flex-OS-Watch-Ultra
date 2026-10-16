@@ -57,6 +57,8 @@ uint32_t sim_flush_count(void);
 
 /** Busca en el árbol de obj una etiqueta con exactamente ese texto. */
 lv_obj_t *sim_find_label(lv_obj_t *obj, const char *text);
+/** La etiqueta número nth (0 = la primera) con ese texto. */
+lv_obj_t *sim_find_label_n(lv_obj_t *obj, const char *text, int nth);
 
 /** Caracteres de las etiquetas de obj (y sus hijos) que su fuente no puede dibujar. */
 int sim_missing_glyphs(lv_obj_t *obj, const char *where);
@@ -119,4 +121,5 @@ void sim_suite_theme(const char *out);
 void sim_suite_face(const char *out);
 void sim_suite_datetime(const char *out);
 void sim_suite_apps(const char *out);
+void sim_suite_wifi(const char *out);
 void sim_suite_screen(const char *out);

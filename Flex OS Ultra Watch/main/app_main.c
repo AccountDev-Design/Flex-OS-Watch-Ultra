@@ -13,6 +13,8 @@
  *   7. sonda de flash de solo lectura (watch_diag) y, si la permite, LittleFS
  *      en "storage" (watch_storage: monta; nunca formatea solo)
  *   8. interfaz: del splash a la esfera (watch_ui)
+ * El Wi-Fi (watch_net) arranca tras los ajustes y solo enciende la radio si el
+ * usuario la dejó encendida.
  */
 #include "esp_app_desc.h"
 #include "esp_err.h"
@@ -23,6 +25,7 @@
 #include "watch_diag.h"
 #include "watch_display.h"
 #include "watch_imu.h"
+#include "watch_net.h"
 #include "watch_power.h"
 #include "watch_settings.h"
 #include "watch_storage.h"
@@ -120,6 +123,12 @@ void app_main(void)
     watch_settings_t ws;
     watch_settings_get(&ws);
     watch_theme_set_wallpaper((flex_wall_t)ws.wallpaper);
+
+    /* Wi-Fi (F5.1): la radio solo se enciende si el usuario la dejó encendida. */
+    err = watch_net_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Wi-Fi no disponible: %s", esp_err_to_name(err));
+    }
 
     ESP_ERROR_CHECK(bsp_i2c_init());
 

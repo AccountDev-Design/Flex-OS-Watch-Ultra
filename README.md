@@ -19,7 +19,7 @@ Detalles, archivos generados y avisos: [`Flex OS Ultra Watch/README.md`](Flex%20
 
 ## Estado
 
-**Progreso global: 35,0 %** (65,0 % pendiente), del que un 8,6 % está verificado en el reloj. El alcance se amplió el 2026-10-16 (iconos y fondos originales, todas las apps del inventario, BLE): ver el historial de [docs/ROADMAP.md](docs/ROADMAP.md).
+**Progreso global: 36,3 %** (63,7 % pendiente), del que un 8,6 % está verificado en el reloj. El alcance se amplió el 2026-10-16 (iconos y fondos originales, todas las apps del inventario, BLE): ver el historial de [docs/ROADMAP.md](docs/ROADMAP.md).
 
 - Referencia única: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Ahí están el plan completo, los pesos, las decisiones pendientes y el historial.
 - F2 (batería y energía), F3 (interfaz, tema y navegación) y F4 (servicios) están hechas en software: compilan y pasan las pruebas de PC y de la vista previa.
@@ -79,6 +79,7 @@ simulados**: sirven para probar la interfaz, no el hardware.
 - [docs/INVENTARIO-APPS.md](docs/INVENTARIO-APPS.md): inventario de las 19 apps de Flex OS Ultra y su estado en el reloj
 - [docs/F3-IDENTIDAD-ORIGINAL.md](docs/F3-IDENTIDAD-ORIGINAL.md): iconos originales, lanzador, app Reloj y fondos (F3.5, F3.6, F9.1)
 - [docs/F9-APPS.md](docs/F9-APPS.md): Calculadora, Calendario, Flex Compass y Device Care (F9.2-F9.5)
+- [docs/F5-CONECTIVIDAD.md](docs/F5-CONECTIVIDAD.md): Wi-Fi (F5.1) y lo que sigue de Flex Phone y BLE
 - [docs/PRUEBAS-RELOJ.md](docs/PRUEBAS-RELOJ.md): **próxima prueba en el reloj**, todas las pruebas pendientes en orden
 - [docs/F4-SERVICIOS.md](docs/F4-SERVICIOS.md): ajustes, hora, apps de tiempo, sensores, apagado de pantalla y almacenamiento (F4)
 - [docs/B4-CALIDAD.md](docs/B4-CALIDAD.md): respuesta de carga, rendimiento, negro AMOLED, esquinas e integridad visual (B4)
