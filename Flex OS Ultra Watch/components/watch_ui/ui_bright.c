@@ -1,8 +1,9 @@
 /*
  * ui_bright — control de brillo compartido por el panel rápido y la página
  * Pantalla. Control real del panel (DCS 0x51, por watch_ui_boot_info_t),
- * mínimo 10 % y envío limitado mientras se arrastra (ui_logic.c). Cada
- * control guarda su estado y lo libera al borrarse.
+ * mínimo 10 % y envío limitado mientras se arrastra (ui_logic.c). Al soltar,
+ * el valor se guarda en los ajustes persistentes (watch_settings, F4.1).
+ * Cada control guarda su estado y lo libera al borrarse.
  *
  * Sin control de brillo disponible se muestra "No disponible" y el control
  * queda desactivado: no se simula.
@@ -10,6 +11,7 @@
 #include "ui_internal.h"
 
 #include "ui_logic.h"
+#include "watch_settings.h"
 #include "watch_theme.h"
 
 #define BRIGHT_H 64
@@ -31,6 +33,12 @@ static void apply(lv_obj_t *sl, bright_t *b, bool final)
             b->applied = v;
         }
         b->last_ms = now;
+    }
+    if (final && b->applied == v) {
+        watch_settings_t ws;
+        watch_settings_get(&ws);
+        ws.brightness = (uint8_t)v;
+        watch_settings_update(&ws); /* sin cambio real no escribe nada */
     }
 }
 

@@ -23,6 +23,8 @@ static const int32_t SIZES[] = {20, 32, 64};
 static const char *const ICON_NAMES[FLEX_ICON_COUNT_] = {
     "rayo", "check", "cruz", "engranaje", "sol", "wifi", "bluetooth",
     "chevron_izq", "chevron_der", "info", "pulso", "reloj",
+    "imagen", "esfera", "globo", "campana", "reloj_arena", "cronometro", "rejilla", "movimiento",
+    "luna", "almacen", "mas", "menos", "reproducir", "pausa", "detener", "bandera",
 };
 
 static void holder_draw_cb(lv_event_t *e)
@@ -41,6 +43,38 @@ static bool lit(int x, int y)
     return ((c >> 11) & 0x1F) > 6 || ((c >> 5) & 0x3F) > 12 || (c & 0x1F) > 6;
 }
 
+static void check_icon(const lv_area_t *b, int sz, int i)
+{
+    int inside = 0, outside = 0;
+    int32_t bx1 = SIM_W, by1 = SIM_H, bx2 = -1, by2 = -1;
+    for (int32_t py = b->y1 - MARGIN; py <= b->y2 + MARGIN; py++) {
+        for (int32_t px = b->x1 - MARGIN; px <= b->x2 + MARGIN; px++) {
+            if (!lit(px, py)) {
+                continue;
+            }
+            if (px < b->x1 || px > b->x2 || py < b->y1 || py > b->y2) {
+                outside++;
+                continue;
+            }
+            inside++;
+            bx1 = px < bx1 ? px : bx1;
+            bx2 = px > bx2 ? px : bx2;
+            by1 = py < by1 ? py : by1;
+            by2 = py > by2 ? py : by2;
+        }
+    }
+    EXPECT(outside == 0, "icono %s a %d px pinta %d px fuera de su caja", ICON_NAMES[i], sz, outside);
+    EXPECT(inside >= sz, "icono %s a %d px casi vacio (%d px)", ICON_NAMES[i], sz, inside);
+    if (inside > 0) {
+        const int32_t span = (bx2 - bx1 + 1) > (by2 - by1 + 1) ? (bx2 - bx1 + 1) : (by2 - by1 + 1);
+        EXPECT(span * 2 >= sz, "icono %s a %d px ocupa solo %d px", ICON_NAMES[i], sz, (int)span);
+        const int32_t cx = (bx1 + bx2) / 2 - (b->x1 + b->x2) / 2;
+        const int32_t cy = (by1 + by2) / 2 - (b->y1 + b->y2) / 2;
+        EXPECT(LV_ABS(cx) * 5 <= sz && LV_ABS(cy) * 5 <= sz, "icono %s a %d px descentrado (%d, %d)", ICON_NAMES[i],
+               sz, (int)cx, (int)cy);
+    }
+}
+
 static void check_icons(const char *out)
 {
     lv_obj_t *scr = lv_obj_create(NULL);
@@ -49,62 +83,39 @@ static void check_icons(const char *out)
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
     lv_screen_load(scr);
 
-    /* Rejilla: una columna por icono y tamaño, filas de iconos. */
-    lv_area_t boxes[FLEX_ICON_COUNT_][N_SIZES];
-    int32_t y = 4;
+    /* Rejilla por tamaño; si no caben todos, en varias pantallas. */
     for (int s = 0; s < N_SIZES; s++) {
         const int32_t cell = SIZES[s] + 2 * MARGIN;
-        int32_t x = 4;
-        for (int i = 0; i < FLEX_ICON_COUNT_; i++) {
-            if (x + cell > SIM_W) {
-                x = 4;
-                y += cell + 2;
-            }
-            lv_obj_t *h = lv_obj_create(scr);
-            lv_obj_remove_style_all(h);
-            lv_obj_set_pos(h, x, y);
-            lv_obj_set_size(h, cell, cell);
-            lv_obj_add_event_cb(h, holder_draw_cb, LV_EVENT_DRAW_MAIN, (void *)(intptr_t)i);
-            boxes[i][s] = (lv_area_t){x + MARGIN, y + MARGIN, x + MARGIN + SIZES[s] - 1, y + MARGIN + SIZES[s] - 1};
-            x += cell + 2;
-        }
-        y += cell + 8;
-    }
-    lv_refr_now(NULL);
-    sim_save(out, "f3_iconos");
-
-    for (int s = 0; s < N_SIZES; s++) {
-        for (int i = 0; i < FLEX_ICON_COUNT_; i++) {
-            const lv_area_t *b = &boxes[i][s];
-            int inside = 0, outside = 0;
-            int32_t bx1 = SIM_W, by1 = SIM_H, bx2 = -1, by2 = -1;
-            for (int32_t py = b->y1 - MARGIN; py <= b->y2 + MARGIN; py++) {
-                for (int32_t px = b->x1 - MARGIN; px <= b->x2 + MARGIN; px++) {
-                    if (!lit(px, py)) {
-                        continue;
-                    }
-                    if (px < b->x1 || px > b->x2 || py < b->y1 || py > b->y2) {
-                        outside++;
-                        continue;
-                    }
-                    inside++;
-                    bx1 = px < bx1 ? px : bx1;
-                    bx2 = px > bx2 ? px : bx2;
-                    by1 = py < by1 ? py : by1;
-                    by2 = py > by2 ? py : by2;
+        int first = 0, page = 0;
+        while (first < FLEX_ICON_COUNT_) {
+            lv_obj_clean(scr);
+            lv_area_t boxes[FLEX_ICON_COUNT_];
+            int32_t x = 4, y = 4;
+            int last = first;
+            for (; last < FLEX_ICON_COUNT_; last++) {
+                if (x + cell > SIM_W) {
+                    x = 4;
+                    y += cell + 2;
                 }
+                if (y + cell > SIM_H) {
+                    break;
+                }
+                lv_obj_t *h = lv_obj_create(scr);
+                lv_obj_remove_style_all(h);
+                lv_obj_set_pos(h, x, y);
+                lv_obj_set_size(h, cell, cell);
+                lv_obj_add_event_cb(h, holder_draw_cb, LV_EVENT_DRAW_MAIN, (void *)(intptr_t)last);
+                boxes[last] = (lv_area_t){x + MARGIN, y + MARGIN, x + MARGIN + SIZES[s] - 1, y + MARGIN + SIZES[s] - 1};
+                x += cell + 2;
             }
-            const int32_t sz = SIZES[s];
-            EXPECT(outside == 0, "icono %s a %d px pinta %d px fuera de su caja", ICON_NAMES[i], (int)sz, outside);
-            EXPECT(inside >= sz, "icono %s a %d px casi vacio (%d px)", ICON_NAMES[i], (int)sz, inside);
-            if (inside > 0) {
-                const int32_t span = (bx2 - bx1 + 1) > (by2 - by1 + 1) ? (bx2 - bx1 + 1) : (by2 - by1 + 1);
-                EXPECT(span * 2 >= sz, "icono %s a %d px ocupa solo %d px", ICON_NAMES[i], (int)sz, (int)span);
-                const int32_t cx = (bx1 + bx2) / 2 - (b->x1 + b->x2) / 2;
-                const int32_t cy = (by1 + by2) / 2 - (b->y1 + b->y2) / 2;
-                EXPECT(LV_ABS(cx) * 5 <= sz && LV_ABS(cy) * 5 <= sz, "icono %s a %d px descentrado (%d, %d)",
-                       ICON_NAMES[i], (int)sz, (int)cx, (int)cy);
+            lv_refr_now(NULL);
+            char name[32];
+            snprintf(name, sizeof(name), "f3_iconos_%d_%d", (int)SIZES[s], page++);
+            sim_save(out, name);
+            for (int i = first; i < last; i++) {
+                check_icon(&boxes[i], (int)SIZES[s], i);
             }
+            first = last;
         }
     }
     lv_screen_load(s_orig);

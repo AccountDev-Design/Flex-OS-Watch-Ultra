@@ -244,6 +244,17 @@ void sim_suite_monkey(const char *out)
         sim_run(400);
     }
     ui_nav_home();
+    sim_run(400);
+    /* Los toques pueden haber cambiado el fondo (Ajustes > Pantalla): se
+     * vuelve al inicial para comparar la memoria con la misma esfera. */
+    watch_settings_t ws;
+    watch_settings_get(&ws);
+    if (ws.wallpaper != FLEX_WALL_BLACK) {
+        ws.wallpaper = FLEX_WALL_BLACK;
+        watch_settings_update(&ws);
+        watch_theme_set_wallpaper(FLEX_WALL_BLACK);
+        ui_nav_replace_root(ui_face_create);
+    }
     sim_scenario(84, 4085, BATT_STATE_DISCHARGING, BATT_LEVEL_NORMAL, false);
     sim_power.track.charge_events = s_charge_events;
     sim_set_time(WATCH_TIME_OK, 2026, 10, 15, 9, 41, 0);

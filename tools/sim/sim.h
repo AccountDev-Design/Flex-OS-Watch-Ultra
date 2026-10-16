@@ -9,6 +9,7 @@
 #include "flex_tokens.h"
 #include "watch_power.h"
 #include "watch_time_types.h"
+#include "watch_settings.h"
 
 #define SIM_W FLEX_SCREEN_W
 #define SIM_H FLEX_SCREEN_H
@@ -64,6 +65,10 @@ void sim_check_glyphs(lv_obj_t *obj, const char *where);
 int sim_timer_count(void);
 
 /* Brillo simulado: valor aplicado y comandos enviados al "panel". */
+/* Ajustes persistentes en RAM (sim_ws.c) */
+extern int sim_ws_updates;
+void sim_ws_reset(const watch_settings_t *s); /* NULL = valores por defecto */
+
 extern int sim_brightness;
 extern int sim_brightness_calls;
 int sim_brightness_get(void);

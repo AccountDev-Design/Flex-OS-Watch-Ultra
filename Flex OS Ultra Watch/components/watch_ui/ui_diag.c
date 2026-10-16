@@ -7,12 +7,14 @@
  *  - Flash: tamaño declarado, identificador y la sonda de >16 MB de B1.
  *  - Reloj: estado del servicio de hora y registros crudos del PCF85063.
  *  - Batería: lecturas, errores y tiempos del servicio del AXP2101.
+ *  - Ajustes guardados (NVS): estado, escrituras y errores (F4.1).
  * Sustituye a la pantalla de inicio de B1 (con sus mismos datos).
  */
 #include "ui_internal.h"
 
 #include <stdio.h>
 #include "ui_logic.h"
+#include "watch_settings.h"
 #include "watch_theme.h"
 #include "watch_time.h"
 
@@ -29,6 +31,8 @@ typedef struct {
     lv_obj_t *pwr_reads;
     lv_obj_t *pwr_i2c;
     lv_obj_t *pwr_stack;
+    lv_obj_t *ws_state;
+    lv_obj_t *ws_writes;
 } diag_t;
 
 static void back_cb(lv_event_t *e)
@@ -97,9 +101,25 @@ static void refresh(diag_t *d)
     }
 }
 
+static void refresh_settings(diag_t *d)
+{
+    char buf[48];
+    watch_settings_stats_t st;
+    watch_settings_stats(&st);
+    if (!st.nvs_ok) {
+        snprintf(buf, sizeof(buf), "NVS no disponible");
+    } else {
+        snprintf(buf, sizeof(buf), "%s%s", st.loaded ? "leídos" : "por defecto", st.pending ? " · pendiente" : "");
+    }
+    watch_theme_info_set(d->ws_state, buf);
+    snprintf(buf, sizeof(buf), "%lu · errores %lu", (unsigned long)st.commits, (unsigned long)st.errors);
+    watch_theme_info_set(d->ws_writes, buf);
+}
+
 static void tick_cb(lv_timer_t *t)
 {
     refresh(lv_timer_get_user_data(t));
+    refresh_settings(lv_timer_get_user_data(t));
 }
 
 static void delete_cb(lv_event_t *e)
@@ -160,7 +180,12 @@ lv_obj_t *ui_diag_create(lv_obj_t *parent)
     d->pwr_i2c = watch_theme_info_row(list, "Lectura I2C", "--");
     d->pwr_stack = watch_theme_info_row(list, "Pila libre mínima", "--");
 
+    watch_theme_section(list, "Ajustes guardados (NVS)");
+    d->ws_state = watch_theme_info_row(list, "Estado", "--");
+    d->ws_writes = watch_theme_info_row(list, "Escrituras", "--");
+
     refresh(d);
+    refresh_settings(d);
     lv_obj_add_event_cb(page, delete_cb, LV_EVENT_DELETE, d);
     ui_page_timer(page, tick_cb, DIAG_TICK_MS, d);
     return page;

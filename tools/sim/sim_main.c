@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lvgl_private.h"
 #include "sim.h"
 #include "watch_diag.h"
 #include "watch_time.h"
@@ -162,8 +163,14 @@ size_t sim_mem_used(void)
     return m.total_size - m.free_size;
 }
 
+/* Bloques de LVGL en uso, sin contar las cachés (círculos del dibujo por
+ * software, imágenes): crecen al dibujar por primera vez un radio o una
+ * imagen y no son fugas. */
 uint32_t sim_mem_blocks(void)
 {
+    lv_draw_sw_mask_cleanup();
+    lv_image_cache_drop(NULL);
+    lv_image_header_cache_drop(NULL);
     lv_mem_monitor_t m;
     lv_mem_monitor(&m);
     return m.used_cnt;

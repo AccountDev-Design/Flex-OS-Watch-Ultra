@@ -24,6 +24,22 @@ typedef enum {
     FLEX_ICON_INFO,         /**< Acerca de */
     FLEX_ICON_PULSE,        /**< Diagnóstico */
     FLEX_ICON_CLOCK,        /**< hora */
+    FLEX_ICON_IMAGE,        /**< fondo */
+    FLEX_ICON_WATCH,        /**< esfera */
+    FLEX_ICON_GLOBE,        /**< zona horaria */
+    FLEX_ICON_BELL,         /**< alarmas */
+    FLEX_ICON_HOURGLASS,    /**< temporizador */
+    FLEX_ICON_STOPWATCH,    /**< cronómetro */
+    FLEX_ICON_GRID,         /**< aplicaciones */
+    FLEX_ICON_MOTION,       /**< sensores */
+    FLEX_ICON_MOON,         /**< apagado de pantalla */
+    FLEX_ICON_STORAGE,      /**< almacenamiento */
+    FLEX_ICON_PLUS,
+    FLEX_ICON_MINUS,
+    FLEX_ICON_PLAY,
+    FLEX_ICON_PAUSE,
+    FLEX_ICON_STOP,
+    FLEX_ICON_FLAG,         /**< vuelta del cronómetro */
     FLEX_ICON_COUNT_
 } flex_icon_t;
 

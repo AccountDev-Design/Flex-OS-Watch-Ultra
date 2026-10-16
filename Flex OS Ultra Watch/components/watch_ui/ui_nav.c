@@ -41,7 +41,10 @@ static struct {
     int depth;
     nav_op_t op;
     ui_drag_t drag;
+    ui_page_create_t root_pending; /* raíz que rehacer al terminar la animación */
 } s_nav;
+
+static bool do_replace_root(ui_page_create_t root);
 
 static lv_obj_t *top_page(void)
 {
@@ -99,6 +102,11 @@ static void finish(void)
         break;
     }
     s_nav.op = NAV_IDLE;
+    if (s_nav.root_pending) {
+        ui_page_create_t root = s_nav.root_pending;
+        s_nav.root_pending = NULL;
+        do_replace_root(root);
+    }
 }
 
 static void anim_done_cb(lv_anim_t *a)
@@ -295,6 +303,41 @@ void ui_nav_home(void)
     s_nav.pages[1] = top;
     s_nav.depth = 2;
     animate(NAV_POPPING, 0, FLEX_SCREEN_W, FLEX_ANIM_APP_CLOSE_MS);
+}
+
+bool ui_nav_replace_root(ui_page_create_t root)
+{
+    if (!s_nav.screen || s_nav.depth < 1) {
+        return false;
+    }
+    if (s_nav.op != NAV_IDLE) {
+        /* En plena animación o arrastre: se hace al terminar (finish). */
+        s_nav.root_pending = root;
+        return true;
+    }
+    return do_replace_root(root);
+}
+
+static bool do_replace_root(ui_page_create_t root)
+{
+    if (!s_nav.screen || s_nav.depth < 1) {
+        return false;
+    }
+    lv_obj_t *old = s_nav.pages[0];
+    lv_obj_t *page = root(s_nav.screen);
+    if (!page) {
+        return false;
+    }
+    /* Mismo sitio y visibilidad que la raíz anterior (debajo de las páginas
+     * abiertas, que no se tocan). */
+    lv_obj_move_to_index(page, 0);
+    lv_obj_set_x(page, lv_obj_get_x(old));
+    if (lv_obj_has_flag(old, LV_OBJ_FLAG_HIDDEN)) {
+        lv_obj_add_flag(page, LV_OBJ_FLAG_HIDDEN);
+    }
+    s_nav.pages[0] = page;
+    lv_obj_delete(old);
+    return true;
 }
 
 int ui_nav_depth(void)

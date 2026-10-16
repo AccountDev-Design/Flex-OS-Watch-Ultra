@@ -83,6 +83,7 @@ void sim_suite_settings(const char *out)
         }
     }
     EXPECT(sl, "la pagina Pantalla no tiene control de brillo");
+    sim_ws_reset(NULL);
     if (sl) {
         lv_area_t a;
         lv_obj_get_coords(sl, &a);
@@ -92,6 +93,35 @@ void sim_suite_settings(const char *out)
         EXPECT(sim_brightness < 70 && sim_brightness >= 10, "el brillo no bajo desde Pantalla (%d)", sim_brightness);
     }
     const int bright = sim_brightness;
+    /* F4.1: se guarda una sola vez, al soltar, con el valor aplicado. */
+    watch_settings_t ws;
+    watch_settings_get(&ws);
+    EXPECT(sim_ws_updates == 1, "el brillo se guardo %d veces (esperado 1, al soltar)", sim_ws_updates);
+    EXPECT(ws.brightness == bright, "brillo guardado %d, aplicado %d", ws.brightness, bright);
+
+    /* Fondo: Negro -> Onyx rehace la esfera de debajo y se guarda; y vuelta. */
+    lv_obj_t *wrow = NULL;
+    for (lv_obj_t *o = sim_find_label(ui_nav_top(), "Negro"); o; o = lv_obj_get_parent(o)) {
+        if (lv_obj_has_flag(o, LV_OBJ_FLAG_CLICKABLE)) {
+            wrow = o;
+            break;
+        }
+    }
+    EXPECT(wrow, "la pagina Pantalla no tiene la fila Fondo");
+    if (wrow) {
+        lv_obj_t *face0 = ui_nav_page(0);
+        lv_obj_send_event(wrow, LV_EVENT_CLICKED, NULL);
+        sim_run(100);
+        watch_settings_get(&ws);
+        EXPECT(ws.wallpaper == FLEX_WALL_ONYX, "el fondo Onyx no se guardo");
+        EXPECT(sim_find_label(ui_nav_top(), "Onyx"), "la fila no muestra Onyx");
+        EXPECT(ui_nav_page(0) != face0 && lv_obj_get_index(ui_nav_page(0)) == 0, "la esfera no se rehizo debajo");
+        EXPECT(lv_obj_has_flag(ui_nav_page(0), LV_OBJ_FLAG_HIDDEN), "la esfera nueva se ve encima de Ajustes");
+        lv_obj_send_event(wrow, LV_EVENT_CLICKED, NULL);
+        sim_run(100);
+        watch_settings_get(&ws);
+        EXPECT(ws.wallpaper == FLEX_WALL_BLACK, "no se volvio al fondo negro");
+    }
     back();
     sim_run(1100);
     char want[24];

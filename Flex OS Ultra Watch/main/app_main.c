@@ -3,6 +3,7 @@
  * Waveshare ESP32-S3-Touch-AMOLED-2.06 · ESP-IDF 5.5.5 · LVGL 9.5.0
  *
  * Orden de arranque:
+ *   0. ajustes guardados (NVS, watch_settings): brillo, fondo, hora...
  *   1. bus I2C compartido (BSP oficial)
  *   2. pantalla CO5300 + LVGL (watch_display) y splash de arranque (watch_ui)
  *   3. táctil FT3168 (watch_touch)        — si falla, se sigue sin táctil
@@ -19,13 +20,15 @@
 #include "watch_diag.h"
 #include "watch_display.h"
 #include "watch_power.h"
+#include "watch_settings.h"
 #include "watch_time.h"
+#include "watch_theme.h"
 #include "watch_touch.h"
 #include "watch_ui.h"
 
 static const char *TAG = "flex_watch";
 
-/* Brillo para la interfaz (sin guardar en NVS hasta F4.1). */
+/* Brillo para la interfaz; la interfaz lo guarda en watch_settings al soltar. */
 static bool ui_brightness_set(int percent)
 {
     return watch_display_set_brightness(percent) == ESP_OK;
@@ -37,10 +40,20 @@ void app_main(void)
     ESP_LOGI(TAG, "Flex OS Watch Ultra %s (ESP-IDF %s)", app->version, esp_get_idf_version());
     watch_diag_log_mem("inicio");
 
+    /* Sin NVS el reloj sigue: ajustes por defecto en RAM (la interfaz avisa). */
+    esp_err_t err = watch_settings_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "ajustes sin guardar: %s", esp_err_to_name(err));
+    }
+    watch_settings_t ws;
+    watch_settings_get(&ws);
+    watch_theme_set_wallpaper((flex_wall_t)ws.wallpaper);
+
     ESP_ERROR_CHECK(bsp_i2c_init());
 
     lv_display_t *disp = NULL;
     ESP_ERROR_CHECK(watch_display_start(&disp));
+    watch_display_set_brightness(ws.brightness);
     watch_diag_log_mem("tras pantalla y LVGL");
 
     /* Splash animado mientras arranca el resto (la pantalla nunca queda congelada). */
@@ -62,7 +75,7 @@ void app_main(void)
     boot.disp_buf_psram = dinfo.buf_in_psram;
 
     lv_indev_t *indev = NULL;
-    esp_err_t err = watch_touch_start(disp, &indev);
+    err = watch_touch_start(disp, &indev);
     boot.touch_ok = (err == ESP_OK);
     if (!boot.touch_ok) {
         ESP_LOGE(TAG, "tactil no disponible: %s", esp_err_to_name(err));

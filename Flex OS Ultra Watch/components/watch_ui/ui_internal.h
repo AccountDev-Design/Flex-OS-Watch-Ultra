@@ -58,6 +58,9 @@ bool ui_nav_push_opts(ui_page_create_t create, bool edge_gesture);
 bool ui_nav_back(void);
 /** Vuelve a la raíz (la esfera) con una sola animación. */
 void ui_nav_home(void);
+/** Rehace la página raíz (la esfera) debajo de las páginas abiertas: para
+ * cambios de ajustes que afectan a su construcción (fondo, estilo). */
+bool ui_nav_replace_root(ui_page_create_t root);
 int ui_nav_depth(void);
 bool ui_nav_busy(void);
 lv_obj_t *ui_nav_top(void);

@@ -75,6 +75,13 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T40) en **una sola s
 | T44 | Prueba de pantalla: primer arco de esquina que se ve entero (104/112/120/128/136) |
 | T45 | Nada cortado en las esquinas: panel rápido, páginas de Ajustes, aviso |
 
+## 6. Servicios F4 (`F4-SERVICIOS.md`)
+
+| Pruebas | Qué hacer |
+|---|---|
+| T46 | Cambia brillo y fondo, espera 3 s y reinicia: deben conservarse |
+| T47 | Diagnóstico > Ajustes guardados: "leídos", escrituras y 0 errores |
+
 ## Qué enviarme
 
 - El registro serie completo de la sesión.

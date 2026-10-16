@@ -201,6 +201,110 @@ void flex_icon_draw(lv_layer_t *layer, flex_icon_t icon, const lv_area_t *box, l
         line(&p, 50, 50, 50, 24, 8);
         line(&p, 50, 50, 70, 58, 8);
         break;
+    case FLEX_ICON_IMAGE: {
+        /* Marco con montañas y sol. */
+        line(&p, 8, 18, 92, 18, 8);
+        line(&p, 92, 18, 92, 82, 8);
+        line(&p, 92, 82, 8, 82, 8);
+        line(&p, 8, 82, 8, 18, 8);
+        static const int32_t m1[6] = {16, 76, 40, 44, 62, 76};
+        static const int32_t m2[6] = {46, 76, 68, 52, 86, 76};
+        tri(&p, m1);
+        tri(&p, m2);
+        disc(&p, 70, 36, 8);
+        break;
+    }
+    case FLEX_ICON_WATCH:
+        /* Caja redonda con correa arriba y abajo y agujas. */
+        arc(&p, 50, 50, 32, 9, 0, 360, false);
+        line(&p, 40, 9, 60, 9, 12);
+        line(&p, 40, 91, 60, 91, 12);
+        line(&p, 50, 50, 50, 33, 7);
+        line(&p, 50, 50, 62, 57, 7);
+        break;
+    case FLEX_ICON_GLOBE:
+        arc(&p, 50, 50, 47, 7, 0, 360, false);
+        line(&p, 50, 8, 50, 92, 6);
+        line(&p, 8, 50, 92, 50, 6);
+        line(&p, 16, 30, 84, 30, 6);
+        line(&p, 16, 70, 84, 70, 6);
+        break;
+    case FLEX_ICON_BELL:
+        arc(&p, 50, 54, 32, 9, 180, 360, false);
+        line(&p, 22, 54, 16, 74, 9);
+        line(&p, 78, 54, 84, 74, 9);
+        line(&p, 10, 76, 90, 76, 9);
+        disc(&p, 50, 88, 8);
+        disc(&p, 50, 16, 6);
+        break;
+    case FLEX_ICON_HOURGLASS: {
+        line(&p, 18, 8, 82, 8, 9);
+        line(&p, 18, 92, 82, 92, 9);
+        line(&p, 26, 10, 74, 90, 8);
+        line(&p, 74, 10, 26, 90, 8);
+        static const int32_t sand[6] = {34, 88, 66, 88, 50, 64};
+        tri(&p, sand);
+        break;
+    }
+    case FLEX_ICON_STOPWATCH:
+        arc(&p, 50, 57, 38, 8, 0, 360, false);
+        line(&p, 40, 6, 60, 6, 8);
+        line(&p, 50, 8, 50, 18, 8);
+        line(&p, 78, 22, 84, 16, 8);
+        line(&p, 50, 57, 63, 41, 8);
+        break;
+    case FLEX_ICON_GRID:
+        disc(&p, 27, 27, 18);
+        disc(&p, 73, 27, 18);
+        disc(&p, 27, 73, 18);
+        disc(&p, 73, 73, 18);
+        break;
+    case FLEX_ICON_MOTION:
+        /* Punto con dos pares de ondas, a izquierda y derecha. */
+        disc(&p, 50, 50, 10);
+        arc(&p, 50, 50, 30, 8, 320, 40, true);
+        arc(&p, 50, 50, 30, 8, 140, 220, true);
+        arc(&p, 50, 50, 45, 8, 322, 38, true);
+        arc(&p, 50, 50, 45, 8, 142, 218, true);
+        break;
+    case FLEX_ICON_MOON:
+        /* Luna creciente: anillo grueso abierto arriba a la derecha. */
+        arc(&p, 50, 50, 46, 20, 10, 260, true);
+        break;
+    case FLEX_ICON_STORAGE:
+        line(&p, 16, 22, 84, 22, 16);
+        line(&p, 16, 50, 84, 50, 16);
+        line(&p, 16, 78, 84, 78, 16);
+        break;
+    case FLEX_ICON_PLUS:
+        line(&p, 50, 14, 50, 86, 14);
+        line(&p, 14, 50, 86, 50, 14);
+        break;
+    case FLEX_ICON_MINUS:
+        line(&p, 14, 50, 86, 50, 14);
+        break;
+    case FLEX_ICON_PLAY: {
+        static const int32_t t[6] = {24, 10, 24, 90, 88, 50};
+        tri(&p, t);
+        break;
+    }
+    case FLEX_ICON_PAUSE:
+        line(&p, 32, 14, 32, 86, 18);
+        line(&p, 68, 14, 68, 86, 18);
+        break;
+    case FLEX_ICON_STOP: {
+        static const int32_t a[6] = {18, 18, 82, 18, 82, 82};
+        static const int32_t b[6] = {18, 18, 82, 82, 18, 82};
+        tri(&p, a);
+        tri(&p, b);
+        break;
+    }
+    case FLEX_ICON_FLAG: {
+        line(&p, 24, 8, 24, 92, 9);
+        static const int32_t f[6] = {28, 10, 86, 30, 28, 50};
+        tri(&p, f);
+        break;
+    }
     default:
         break;
     }

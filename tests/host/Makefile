@@ -13,8 +13,10 @@ INC := -I$(FW)/components/watch_power/include \
        -I$(FW)/components/watch_diag/include \
        -I$(FW)/components/watch_theme/include \
        -I$(FW)/components/watch_ui/include \
-       -I$(FW)/components/watch_time/include
+       -I$(FW)/components/watch_time/include \
+       -I$(FW)/components/watch_settings/include
 SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test_power_sched.c test_safe.c \
+       test_settings.c $(FW)/components/watch_settings/ws_logic.c \
        $(FW)/components/watch_power/battery_model.c \
        $(FW)/components/watch_power/battery_alerts.c \
        $(FW)/components/watch_power/power_sched.c \
