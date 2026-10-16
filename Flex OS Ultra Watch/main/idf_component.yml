@@ -7,6 +7,12 @@
 ##   que su CI compila con ESP-IDF v5.5.5. Su dependencies.lock (lvgl 9.2.0,
 ##   BSP 1.0.3) es una resolución antigua que nunca se regeneró.
 ##
+## - LittleFS (joltwallet/littlefs 1.22.3, núcleo littlefs 2.11.3) para la
+##   partición "storage" (F4.6). Versión exacta: la más reciente con más de 14
+##   días, compilada aquí con ESP-IDF 5.5.5 para esp32s3. No se usa
+##   littlefs_create_partition_image (instalaría paquetes de Python al
+##   compilar): se formatea en el reloj, a petición.
+##
 ## El dependencies.lock que genere tu primera compilación es la resolución
 ## real: súbelo al repositorio (ver docs/B1-ARRANQUE.md).
 dependencies:
@@ -14,3 +20,4 @@ dependencies:
   waveshare/esp32_s3_touch_amoled_2_06: "2.0.0"
   lvgl/lvgl: "9.5.0"
   espressif/esp_lvgl_port: "^2"
+  joltwallet/littlefs: "==1.22.3"

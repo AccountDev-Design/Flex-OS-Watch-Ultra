@@ -1,15 +1,17 @@
-# Próxima prueba en el reloj (F1-F3)
+# Próxima prueba en el reloj (F1-F4)
 
-Esta guía ordena todas las pruebas físicas pendientes (T1-T40) en **una sola sesión**. El detalle de cada prueba está en su documento:
+Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola sesión**. El detalle de cada prueba está en su documento:
 
 | Pruebas | Documento |
 |---|---|
 | T1-T13 | [B1-ARRANQUE.md](B1-ARRANQUE.md) |
 | T14-T22 | [B2-ENERGIA.md](B2-ENERGIA.md) |
 | T23-T40 | [B3-INTERFAZ.md](B3-INTERFAZ.md) |
+| T41-T45 | [B4-CALIDAD.md](B4-CALIDAD.md) y [B2-ENERGIA.md](B2-ENERGIA.md) |
+| T46-T66 | [F4-SERVICIOS.md](F4-SERVICIOS.md) |
 | Flash de 32 MB | [FLASH-32MB.md](FLASH-32MB.md) |
 
-**Nada de esto está verificado todavía.** Compilar y pasar las pruebas de PC no prueba el reloj: cada resultado que me envíes es lo que convierte una tarea del 50 % al 100 %.
+**Verificado en el reloj hasta ahora** (fotos y vídeo del 2026-10-15): pantalla, táctil, LVGL y la sonda de 32 MB (T10). Lo demás no. Compilar y pasar las pruebas de PC no prueba el reloj: cada resultado que me envíes es lo que convierte una tarea del 50 % al 100 %.
 
 ## 0. Preparación
 
@@ -23,8 +25,8 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T40) en **una sola s
    ```
 
    - **No** ejecutes `erase-flash` ni `update-dependencies`.
-   - Los `idf_component.yml` no han cambiado en este ciclo: tu `dependencies.lock` sigue valiendo.
-   - El componente nuevo `watch_time` no tiene dependencias del registro.
+   - **Dependencia nueva del registro (F4.6):** `joltwallet/littlefs ==1.22.3`. La primera compilación la descarga y actualiza tu `dependencies.lock`: súbelo.
+   - Los componentes nuevos (`watch_settings`, `watch_imu`, `watch_storage`) no necesitan nada más del registro.
 3. Guarda **todo** el registro serie de la sesión en un archivo de texto. Es lo más útil que me puedes enviar.
 
 ## 1. Arranque (con el monitor abierto y USB conectado)
@@ -86,8 +88,9 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T40) en **una sola s
 | T50 | Diferencia con el móvil a los 15 min y a las 24 h |
 | T51 | Cambiar zona y formato 12/24 h: la hora se ve bien y el RTC no cambia |
 | T52-T55 | Apps (desliza la esfera a la izquierda): cronómetro, temporizador con aviso, alarma que suena y se conserva tras reiniciar |
-| T60-T62 | IMU: línea `QMI8658 ... configurado` en el registro; Aplicaciones > Sensores plano (Z ≈ 1 g, punto verde) y hacia dónde va el punto al inclinar |
 | T56-T59 | Apagado de pantalla: atenuada y apagada sin tocar, botón lateral (anota "reposo N" en Diagnóstico; **no** lo mantengas 4 s), despertar con USB y temporizador, imagen correcta tras encender |
+| T60-T62 | IMU: línea `QMI8658 ... configurado` en el registro; Aplicaciones > Sensores plano (Z ≈ 1 g, punto verde) y hacia dónde va el punto al inclinar |
+| T63-T66 | Ajustes > Almacenamiento: registro al arrancar (no formatea solo), Probar escritura ("Superada"), Formatear con dos toques, Probar archivo antes y después de reiniciar |
 
 ## Qué enviarme
 

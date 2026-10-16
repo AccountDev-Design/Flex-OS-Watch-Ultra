@@ -108,6 +108,7 @@ lv_obj_t *ui_timer_create(lv_obj_t *parent);
 lv_obj_t *ui_alarms_create(lv_obj_t *parent);
 lv_obj_t *ui_alarm_edit_create(lv_obj_t *parent);
 lv_obj_t *ui_sensors_create(lv_obj_t *parent); /* F4.4 */
+lv_obj_t *ui_storage_create(lv_obj_t *parent); /* F4.6 */
 /** Rodillo con el estilo del sistema (3 filas visibles, la elegida resaltada). */
 lv_obj_t *ui_roller(lv_obj_t *parent, const char *opts, lv_roller_mode_t mode, const lv_font_t *font, int32_t w);
 /* Apagado de pantalla (F4.5, ui_screen.c) */

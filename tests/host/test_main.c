@@ -511,6 +511,7 @@ int main(void)
     test_clock_all();
     test_screen_all();
     test_imu_all();
+    test_storage_all();
     printf("%d comprobaciones, %d fallos\n", g_checks, g_fail);
     return g_fail ? 1 : 0;
 }

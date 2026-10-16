@@ -54,3 +54,14 @@ CONFIG_LV_USE_SYSMON=y
 CONFIG_LV_USE_PERF_MONITOR=y
 CONFIG_LV_PERF_MONITOR_ALIGN_BOTTOM_MID=y
 CONFIG_LV_BUILD_EXAMPLES=n
+
+# ---------------------------------------------------------------------------
+# LittleFS (F4.6, partición "storage" de 16 MB por encima de 16 MB)
+# ---------------------------------------------------------------------------
+# Sin mapear la partición en caché: la caché solo direcciona 24 bits y por
+# encima de 16 MB leería datos de la zona baja (docs/FLASH-32MB.md).
+# CONFIG_LITTLEFS_MMAP_PARTITION is not set
+# 512 B de "lookahead" cubren los 4096 bloques de 4 KB en una sola pasada.
+CONFIG_LITTLEFS_LOOKAHEAD_SIZE=512
+# Búferes de E/S de flash en RAM interna (no en PSRAM).
+CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL=y

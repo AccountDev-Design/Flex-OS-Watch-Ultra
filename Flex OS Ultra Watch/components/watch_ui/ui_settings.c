@@ -106,6 +106,7 @@ lv_obj_t *ui_settings_create(lv_obj_t *parent)
     s->time = row(list, FLEX_ICON_CLOCK, FLEX_C_CAT_BLUE, "Fecha y hora", "", ui_datetime_create);
     s->battery = row(list, FLEX_ICON_BOLT, FLEX_C_CAT_GREEN, "Batería", "", ui_battery_page_create);
     row(list, FLEX_ICON_PULSE, FLEX_C_CAT_BLUE, "Diagnóstico", NULL, ui_diag_create);
+    row(list, FLEX_ICON_STORAGE, FLEX_C_CAT_BLUE, "Almacenamiento", NULL, ui_storage_create);
     const watch_ui_boot_info_t *bi = ui_boot_info();
     row(list, FLEX_ICON_INFO, FLEX_C_CAT_BLUE, "Acerca de", bi->fw_version, ui_about_create);
     refresh(s);

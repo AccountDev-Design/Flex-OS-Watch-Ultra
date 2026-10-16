@@ -143,6 +143,53 @@ void sim_suite_settings(const char *out)
     EXPECT(sim_find_label(ui_nav_top(), want), "Ajustes no refresca el brillo (%s)", want);
     sim_brightness_set(70);
 
+    /* ---- Almacenamiento (F4.6): bloqueado, y con la puerta abierta el
+     * orden prueba -> formatear (dos toques) -> archivo ---- */
+    open_row(4, "Almacenamiento");
+    EXPECT(sim_find_label(ui_nav_top(), "Sonda de 32 MB no superada"), "almacenamiento: no dice por que esta bloqueado");
+    lv_obj_t *bsec = sim_find_label(ui_nav_top(), "Probar escritura");
+    while (bsec && !lv_obj_has_flag(bsec, LV_OBJ_FLAG_CLICKABLE)) {
+        bsec = lv_obj_get_parent(bsec);
+    }
+    EXPECT(bsec && lv_obj_has_state(bsec, LV_STATE_DISABLED), "almacenamiento: se ofrece escribir con la puerta cerrada");
+    sim_stg.gate = STG_GATE_OK;
+    sim_stg.state = STG_UNFORMATTED;
+    sim_stg.detail = "Sin formato de LittleFS";
+    sim_run(400);
+    EXPECT(sim_find_label(ui_nav_top(), "Sin formato"), "almacenamiento: no muestra sin formato");
+    lv_obj_t *bfmt = sim_find_label(ui_nav_top(), "Formatear");
+    while (bfmt && !lv_obj_has_flag(bfmt, LV_OBJ_FLAG_CLICKABLE)) {
+        bfmt = lv_obj_get_parent(bfmt);
+    }
+    EXPECT(bfmt && lv_obj_has_state(bfmt, LV_STATE_DISABLED), "almacenamiento: formatear antes de la prueba");
+    lv_obj_send_event(bsec, LV_EVENT_CLICKED, NULL);
+    sim_run(400);
+    EXPECT(sim_find_label(ui_nav_top(), "Superada") && !lv_obj_has_state(bfmt, LV_STATE_DISABLED),
+           "almacenamiento: la prueba del sector no habilita formatear");
+    lv_obj_send_event(bfmt, LV_EVENT_CLICKED, NULL); /* primer toque: solo pide confirmar */
+    sim_run(300);
+    EXPECT(sim_stg.state == STG_UNFORMATTED && sim_find_label(ui_nav_top(), "Toca otra vez"),
+           "almacenamiento: formateo con un solo toque");
+    sim_save(out, "f4_almacenamiento_confirmar");
+    sim_lint("almacenamiento (confirmar)");
+    lv_obj_send_event(bfmt, LV_EVENT_CLICKED, NULL);
+    sim_run(400);
+    EXPECT(sim_stg.state == STG_MOUNTED && sim_find_label(ui_nav_top(), "Montado (LittleFS)"),
+           "almacenamiento: no se monto tras formatear");
+    lv_obj_t *bfile = sim_find_label(ui_nav_top(), "Probar archivo");
+    while (bfile && !lv_obj_has_flag(bfile, LV_OBJ_FLAG_CLICKABLE)) {
+        bfile = lv_obj_get_parent(bfile);
+    }
+    lv_obj_send_event(bfile, LV_EVENT_CLICKED, NULL);
+    sim_run(400);
+    EXPECT(sim_find_label(ui_nav_top(), "Bien (n.º 1)"), "almacenamiento: archivo de prueba");
+    sim_check_glyphs(ui_nav_top(), "almacenamiento");
+    sim_lint("almacenamiento");
+    sim_save(out, "f4_almacenamiento");
+    back();
+    sim_run(1100);
+    sim_stg = (watch_storage_info_t){.state = STG_LOCKED, .gate = STG_GATE_PROBE, .detail = "Sonda de 32 MB no superada"};
+
     /* ---- Batería ---- */
     open_row(1, "Batería");
     lv_obj_t *bp = ui_nav_top();

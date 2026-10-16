@@ -11,6 +11,7 @@
 #include "watch_time_types.h"
 #include "watch_settings.h"
 #include "watch_imu.h"
+#include "watch_storage.h"
 
 #define SIM_W FLEX_SCREEN_W
 #define SIM_H FLEX_SCREEN_H
@@ -70,6 +71,14 @@ int sim_timer_count(void);
 extern int sim_time_sets;
 extern int64_t sim_time_set_utc;
 extern wt_set_result_t sim_time_set_result;
+
+/* Verificador visual (sim_lint.c) */
+int sim_lint(const char *where);
+int sim_check_residue(const char *where);
+
+/* Almacenamiento simulado (sim_main.c) */
+extern watch_storage_info_t sim_stg;
+extern bool sim_stg_fail;
 
 /* IMU simulado (sim_main.c) */
 extern watch_imu_snapshot_t sim_imu;

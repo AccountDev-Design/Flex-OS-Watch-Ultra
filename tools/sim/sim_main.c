@@ -278,6 +278,47 @@ void watch_imu_set_active(bool on)
     sim_imu_users += on ? 1 : -1;
 }
 
+/* Almacenamiento de la vista previa: la misma máquina de estados, sin flash.
+ * sim_stg.gate decide si se permite escribir; sim_stg_fail hace fallar la
+ * prueba del sector. */
+watch_storage_info_t sim_stg = {.state = STG_LOCKED, .gate = STG_GATE_PROBE, .detail = "Sonda de 32 MB no superada"};
+bool sim_stg_fail;
+
+void watch_storage_info(watch_storage_info_t *out)
+{
+    *out = sim_stg;
+}
+
+esp_err_t watch_storage_request(stg_req_t req)
+{
+    if (sim_stg.gate != STG_GATE_OK) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    switch (req) {
+    case STG_REQ_SECTOR_TEST:
+        if (sim_stg.state == STG_UNFORMATTED) {
+            sim_stg.sector_test = sim_stg_fail ? -1 : 1;
+            sim_stg.detail = sim_stg_fail ? "LA ZONA BAJA CAMBIÓ: no formatear" : "Prueba superada";
+        }
+        break;
+    case STG_REQ_FORMAT:
+        if (sim_stg.state == STG_UNFORMATTED && sim_stg.sector_test == 1) {
+            sim_stg.state = STG_MOUNTED;
+            sim_stg.total = 16u * 1024 * 1024;
+            sim_stg.used = 8192;
+        }
+        break;
+    case STG_REQ_FILE_TEST:
+        if (sim_stg.state == STG_MOUNTED) {
+            sim_stg.file_test = 1;
+            sim_stg.file_count++;
+            sim_stg.used += 4096;
+        }
+        break;
+    }
+    return ESP_OK;
+}
+
 /* ---- Datos simulados que sustituyen a watch_power / watch_time / watch_diag ---- */
 /* La hora simulada (s_time) es LOCAL; la zona solo convierte a/desde UTC. */
 static int s_tz = -300;

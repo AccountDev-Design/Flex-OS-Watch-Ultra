@@ -9,7 +9,7 @@ Estado de cada bloque de F4 (pesos de `ROADMAP.md`). Las referencias son la audi
 | F4.3 | Cronómetro, temporizador, alarmas y lanzador de apps | implementado · pruebas de PC · prueba física pendiente (T52-T55) |
 | F4.4 | IMU QMI8658 y app Sensores | implementado · pruebas de PC · prueba física pendiente (T60-T62) |
 | F4.5 | Apagado de pantalla por inactividad, botón lateral | implementado · pruebas de PC · prueba física pendiente (T56-T59) |
-| F4.6 | LittleFS en `storage` | pendiente |
+| F4.6 | LittleFS en `storage` | implementado · compilado · prueba física pendiente (T63-T66) |
 
 ## F4.1. Ajustes persistentes
 
@@ -264,3 +264,49 @@ Por eso hay un controlador mínimo propio, según la hoja de datos (componente `
 | T60 | Detección | Arranca con el monitor serie | `QMI8658 (id 0x05, revision 0x..) configurado`. Si sale "no responde", envíame el registro |
 | T61 | Ejes | Aplicaciones > Sensores con el reloj **plano** sobre la mesa; luego inclínalo hacia la derecha y hacia ti | Plano: Z ≈ 1,00 g (o −1,00), X e Y ≈ 0, el punto verde en el centro. Dime hacia dónde se mueve el punto al inclinar: así se ajustan los ejes |
 | T62 | Giro y reposo | Gira el reloj sobre la mesa; luego sal de la app | Giro Z cambia de signo según el sentido; "Perdidas" casi 0 y "Errores I2C" 0. En el registro, al salir: `en reposo` |
+
+## F4.6. LittleFS en `storage` (16 MB por encima de 16 MB)
+
+**Dependencia nueva:** `joltwallet/littlefs ==1.22.3`, con el núcleo littlefs 2.11.3.
+- Es la versión más reciente con más de 14 días, de julio de 2026.
+- Su CI no compila ESP-IDF 5.5; aquí compila con 5.5.5 para esp32s3, sin avisos.
+- **En tu PC** la descarga el gestor de componentes. Sube el `dependencies.lock` que se genere.
+- **En el entorno sin registro** se usa una copia local de la misma etiqueta (`tools/offline/build_offline.sh`).
+- **Opciones** (`sdkconfig.defaults`):
+  - sin mapear la partición en caché: la caché solo direcciona 24 bits;
+  - "lookahead" de 512 B, que cubre los 4096 bloques;
+  - búferes en RAM interna.
+- **No** se usa `littlefs_create_partition_image`: instalaría paquetes de Python al compilar.
+- **Particiones sin cambios.**
+
+**Puerta de escritura** (`stg_logic.c`, pura, con pruebas de PC). Solo se monta o se escribe si se cumple todo:
+- chip GD25Q256 (JEDEC 0xC84019);
+- 32 MB declarados y leídos;
+- partición dentro del chip y alineada;
+- veredicto **"sin aliasing"** de la sonda de B1. Tu foto del 2026-10-15 lo mostró.
+
+Si no, la página dice por qué y no ofrece ninguna acción.
+
+**Orden de uso** (Ajustes > Almacenamiento; todo lo que escribe es a petición):
+1. **Al arrancar** solo se intenta **montar**, sin formatear a escondidas. Con los datos de fábrica en esa zona falla: "Sin formato".
+2. **Probar escritura:**
+   - borra, escribe con un patrón propio y relee el **último** sector de `storage`;
+   - comprueba que ni el bootloader (0x0) ni la posición 16 MB más abajo cambiaron;
+   - deja el sector borrado.
+   - Se elige el último sector a propósito: si las direcciones dieran la vuelta, caería al final de `assets`, nunca en el bootloader.
+3. **Formatear:** solo tras superar la prueba, con **dos toques**. Borra los datos de fábrica de los 16 MB altos; la imagen de fábrica se puede volver a grabar (`FLASH-32MB.md` §5). Después monta.
+4. **Probar archivo:** escritura atómica (temporal, `fsync` y `rename`) de `/storage/flexos/prueba.txt` con un contador. Tras reiniciar, el contador sigue: se ha conservado.
+
+**Pruebas.**
+- **PC:** la puerta (cada condición la cierra por separado), el sector de prueba, el patrón y la CRC.
+- **Vista previa:** la página bloqueada; luego el orden prueba → formatear (no formatea con un solo toque) → archivo; integridad visual.
+- **Escritura real en la flash:** solo se puede comprobar en el reloj.
+
+### Pruebas en el reloj
+
+| # | Prueba | Cómo | Resultado esperado |
+|---|---|---|---|
+| T63 | Arranque | Monitor serie al arrancar | `storage sin LittleFS ... no se formatea solo` (datos de fábrica) o `LittleFS montado`. Nunca un formateo sin pedirlo |
+| T64 | Prueba de escritura | Ajustes > Almacenamiento > Probar escritura | "Prueba del sector: Superada". En el registro: `prueba del sector 0x01fff000: Prueba superada`. Si dijera "LA ZONA BAJA CAMBIÓ", **no formatees** y envíame el registro |
+| T65 | Formatear | Formatear, dos toques | "Montado (LittleFS)" y "Espacio: … de 16,0 MB". El reloj sigue arrancando normal tras reiniciar |
+| T66 | Archivo | Probar archivo dos veces, reinicia y otra vez | El número sigue creciendo tras el reinicio (n.º 3): el archivo se conservó |

@@ -10,7 +10,8 @@
  *   4. AXP2101 en solo lectura (watch_power) — si falla, batería "sin datos"
  *   5. RTC PCF85063 (watch_time; lo escribe solo al poner en hora) — si falla, hora "no disponible"
  *   6. IMU QMI8658 (watch_imu; en reposo hasta que la app Sensores lo pida)
- *   7. sonda de flash de solo lectura (watch_diag)
+ *   7. sonda de flash de solo lectura (watch_diag) y, si la permite, LittleFS
+ *      en "storage" (watch_storage: monta; nunca formatea solo)
  *   8. interfaz: del splash a la esfera (watch_ui)
  */
 #include "esp_app_desc.h"
@@ -24,6 +25,7 @@
 #include "watch_imu.h"
 #include "watch_power.h"
 #include "watch_settings.h"
+#include "watch_storage.h"
 #include "watch_time.h"
 #include "watch_theme.h"
 #include "watch_touch.h"
@@ -143,6 +145,22 @@ void app_main(void)
     }
 
     watch_diag_flash_probe(&boot.flash);
+
+    /* LittleFS en "storage" (por encima de 16 MB): solo si el chip, el tamaño
+     * y la sonda de 32 MB lo permiten; al arrancar solo intenta montar. */
+    const stg_flash_t sf = {
+        .jedec_id = boot.flash.jedec_id,
+        .physical_size = boot.flash.physical_size,
+        .configured_size = boot.flash.configured_size,
+        .storage_found = boot.flash.storage_found,
+        .storage_offset = boot.flash.storage_offset,
+        .storage_size = boot.flash.storage_size,
+        .verdict = boot.flash.verdict,
+    };
+    err = watch_storage_start(&sf);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "almacenamiento: %s", esp_err_to_name(err));
+    }
 
     if (watch_display_lock(0)) {
         watch_ui_home_create(&boot);

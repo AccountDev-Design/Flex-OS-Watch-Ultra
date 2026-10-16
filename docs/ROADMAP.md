@@ -1,7 +1,7 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 36,5 %   [███████░░░░░░░░░░░░░]   (verificado en el reloj: 10,5 %)
+PROGRESO GLOBAL: 37 %   [███████░░░░░░░░░░░░░]   (verificado en el reloj: 10,5 %)
 ```
 
 - **Completado:**
@@ -17,12 +17,19 @@ PROGRESO GLOBAL: 36,5 %   [███████░░░░░░░░░░�
     - negro AMOLED;
     - área segura con esquinas redondeadas;
     - verificador visual de todas las pantallas.
-- **En curso:** F4 (servicios).
+  - Software de F4 (`docs/F4-SERVICIOS.md`), compilado y probado en el PC:
+    - ajustes persistentes;
+    - poner en hora, zona horaria y 12/24 h;
+    - cronómetro, temporizador, alarmas y lanzador de apps;
+    - IMU y app Sensores;
+    - apagado de pantalla;
+    - LittleFS.
+- **En curso:** pruebas físicas de F2-F4.
 - **Falta:**
-  - Pruebas físicas de F2/F3 sobre el firmware con B4 (T41-T45 y las T de F2/F3 aún sin resultado).
+  - Pruebas físicas de F2-F4 sobre el firmware actual (T41-T66 y las T de F2/F3 aún sin resultado).
   - La calibración de umbrales (❓ D4).
   - Flex Phone, el navegador, OTA, la seguridad y las pruebas finales.
-- **Siguiente:** F4.6 (LittleFS en la partición storage).
+- **Siguiente:** pruebas físicas de F2-F4 (`docs/PRUEBAS-RELOJ.md`); después F5 (Wi-Fi y Flex Phone).
 
 ## Cómo se calcula
 
@@ -73,7 +80,7 @@ Dentro de F2 queda:
 | F3.3 Panel rápido: cortina que sigue al dedo, brillo real (mín. 10 %), batería real, acceso a Ajustes, Wi-Fi/Bluetooth marcados "Pendiente" (B3-4) | 5 | 🟡 faltan T33-T36 | 2,5 |
 | F3.4 Ajustes (Pantalla, Batería, Diagnóstico, Acerca de), navegación por gestos y **animaciones/transiciones** (apertura y cierre 210/190 ms, volver, arranque) (B3-3, B3-5) | 5 | 🟡 faltan T30-T32 y T37-T40 | 2,5 |
 
-### F4 · Servicios del sistema — 4,5 / 10
+### F4 · Servicios del sistema — 5 / 10
 
 Detalle y pruebas en `docs/F4-SERVICIOS.md`.
 | Tarea | Peso | Estado |
@@ -83,7 +90,7 @@ Detalle y pruebas en `docs/F4-SERVICIOS.md`.
 | F4.3 Cronómetro, temporizador y alarmas (aviso visual), con lanzador de apps (D15) | 2 | 🟡 faltan T52-T55 |
 | F4.4 IMU QMI8658 (controlador propio, mide solo con la app abierta) + app Sensores con nivel, movimiento y batería | 1,5 | 🟡 faltan T60-T62 |
 | F4.5 Apagado de pantalla por inactividad (atenuada, DISPOFF, vuelta a la esfera), botón lateral, despertar por toque, alarma y USB. Sin reposo ligero de la CPU (F8.4, medir antes) | 1,5 | 🟡 faltan T56-T59 |
-| F4.6 Almacenamiento LittleFS en `storage` (> 16 MB): prueba de escritura y montaje (`FLASH-32MB.md` §6) | 1 | ⬜ |
+| F4.6 Almacenamiento LittleFS en `storage` (> 16 MB): puerta por la sonda de 32 MB, prueba de escritura del sector, formateo confirmado, montaje y archivo atómico (`FLASH-32MB.md` §6) | 1 | 🟡 faltan T63-T66 |
 
 ### F5 · Conectividad y Flex Phone — 0 / 15
 | Tarea | Peso | Estado |
@@ -192,4 +199,5 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-16 | 34 % | +1 | F4.2 (poner en hora, zona horaria y 12/24 h) compila y pasa las pruebas de PC y de la vista previa: 50 % de 2 |
 | 2026-10-16 | 35 % | +1 | F4.3 (cronómetro, temporizador, alarmas y lanzador) compila y pasa las pruebas de PC y de la vista previa: 50 % de 2 |
 | 2026-10-16 | 35,75 % | +0,75 | F4.5 (apagado de pantalla y botón lateral) compila y pasa las pruebas de PC y de la vista previa: 50 % de 1,5 |
-| 2026-10-16 | **36,5 %** | +0,75 | F4.4 (IMU QMI8658 y app Sensores) compila y pasa las pruebas de PC y de la vista previa: 50 % de 1,5 |
+| 2026-10-16 | 36,5 % | +0,75 | F4.4 (IMU QMI8658 y app Sensores) compila y pasa las pruebas de PC y de la vista previa: 50 % de 1,5 |
+| 2026-10-16 | **37 %** | +0,5 | F4.6 (LittleFS en storage) compila y pasa las pruebas de PC y de la vista previa: 50 % de 1. Todas las tareas de F4 están implementadas y probadas en el PC; falta la prueba física |

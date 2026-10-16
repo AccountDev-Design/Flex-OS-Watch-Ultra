@@ -33,6 +33,7 @@ DEPS_MAP=(
     "espressif/esp_io_expander:esp_io_expander"
     "espressif/cmake_utilities:cmake_utilities"
     "espressif/esp_codec_dev:esp_codec_dev"
+    "joltwallet/littlefs:littlefs"
 )
 
 # Copia limpia de las fuentes conservando lo generado en la carpeta de trabajo
