@@ -42,6 +42,8 @@ typedef struct {
     int last_pct;
     int last_state;
     int last_level;
+    uint32_t txt;  /* color de la hora: claro, u oscuro sobre un fondo claro */
+    uint32_t txt2; /* color de la fecha */
 } face_t;
 
 static void update_time(face_t *f)
@@ -57,7 +59,7 @@ static void update_time(face_t *f)
     }
     f->last_key = t.key;
     lv_label_set_text(f->time, t.time);
-    lv_obj_set_style_text_color(f->time, flex_color(t.valid ? FLEX_C_TXT : FLEX_C_MUTE), 0);
+    lv_obj_set_style_text_color(f->time, flex_color(t.valid ? f->txt : FLEX_C_MUTE), 0);
     if (t.ampm[0]) {
         lv_label_set_text(f->ampm, t.ampm);
         lv_obj_update_layout(f->time);
@@ -127,12 +129,18 @@ lv_obj_t *ui_face_create(lv_obj_t *parent)
 
     lv_obj_t *scr = ui_page_new(parent);
     watch_theme_apply_background(scr);
+    /* Sobre un fondo claro (Aurora, Naturaleza...) el texto pasa a oscuro,
+     * como onColor() de la referencia: se mira el fondo bajo cada texto. */
+    const bool light_time = watch_theme_wall_is_light(FLEX_SAFE_X, TIME_Y, FLEX_SCREEN_W - 2 * FLEX_SAFE_X, 86);
+    const bool light_date = watch_theme_wall_is_light(FLEX_SAFE_X, DATE_Y, FLEX_SCREEN_W - 2 * FLEX_SAFE_X, 28);
+    f->txt = light_time ? FLEX_C_ON_LIGHT : FLEX_C_TXT;
+    f->txt2 = light_date ? FLEX_C_ON_LIGHT2 : FLEX_C_TXT2;
 
     f->time = watch_theme_label(scr, FLEX_FONT_CLOCK, FLEX_C_MUTE, "--:--");
     lv_obj_align(f->time, LV_ALIGN_TOP_MID, 0, TIME_Y);
-    f->ampm = watch_theme_label(scr, FLEX_FONT_BODY, FLEX_C_TXT2, "");
+    f->ampm = watch_theme_label(scr, FLEX_FONT_BODY, light_time ? FLEX_C_ON_LIGHT2 : FLEX_C_TXT2, "");
     lv_obj_add_flag(f->ampm, LV_OBJ_FLAG_HIDDEN);
-    f->date = watch_theme_label(scr, FLEX_FONT_BODY, FLEX_C_TXT2, "");
+    f->date = watch_theme_label(scr, FLEX_FONT_BODY, f->txt2, "");
     lv_obj_set_width(f->date, FLEX_SCREEN_W - 2 * FLEX_SAFE_X);
     lv_obj_set_style_text_align(f->date, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(f->date, LV_LABEL_LONG_MODE_DOTS);
@@ -140,6 +148,10 @@ lv_obj_t *ui_face_create(lv_obj_t *parent)
 
     /* Complicación de batería: vidrio con el indicador, el % y el estado. */
     lv_obj_t *card = watch_theme_glass_card(scr, (FLEX_SCREEN_W - COMP_W) / 2, COMP_Y, COMP_W, COMP_H);
+    if (watch_theme_wall_is_light((FLEX_SCREEN_W - COMP_W) / 2, COMP_Y, COMP_W, COMP_H)) {
+        /* vidrio más denso sobre un fondo claro: el texto claro de la tarjeta se lee */
+        watch_theme_glass_set_min_tint(card, FLEX_GLASS_MIN_MIX_LIGHT);
+    }
     f->batt_icon = flex_battery_icon_create(card, BICON_W, BICON_H);
     lv_obj_align(f->batt_icon, LV_ALIGN_LEFT_MID, 0, 0);
     /* % y estado en columna: nunca se pisan, sea cual sea el texto. */

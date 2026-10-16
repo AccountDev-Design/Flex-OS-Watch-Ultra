@@ -43,12 +43,12 @@ F4.4), que pasa a ser parte de Device Care / Flex Compass.
 |---|---|---|---|
 | Esfera / pantalla de bloqueo | `Lock.h`, `Clock.h` | Esfera con hora del RTC, fecha y batería real | 🟡 |
 | Escritorio (Inicio) y dock | `Home.h`, `HomeCfg.h` (rejilla 4×N, iconos de 72 px) | La esfera hace de Inicio; el escritorio de 4 columnas no cabe en 410 px | ⚠️ |
-| Caja de aplicaciones | `AppDrawer.h` (4 columnas, iconos de 72 px, etiqueta debajo, buscador) | **Lanzador en rejilla de 3 columnas con los iconos originales** (mismo tamaño físico) | ⬜ (F3.5) |
+| Caja de aplicaciones | `AppDrawer.h` (4 columnas, iconos de 72 px, etiqueta debajo, buscador) | **Lanzador en rejilla de 3 columnas con los iconos originales** (mismo tamaño físico) | 🟡 (F3.5) |
 | Panel rápido | `QuickPanel*.h` (22 mosaicos: Wi-Fi, BLE, brillo, ahorro, No molestar...) | Cortina con Wi-Fi, Bluetooth, batería, Ajustes y brillo | 🟡 (Wi-Fi/BT "Pendiente") |
 | Notificaciones | `Notif.h`, `FlexPhone_Overlay.h` | Llegan con Flex Phone (F5.3) | ⬜ |
 | Recientes | `AppSwitcher.h` | Pila de navegación + gesto volver | ⚠️ (no se replica la multitarea) |
 | Teclado | `Keyboard.h` (QWERTY completo, 480 px) | Teclado compacto por páginas para 410 px | ⬜ |
-| Fondos de pantalla | `Wallpaper.h` (8 fondos procedurales) | Los 8 fondos regenerados para 410×502 + negro AMOLED | ⬜ (F3.6) |
+| Fondos de pantalla | `Wallpaper.h` (8 fondos procedurales) | Los 8 fondos regenerados para 410×502 + negro AMOLED, con selector | 🟡 (F3.6) |
 | Temas | `Wallpaper.h:504` (`LOOKS`, 8 temas) | Tema "AMOLED" por defecto (fondo negro, acento #788CFF) | 🟡 (solo AMOLED) |
 | OTA | `FlexOS_OTA.cpp` | F7 | ⬜ |
 | Antirrobo, cuenta, nube | `Theft*.h`, `FlexOS_Account`, `FlexOS_Cloud` | F8 (❓ D11) | ⬜ |

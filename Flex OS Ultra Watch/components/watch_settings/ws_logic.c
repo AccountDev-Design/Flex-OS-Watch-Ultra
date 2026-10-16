@@ -51,7 +51,7 @@ bool ws_normalize(ws_settings_t *s)
         tz -= WS_TZ_STEP;
     }
     s->tz_min = (int16_t)tz;
-    if (s->wallpaper > 1) {
+    if (s->wallpaper >= WS_WALLPAPER_COUNT) {
         s->wallpaper = 0;
     }
     if (s->face >= WS_FACE_COUNT) {

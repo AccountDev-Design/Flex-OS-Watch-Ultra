@@ -1,26 +1,62 @@
 /*
- * ui_apps — lanzador de aplicaciones: se abre deslizando la esfera hacia la
- * izquierda (y se vuelve con el gesto desde el borde izquierdo o la
- * cabecera). Mosaicos de vidrio con el estado real de cada app: cronómetro
- * y temporizador (siguen contando fuera de su página), próxima alarma,
- * sensores y Ajustes.
+ * ui_apps — lanzador de aplicaciones: la Caja de aplicaciones de Flex OS
+ * Ultra (FlexOS_Ultra_AppDrawer.h) adaptada a 410x502.
+ *
+ * Se abre deslizando la esfera hacia la izquierda y se vuelve con el gesto
+ * desde el borde izquierdo o la cabecera.
+ *
+ * De la referencia se conserva:
+ *  - los ICONOS ORIGINALES de cada app (flex_app_icons, el dibujo de
+ *    drawAppIcon), al mismo tamaño físico: 72 px a 217 ppi = 104 px aquí;
+ *  - la rejilla con el nombre centrado bajo el icono, ajustado a su
+ *    columna (uiFontFit + uiLabelFit, AppDrawer.h:700-707);
+ *  - el punto de estado sobre el icono (AppDrawer.h:690): aquí, en Reloj
+ *    mientras el cronómetro o el temporizador cuentan.
+ * Cambia: 3 columnas en vez de 4 (410 px de ancho) y sin buscador (con tan
+ * pocas apps no hace falta, y el teclado no cabe con la rejilla).
+ *
+ * Solo aparecen las apps que funcionan de verdad en el reloj
+ * (docs/INVENTARIO-APPS.md): ni pantallas vacías ni "próximamente".
  */
 #include "ui_internal.h"
 
-#include <stdio.h>
-#include <string.h>
+#include "flex_app_icons.h"
 #include "ui_gesture.h"
-#include "watch_settings.h"
 #include "watch_theme.h"
 
 #define APPS_TICK_MS 500
-#define TILE_H       128
-#define TILE_GAP     12
+#define APPS_COLS    3
+#define CELL_W       128                      /* paso de columna */
+#define CELL_GAP_Y   6                        /* icono -> nombre */
+#define ROW_STEP     (FLEX_APP_ICON_SIZE + CELL_GAP_Y + 23 + 17)
+#define GRID_X0      ((FLEX_SCREEN_W - ((APPS_COLS - 1) * CELL_W + FLEX_APP_ICON_SIZE)) / 2 - (CELL_W - FLEX_APP_ICON_SIZE) / 2)
+#define GRID_TOP     6
+/* Nombre bajo el icono. La referencia, si no cabe en su columna, primero
+ * encoge la letra (uiFontFit) y solo después recorta. Aquí 18 px es la menor
+ * legible, así que se aprieta el espaciado (hasta -1 px) y, si aun así no
+ * cabe, recorta con "..." (LV_LABEL_LONG_MODE_DOTS). */
+#define LABEL_W      CELL_W
+/* Punto de estado: radio 7 px a 72 px en la referencia -> 10 px a 104 px */
+#define BADGE_D      20
+#define BADGE_INSET  3
 
 typedef struct {
-    lv_obj_t *sw;
-    lv_obj_t *tmr;
-    lv_obj_t *al;
+    flex_app_t app;
+    ui_page_create_t create;
+} app_entry_t;
+
+/* Apps del reloj con su página. Una app del inventario entra aquí cuando
+ * hace algo real; el orden es el de la rejilla. */
+static const app_entry_t kApps[] = {
+    {FLEX_APP_RELOJ, ui_reloj_create},
+    {FLEX_APP_SENSORES, ui_sensors_create},
+    {FLEX_APP_ALMACENAMIENTO, ui_storage_create},
+    {FLEX_APP_AJUSTES, ui_settings_create},
+};
+#define APPS_N ((int)(sizeof(kApps) / sizeof(kApps[0])))
+
+typedef struct {
+    lv_obj_t *badge; /* punto de estado de Reloj */
 } apps_t;
 
 static void back_cb(lv_event_t *e)
@@ -34,71 +70,89 @@ static void open_cb(lv_event_t *e)
     ui_nav_push((ui_page_create_t)lv_event_get_user_data(e));
 }
 
-/* Mosaico: icono, nombre y estado (hijo 2). */
-static lv_obj_t *tile(lv_obj_t *list, flex_icon_t icon, uint32_t accent, const char *name, ui_page_create_t page,
-                      int32_t w)
+/* El icono se oscurece mientras el dedo está encima de su celda (icono o
+ * nombre): el estado de la celda se copia al icono, que es quien se tiñe. */
+static void press_cb(lv_event_t *e)
 {
-    lv_obj_t *t = watch_theme_tile(list, 0, 0, w, TILE_H);
-    lv_obj_t *ic = flex_icon_create(t, icon, 40, accent);
-    lv_obj_set_pos(ic, 0, 0);
-    lv_obj_t *n = watch_theme_label(t, FLEX_FONT_BODY, FLEX_C_TXT, name);
-    lv_label_set_long_mode(n, LV_LABEL_LONG_MODE_DOTS);
-    lv_obj_set_size(n, LV_PCT(100), lv_font_get_line_height(FLEX_FONT_BODY));
-    lv_obj_set_pos(n, 0, 46);
-    lv_obj_t *s = watch_theme_label(t, FLEX_FONT_SMALL, FLEX_C_TXT2, "");
-    lv_label_set_long_mode(s, LV_LABEL_LONG_MODE_DOTS);
-    lv_obj_set_size(s, LV_PCT(100), lv_font_get_line_height(FLEX_FONT_SMALL));
-    lv_obj_align(s, LV_ALIGN_BOTTOM_LEFT, 0, 2);
-    if (page) {
-        lv_obj_add_event_cb(t, open_cb, LV_EVENT_CLICKED, (void *)page);
+    lv_obj_t *icon = lv_obj_get_child(lv_event_get_target_obj(e), 0);
+    if (lv_event_get_code(e) == LV_EVENT_PRESSED) {
+        lv_obj_add_state(icon, LV_STATE_PRESSED);
+    } else {
+        lv_obj_remove_state(icon, LV_STATE_PRESSED);
     }
-    return t;
 }
 
-static void set_status(lv_obj_t *t, const char *text)
+/* Celda: icono (hijo 0) y nombre (hijo 1). */
+static lv_obj_t *cell(lv_obj_t *grid, const app_entry_t *a, int i)
 {
-    lv_obj_t *s = lv_obj_get_child(t, 2);
-    if (strcmp(lv_label_get_text(s), text) != 0) {
-        lv_label_set_text(s, text);
+    const int32_t line = lv_font_get_line_height(FLEX_FONT_SMALL);
+    lv_obj_t *c = lv_obj_create(grid);
+    lv_obj_remove_style_all(c);
+    /* BADGE_INSET de más arriba: el punto de estado sobresale del icono y
+     * LVGL recorta los hijos al área de su padre; así queda dentro de la celda
+     * sin mover el icono ni el nombre en pantalla. */
+    lv_obj_set_size(c, CELL_W, BADGE_INSET + FLEX_APP_ICON_SIZE + CELL_GAP_Y + line);
+    lv_obj_set_pos(c, GRID_X0 + (i % APPS_COLS) * CELL_W, GRID_TOP - BADGE_INSET + (i / APPS_COLS) * ROW_STEP);
+    lv_obj_set_style_pad_top(c, BADGE_INSET, 0);
+    lv_obj_remove_flag(c, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(c, LV_OBJ_FLAG_CLICKABLE);
+
+    lv_obj_t *img = lv_image_create(c);
+    lv_image_set_src(img, flex_app_icon(a->app));
+    lv_obj_align(img, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_remove_flag(img, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_image_recolor(img, lv_color_black(), LV_STATE_PRESSED);
+    lv_obj_set_style_image_recolor_opa(img, LV_OPA_40, LV_STATE_PRESSED);
+
+    const char *name = flex_app_name(a->app);
+    lv_obj_t *n = watch_theme_label(c, FLEX_FONT_SMALL, FLEX_C_TXT, name);
+    lv_point_t sz;
+    lv_text_get_size(&sz, name, FLEX_FONT_SMALL, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+    if (sz.x > LABEL_W) {
+        lv_obj_set_style_text_letter_space(n, -1, 0);
     }
+    lv_label_set_long_mode(n, LV_LABEL_LONG_MODE_DOTS);
+    lv_obj_set_size(n, LABEL_W, line);
+    lv_obj_set_style_text_align(n, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(n, LV_ALIGN_TOP_MID, 0, FLEX_APP_ICON_SIZE + CELL_GAP_Y);
+
+    lv_obj_add_event_cb(c, open_cb, LV_EVENT_CLICKED, (void *)a->create);
+    lv_obj_add_event_cb(c, press_cb, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(c, press_cb, LV_EVENT_RELEASED, NULL);
+    lv_obj_add_event_cb(c, press_cb, LV_EVENT_PRESS_LOST, NULL);
+    return c;
+}
+
+static lv_obj_t *badge(lv_obj_t *c)
+{
+    lv_obj_t *b = lv_obj_create(c);
+    lv_obj_remove_style_all(b);
+    lv_obj_set_size(b, BADGE_D, BADGE_D);
+    lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(b, flex_color(FLEX_C_ACCENT), 0);
+    lv_obj_set_style_bg_opa(b, LV_OPA_COVER, 0);
+    /* aro negro: separa el punto del icono, como sobre el fondo en la referencia */
+    lv_obj_set_style_border_color(b, lv_color_black(), 0);
+    lv_obj_set_style_border_width(b, 2, 0);
+    lv_obj_set_pos(b, (CELL_W + FLEX_APP_ICON_SIZE) / 2 - BADGE_D + BADGE_INSET, -BADGE_INSET);
+    lv_obj_remove_flag(b, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(b, LV_OBJ_FLAG_HIDDEN);
+    return b;
 }
 
 static void refresh(apps_t *a)
 {
-    char buf[32], t[16];
-    const int64_t now = ui_mono_us();
-    const sw_t *sw = ui_sw();
-    sw_format(sw_elapsed(sw, now), false, t, sizeof(t));
-    if (sw->st == SW_RUN) {
-        snprintf(buf, sizeof(buf), "%s", t);
-    } else if (sw->st == SW_PAUSE) {
-        snprintf(buf, sizeof(buf), "Pausa %s", t);
-    } else {
-        snprintf(buf, sizeof(buf), "Parado");
+    if (!a->badge) {
+        return;
     }
-    set_status(a->sw, buf);
-
-    const tmr_t *tm = ui_tmr();
-    tmr_format(tmr_left(tm, now), t, sizeof(t));
-    if (tm->st == TMR_RUN) {
-        snprintf(buf, sizeof(buf), "%s", t);
-    } else if (tm->st == TMR_PAUSE) {
-        snprintf(buf, sizeof(buf), "Pausa %s", t);
-    } else {
-        snprintf(buf, sizeof(buf), "Listo");
+    const bool busy = ui_sw()->st == SW_RUN || ui_tmr()->st == TMR_RUN;
+    if (busy != !lv_obj_has_flag(a->badge, LV_OBJ_FLAG_HIDDEN)) {
+        if (busy) {
+            lv_obj_remove_flag(a->badge, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(a->badge, LV_OBJ_FLAG_HIDDEN);
+        }
     }
-    set_status(a->tmr, buf);
-
-    int64_t loc;
-    const int64_t next = ui_clock_local_now(&loc) ? alarms_next(ui_alarms(), loc, NULL) : -1;
-    if (next >= 0) {
-        watch_settings_t ws;
-        watch_settings_get(&ws);
-        alarm_when_text(next, loc, ws.h24, buf, sizeof(buf));
-    } else {
-        snprintf(buf, sizeof(buf), "%s", ui_alarms()->n ? "Ninguna activa" : "Ninguna");
-    }
-    set_status(a->al, buf);
 }
 
 static void tick_cb(lv_timer_t *t)
@@ -118,19 +172,22 @@ lv_obj_t *ui_apps_create(lv_obj_t *parent)
     lv_obj_t *page = ui_page_new(parent);
     watch_theme_page(page);
     watch_theme_header(page, "Aplicaciones", back_cb, NULL);
-    lv_obj_t *list = watch_theme_list(page);
-    lv_obj_set_flex_flow(list, LV_FLEX_FLOW_ROW_WRAP);
-    lv_obj_set_style_pad_column(list, TILE_GAP, 0);
-    lv_obj_set_style_pad_row(list, TILE_GAP, 0);
-    const int32_t w = (FLEX_SCREEN_W - 2 * FLEX_LIST_X - TILE_GAP) / 2;
-
-    a->sw = tile(list, FLEX_ICON_STOPWATCH, FLEX_C_CAT_GREEN, "Cronómetro", ui_stopwatch_create, w);
-    a->tmr = tile(list, FLEX_ICON_HOURGLASS, FLEX_C_ACCENT, "Temporizador", ui_timer_create, w);
-    a->al = tile(list, FLEX_ICON_BELL, FLEX_C_WARN, "Alarmas", ui_alarms_create, w);
-    lv_obj_t *sen = tile(list, FLEX_ICON_MOTION, FLEX_C_CAT_NET, "Sensores", ui_sensors_create, w);
-    set_status(sen, "Movimiento");
-    lv_obj_t *set = tile(list, FLEX_ICON_GEAR, FLEX_C_CAT_BLUE, "Ajustes", ui_settings_create, w);
-    set_status(set, "Brillo, hora, zona");
+    lv_obj_t *grid = watch_theme_list(page);
+    /* Las celdas se colocan a mano: sin flex, la rejilla no se recalcula. */
+    lv_obj_set_layout(grid, LV_LAYOUT_NONE);
+    lv_obj_set_style_pad_all(grid, 0, 0);
+    for (int i = 0; i < APPS_N; i++) {
+        lv_obj_t *c = cell(grid, &kApps[i], i);
+        if (kApps[i].app == FLEX_APP_RELOJ) {
+            a->badge = badge(c);
+        }
+    }
+    /* Aire bajo la última fila para que su nombre suba por encima del borde
+     * redondeado al desplazar hasta el final. */
+    lv_obj_t *pad = lv_obj_create(grid);
+    lv_obj_remove_style_all(pad);
+    lv_obj_set_size(pad, 1, 1);
+    lv_obj_set_pos(pad, 0, GRID_TOP + ((APPS_N + APPS_COLS - 1) / APPS_COLS) * ROW_STEP);
 
     refresh(a);
     lv_obj_add_event_cb(page, free_cb, LV_EVENT_DELETE, a);

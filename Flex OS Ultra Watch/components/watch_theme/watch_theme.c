@@ -6,9 +6,11 @@
 #include <string.h>
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "flex_glass_math.h"
 #include "flex_safe.h"
 #include "flex_wallpaper.h"
+#include "misc/cache/lv_cache.h" /* lv_image_cache_drop (no está en lvgl.h) */
 
 static const char *TAG = "watch_theme";
 
@@ -27,9 +29,21 @@ enum { ROW_ICON = 0, ROW_TITLE, ROW_VALUE };
 
 #define HDR_CHEV 26 /* chevron de "volver" */
 
+/* Un solo fondo en PSRAM (402 KB): el que pinta la esfera. Se reescribe al
+ * cambiar de fondo y se libera al volver al negro. s_wall_px_id dice qué
+ * fondo contiene (FLEX_WALL_BLACK = ninguno válido). */
 static uint16_t *s_wall_px;
+static flex_wall_t s_wall_px_id = FLEX_WALL_BLACK;
 static lv_image_dsc_t s_wall_dsc;
 static flex_wall_t s_wall = FLEX_WALL_BLACK;
+
+/* flex_wall_t (valor guardado en los ajustes) -> fondo de la referencia */
+static const flex_wp_t kWallToWp[FLEX_WALL_COUNT_] = {
+    [FLEX_WALL_ONYX] = FLEX_WP_ONYX,         [FLEX_WALL_FLEX_ORIGINAL] = FLEX_WP_FLEX_ORIGINAL,
+    [FLEX_WALL_AURORA] = FLEX_WP_AURORA,     [FLEX_WALL_NOCTURNO] = FLEX_WP_NOCTURNO,
+    [FLEX_WALL_HALO] = FLEX_WP_HALO,         [FLEX_WALL_OCEANO] = FLEX_WP_OCEANO,
+    [FLEX_WALL_VIOLETA] = FLEX_WP_VIOLETA,   [FLEX_WALL_NATURALEZA] = FLEX_WP_NATURALEZA,
+};
 static lv_opa_t s_flat_mix; /* tinte del vidrio sobre el negro de la página */
 
 static lv_color_t mix(uint32_t fg, uint32_t bg, uint8_t a)
@@ -154,7 +168,7 @@ static void add_states(lv_obj_t *obj)
 
 void watch_theme_set_wallpaper(flex_wall_t w)
 {
-    s_wall = w;
+    s_wall = ((unsigned)w < FLEX_WALL_COUNT_) ? w : FLEX_WALL_BLACK;
 }
 
 flex_wall_t watch_theme_get_wallpaper(void)
@@ -162,18 +176,61 @@ flex_wall_t watch_theme_get_wallpaper(void)
     return s_wall;
 }
 
-static bool ensure_onyx(void)
+const char *watch_theme_wallpaper_name(flex_wall_t w)
+{
+    if (w == FLEX_WALL_BLACK || (unsigned)w >= FLEX_WALL_COUNT_) {
+        return "Negro";
+    }
+    return flex_wallpaper_name(kWallToWp[w]);
+}
+
+void watch_theme_wallpaper_thumb(flex_wall_t w, uint16_t *buf, int tw, int th)
+{
+    if (w == FLEX_WALL_BLACK || (unsigned)w >= FLEX_WALL_COUNT_) {
+        memset(buf, 0, (size_t)tw * (size_t)th * sizeof(uint16_t));
+        return;
+    }
+    flex_wallpaper_render(kWallToWp[w], buf, tw, th);
+}
+
+/* Libera el fondo. Solo se llama mientras se construye la esfera nueva: la
+ * vieja, que aún apunta al búfer, se borra en la misma llamada sin dibujarse
+ * (ui_nav_replace_root), así que nadie lo lee después. */
+static void drop_wall(void)
 {
     if (s_wall_px) {
-        return true;
+        lv_image_cache_drop(&s_wall_dsc);
+        heap_caps_free(s_wall_px);
+        s_wall_px = NULL;
+        s_wall_px_id = FLEX_WALL_BLACK;
+        ESP_LOGI(TAG, "fondo liberado (negro AMOLED)");
     }
-    const size_t bytes = (size_t)FLEX_SCREEN_W * FLEX_SCREEN_H * sizeof(uint16_t);
-    s_wall_px = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!s_wall_px) {
-        ESP_LOGW(TAG, "sin PSRAM para el fondo Onyx (%u B): fondo negro", (unsigned)bytes);
+}
+
+/* Deja en s_wall_px el fondo s_wall. false si es el negro o no hay PSRAM. */
+static bool ensure_wall(void)
+{
+    if (s_wall == FLEX_WALL_BLACK) {
+        drop_wall();
         return false;
     }
-    flex_wallpaper_onyx(s_wall_px, FLEX_SCREEN_W, FLEX_SCREEN_H);
+    const size_t bytes = (size_t)FLEX_SCREEN_W * FLEX_SCREEN_H * sizeof(uint16_t);
+    if (!s_wall_px) {
+        s_wall_px = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!s_wall_px) {
+            ESP_LOGW(TAG, "sin PSRAM para el fondo (%u B): fondo negro", (unsigned)bytes);
+            return false;
+        }
+        s_wall_px_id = FLEX_WALL_BLACK;
+    }
+    if (s_wall_px_id != s_wall) {
+        const int64_t t0 = esp_timer_get_time();
+        flex_wallpaper_render(kWallToWp[s_wall], s_wall_px, FLEX_SCREEN_W, FLEX_SCREEN_H);
+        s_wall_px_id = s_wall;
+        lv_image_cache_drop(&s_wall_dsc); /* mismo descriptor, contenido nuevo */
+        ESP_LOGI(TAG, "fondo \"%s\" generado en PSRAM (%u B) en %d ms", watch_theme_wallpaper_name(s_wall),
+                 (unsigned)bytes, (int)((esp_timer_get_time() - t0) / 1000));
+    }
     s_wall_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
     s_wall_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
     s_wall_dsc.header.w = FLEX_SCREEN_W;
@@ -181,20 +238,27 @@ static bool ensure_onyx(void)
     s_wall_dsc.header.stride = FLEX_SCREEN_W * sizeof(uint16_t);
     s_wall_dsc.data_size = bytes;
     s_wall_dsc.data = (const uint8_t *)s_wall_px;
-    ESP_LOGI(TAG, "fondo Onyx generado en PSRAM (%u B)", (unsigned)bytes);
     return true;
 }
 
-static bool onyx_active(void)
+static bool wall_active(void)
 {
-    return s_wall == FLEX_WALL_ONYX && s_wall_px;
+    return s_wall != FLEX_WALL_BLACK && s_wall_px && s_wall_px_id == s_wall;
+}
+
+bool watch_theme_wall_is_light(int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    if (!wall_active()) {
+        return false;
+    }
+    return flex_wallpaper_region_luma(s_wall_px, FLEX_SCREEN_W, FLEX_SCREEN_H, x, y, w, h) > FLEX_WALL_LIGHT_LUMA;
 }
 
 bool watch_theme_apply_background(lv_obj_t *screen)
 {
     lv_obj_set_style_bg_color(screen, flex_color(FLEX_C_BLACK), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
-    if (s_wall != FLEX_WALL_ONYX || !ensure_onyx()) {
+    if (!ensure_wall()) {
         return false;
     }
     lv_obj_t *img = lv_image_create(screen);
@@ -214,8 +278,8 @@ lv_obj_t *watch_theme_glass_card(lv_obj_t *parent, int32_t x, int32_t y, int32_t
     lv_obj_set_size(card, w, h);
     lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
-    if (onyx_active()) {
-        /* Sobre Onyx: vidrio translúcido con el tinte adaptativo según la
+    if (wall_active()) {
+        /* Sobre un fondo: vidrio translúcido con el tinte adaptativo según la
          * luma real del fondo que queda debajo (glassTintMix). */
         uint32_t sum = 0;
         int n = 0;

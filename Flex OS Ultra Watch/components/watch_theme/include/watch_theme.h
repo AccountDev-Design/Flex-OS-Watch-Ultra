@@ -6,9 +6,9 @@
  * adaptativo de la referencia PRECALCULADA y opaca, más el borde de luz
  * arriba/izquierda. Sin desenfoque, sin capas translúcidas a pantalla
  * completa y sin degradados: cada cuadro solo rellena colores sólidos y
- * dibuja texto (ver docs/B4-CALIDAD.md). El fondo Onyx de la referencia sigue
- * disponible (watch_theme_set_wallpaper) y con él las tarjetas vuelven a ser
- * translúcidas.
+ * dibuja texto (ver docs/B4-CALIDAD.md). Los 8 fondos de la referencia están
+ * disponibles (watch_theme_set_wallpaper) y con ellos las tarjetas vuelven a
+ * ser translúcidas.
  */
 #pragma once
 
@@ -43,33 +43,57 @@ static inline lv_color_t flex_color(uint32_t rgb)
 void watch_theme_init(void);
 
 /**
- * Fondo de las pantallas principales (esfera):
+ * Fondo de la esfera. El valor se guarda en los ajustes (watch_settings):
+ * no se reordena.
  *  - FLEX_WALL_BLACK (por defecto): negro puro AMOLED. Sin imagen: no se lee
  *    nada de la PSRAM al dibujar y los píxeles quedan apagados.
- *  - FLEX_WALL_ONYX: el fondo Onyx de la referencia (negro con halo azul),
- *    imagen RGB565 de 411 KB en PSRAM generada una vez.
+ *  - los 8 fondos de Flex OS Ultra (FlexOS_Ultra_Wallpaper.h), generados por
+ *    flex_wallpaper en una sola imagen RGB565 de 402 KB en PSRAM (solo el
+ *    fondo activo; se libera al volver al negro).
  */
 typedef enum {
     FLEX_WALL_BLACK = 0,
     FLEX_WALL_ONYX,
+    FLEX_WALL_FLEX_ORIGINAL,
+    FLEX_WALL_AURORA,
+    FLEX_WALL_NOCTURNO,
+    FLEX_WALL_HALO,
+    FLEX_WALL_OCEANO,
+    FLEX_WALL_VIOLETA,
+    FLEX_WALL_NATURALEZA,
+    FLEX_WALL_COUNT_
 } flex_wall_t;
+
+/** Luma (Rec.601) a partir de la cual un fondo es "claro": onColor() de la
+ * referencia (Wallpaper.h:468) pone texto oscuro por encima de 140. */
+#define FLEX_WALL_LIGHT_LUMA 140
+/** Texto sobre un fondo claro (onColor de la referencia: TC(16,18,26)). */
+#define FLEX_C_ON_LIGHT      0x10121A
+#define FLEX_C_ON_LIGHT2     0x3A3F4E
 
 void watch_theme_set_wallpaper(flex_wall_t w);
 flex_wall_t watch_theme_get_wallpaper(void);
+/** Nombre del fondo ("Negro", "Onyx", "Aurora"...). */
+const char *watch_theme_wallpaper_name(flex_wall_t w);
+/** Miniatura del fondo w en buf (tw x th RGB565) para el selector. */
+void watch_theme_wallpaper_thumb(flex_wall_t w, uint16_t *buf, int tw, int th);
 
 /**
- * Pone el fondo actual en screen (color negro y, con Onyx, la imagen).
+ * Pone el fondo actual en screen (color negro y, con un fondo, su imagen).
  * Las tarjetas de vidrio creadas después usan el modo correspondiente.
- * @return true si se puso la imagen Onyx.
+ * @return true si se puso una imagen de fondo.
  */
 bool watch_theme_apply_background(lv_obj_t *screen);
+
+/** ¿El fondo activo es claro bajo esa región? (false con el negro) */
+bool watch_theme_wall_is_light(int32_t x, int32_t y, int32_t w, int32_t h);
 
 /**
  * Crea una tarjeta de vidrio (rol CARD) en (x, y) de tamaño w x h, en
  * coordenadas de pantalla. El tinte es el de la mezcla adaptativa de Flex OS
  * Ultra: sobre negro (por defecto) se precalcula y la tarjeta es OPACA (sin
- * mezcla por píxel); sobre Onyx es translúcida y se calcula con la luma real
- * del fondo que queda debajo.
+ * mezcla por píxel); sobre un fondo es translúcida y se calcula con la luma
+ * real del fondo que queda debajo.
  */
 lv_obj_t *watch_theme_glass_card(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h);
 
@@ -82,6 +106,8 @@ lv_obj_t *watch_theme_glass_card(lv_obj_t *parent, int32_t x, int32_t y, int32_t
  * el suelo sube a 235.
  */
 #define FLEX_GLASS_MIN_MIX_BANNER 235
+/** Suelo del tinte de una tarjeta con texto claro sobre un fondo claro. */
+#define FLEX_GLASS_MIN_MIX_LIGHT  200
 void watch_theme_glass_set_min_tint(lv_obj_t *card, lv_opa_t min_mix);
 
 /** Etiqueta con fuente y color de la paleta. */

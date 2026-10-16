@@ -37,9 +37,9 @@ Auditoría inicial: [AUDITORIA-FASE0.md](AUDITORIA-FASE0.md).
 | Fuente Outfit | rama IDF `tools/fonts/` (OFL) | `flex_outfit_18/22/28/40/clock_120` generadas con `lv_font_conv` | 🟡 |
 | Liquid Glass nivel 50 (tinte 46-70, especular 26, sombra 30, borde 156/104) | Theme.h:404-464, 524-530 | Tinte adaptativo precalculado + borde de luz; sin desenfoque (coste). Sobre negro: opaco | 🟡 |
 | Tarjeta de fila de Ajustes (icono de color, título, valor, chevron) | AppSettings.h:399 (`setRowCard`) | `watch_theme_list_row` | 🟡 |
-| **Iconos de app (19, vectoriales, "son marca")** | Icons.h:65-305 (`drawAppIcon`) | Generador de PC con las **mismas figuras y colores**, a 72 px de diseño escalados a 104 px con antialiasing por supermuestreo; imágenes RGB565A8 en flash | ⬜ → F3.5 |
-| Caja de aplicaciones (rejilla 4×N, icono 72 px, etiqueta centrada, recorte con "...") | AppDrawer.h:328-346, 648-725 | Rejilla de 3 columnas, icono 104 px (mismo tamaño físico), etiqueta centrada recortada | ⬜ → F3.5 |
-| **Fondos (8)**: Flex Original, Aurora, Nocturno, Halo, Onyx, Océano, Violeta, Naturaleza | Wallpaper.h:42-315 | Las mismas funciones (`wallDiag3`, `wallDisc`, `wallRadial`, LUT de distancia) en C puro; posiciones y radios escalados a 410×502; tramado 4×4 para el RGB565 | ⬜ → F3.6 |
+| **Iconos de app (19, vectoriales, "son marca")** | Icons.h:65-305 (`drawAppIcon`) | Generador de PC con las **mismas figuras y colores**, a 72 px de diseño escalados a 104 px con antialiasing por supermuestreo; imágenes RGB565A8 en flash | 🟡 F3.5 |
+| Caja de aplicaciones (rejilla 4×N, icono 72 px, etiqueta centrada, recorte con "...") | AppDrawer.h:328-346, 648-725 | Rejilla de 3 columnas, icono 104 px (mismo tamaño físico), etiqueta centrada ajustada | 🟡 F3.5 |
+| **Fondos (8)**: Flex Original, Aurora, Nocturno, Halo, Onyx, Océano, Violeta, Naturaleza | Wallpaper.h:42-315 | Las mismas funciones (`wallDiag3`, `wallDisc`, `wallRadial`, LUT de distancia) en C puro; posiciones y radios escalados a 410×502; tramado 4×4 para el RGB565 | 🟡 F3.6 |
 | Movimiento: apertura 210 ms, cierre 190 ms, ease-out cúbico; aviso 220/4200/180 ms; cortina 1:1 con umbral del 40 % | AppFramework.h:866-940, Home.h:278-320 | `flex_tokens.h` + `ui_nav.c` / `ui_qp.c` / `ui_banner.c` | 🟡 |
 | Panel rápido de vidrio | QuickPanelGlass.h | `ui_qp.c` | 🟡 |
 | Estados pulsado / activo / no disponible | Widgets.h:593, QuickPanelGlass.h:154 | `LV_STATE_PRESSED/CHECKED/DISABLED` en los estilos del tema | 🟡 |

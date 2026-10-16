@@ -46,6 +46,12 @@ APP_SRC := $(wildcard sim_*.c) \
 
 LVGL_OBJ := $(patsubst $(LVGL_DIR)/%.c,$(BUILD)/lvgl/%.o,$(LVGL_SRC))
 
+# Iconos originales de las apps: el mismo .incbin alineado que genera
+# components/watch_theme/CMakeLists.txt para el firmware.
+ICONS := reloj calend calc clima musica notas flexphone nav brujula devcare almacen paint flexstore ajustes sensores
+ICON_BINS := $(foreach n,$(ICONS),$(FW)/assets/icons/app_$(n).bin)
+ICON_ASM := $(BUILD)/flex_app_icons_data.S
+
 .PHONY: all clean
 all: $(BUILD)/sim
 
@@ -62,9 +68,17 @@ $(BUILD)/lvgl/%.o: $(LVGL_DIR)/%.c lv_conf.h
 APP_HDR := $(wildcard $(FW)/components/*/include/*.h) $(wildcard $(FW)/components/watch_ui/*.h) \
            $(wildcard stubs/*.h stubs/*/*.h) sim.h lv_conf.h
 
-$(BUILD)/sim: $(APP_SRC) $(APP_HDR) $(LVGL_OBJ)
+$(ICON_ASM): $(ICON_BINS) Makefile
+	@mkdir -p $(dir $@)
+	@{ echo '.section .rodata.flex_app_icons, "a"'; \
+	  for n in $(ICONS); do \
+	    printf '.balign 4\n.global _binary_app_%s_bin_start\n_binary_app_%s_bin_start:\n.incbin "%s"\n' \
+	      $$n $$n "$(abspath $(FW))/assets/icons/app_$$n.bin"; \
+	  done; echo '.section .note.GNU-stack,"",@progbits'; } > $@
+
+$(BUILD)/sim: $(APP_SRC) $(APP_HDR) $(LVGL_OBJ) $(ICON_ASM)
 	@echo "LD $@"
-	@$(CC) $(CFLAGS) -Werror $(APP_SRC) $(LVGL_OBJ) -lm -o $@
+	@$(CC) $(CFLAGS) -Werror $(APP_SRC) $(ICON_ASM) $(LVGL_OBJ) -lm -o $@
 
 clean:
 	rm -rf build build-san out

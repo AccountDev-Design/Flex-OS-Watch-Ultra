@@ -35,9 +35,12 @@ typedef struct {
     uint8_t screen_to_s; /**< apagado de pantalla, uno de ws_screen_timeouts */
     bool h24;            /**< formato de 24 h (D18) */
     int16_t tz_min;      /**< desfase de la zona horaria respecto a UTC, en min (D17) */
-    uint8_t wallpaper;   /**< 0 = negro AMOLED, 1 = Onyx (flex_wall_t) */
+    uint8_t wallpaper;   /**< flex_wall_t: 0 = negro AMOLED, 1 = Onyx, 2..8 = resto de fondos de Flex OS Ultra */
     uint8_t face;        /**< estilo de esfera (0..WS_FACE_COUNT-1) */
 } ws_settings_t;
+
+/** Número de fondos (= FLEX_WALL_COUNT_ de watch_theme; lo comprueba ui_wallpaper.c). */
+#define WS_WALLPAPER_COUNT 9
 
 void ws_defaults(ws_settings_t *s);
 /** Lleva cada campo a un valor válido (el más cercano). true si cambió algo. */

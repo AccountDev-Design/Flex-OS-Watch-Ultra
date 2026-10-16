@@ -9,6 +9,7 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | T23-T40 | [B3-INTERFAZ.md](B3-INTERFAZ.md) |
 | T41-T45 | [B4-CALIDAD.md](B4-CALIDAD.md) y [B2-ENERGIA.md](B2-ENERGIA.md) |
 | T46-T66 | [F4-SERVICIOS.md](F4-SERVICIOS.md) |
+| T67-T73 | [F3-IDENTIDAD-ORIGINAL.md](F3-IDENTIDAD-ORIGINAL.md) (iconos, lanzador, Reloj y fondos) |
 | Flash de 32 MB | [FLASH-32MB.md](FLASH-32MB.md) |
 
 **Verificado en el reloj hasta ahora** (fotos y vídeo del 2026-10-15): pantalla, táctil, LVGL y la sonda de 32 MB (T10). Lo demás no. Compilar y pasar las pruebas de PC no prueba el reloj: cada resultado que me envíes es lo que convierte una tarea del 50 % al 100 %.
@@ -91,6 +92,13 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | T56-T59 | Apagado de pantalla: atenuada y apagada sin tocar, botón lateral (anota "reposo N" en Diagnóstico; **no** lo mantengas 4 s), despertar con USB y temporizador, imagen correcta tras encender |
 | T60-T62 | IMU: línea `QMI8658 ... configurado` en el registro; Aplicaciones > Sensores plano (Z ≈ 1 g, punto verde) y hacia dónde va el punto al inclinar |
 | T63-T66 | Ajustes > Almacenamiento: registro al arrancar (no formatea solo), Probar escritura ("Superada"), Formatear con dos toques, Probar archivo antes y después de reiniciar |
+
+## 7. Identidad original: iconos, lanzador y fondos (`F3-IDENTIDAD-ORIGINAL.md`)
+
+| Pruebas | Qué mirar |
+|---|---|
+| T67-T70 | Deslizar la esfera a la izquierda: iconos nítidos y sin bordes raros; "Almacenamiento" entero; punto en Reloj con el cronómetro en marcha; FPS al desplazar. En el registro, ningún `LoadStoreAlignment` |
+| T71-T73 | Ajustes > Pantalla > Fondo: tiempo de generación en el registro, degradados sin escalones, hora legible sobre Aurora y Naturaleza |
 
 ## Qué enviarme
 

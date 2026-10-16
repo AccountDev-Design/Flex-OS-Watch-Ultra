@@ -1,8 +1,8 @@
 /*
  * ui_display_page — Ajustes > Pantalla:
  *  - brillo real (el mismo control del panel rápido), guardado al soltar;
- *  - fondo: negro AMOLED (píxeles apagados) u Onyx. Se guarda y la esfera se
- *    rehace al momento;
+ *  - fondo: abre el selector (negro AMOLED o uno de los 8 fondos de Flex OS
+ *    Ultra, ui_wallpaper.c). Se guarda y la esfera se rehace al momento;
  *  - apagado por inactividad: 5, 10, 15, 30 o 60 s (cada toque pasa al
  *    siguiente). Se atenúa los últimos segundos; un toque, el botón lateral,
  *    una alarma o el USB la encienden (ui_screen.c, F4.5).
@@ -14,11 +14,6 @@
 #include "watch_settings.h"
 #include "watch_theme.h"
 
-static const char *wall_name(uint8_t w)
-{
-    return w == FLEX_WALL_ONYX ? "Onyx" : "Negro";
-}
-
 static void back_cb(lv_event_t *e)
 {
     (void)e;
@@ -27,14 +22,15 @@ static void back_cb(lv_event_t *e)
 
 static void wall_cb(lv_event_t *e)
 {
-    lv_obj_t *row = lv_event_get_current_target(e);
-    watch_settings_t ws;
-    watch_settings_get(&ws);
-    ws.wallpaper = ws.wallpaper == FLEX_WALL_ONYX ? FLEX_WALL_BLACK : FLEX_WALL_ONYX;
-    watch_settings_update(&ws);
-    watch_theme_set_wallpaper((flex_wall_t)ws.wallpaper);
-    watch_theme_row_set_value(row, wall_name(ws.wallpaper));
-    ui_nav_replace_root(ui_face_create); /* la esfera, debajo, con el fondo nuevo */
+    (void)e;
+    ui_nav_push(ui_wallpaper_create);
+}
+
+/* El nombre del fondo puede cambiar en el selector: se refresca al volver. */
+static void wall_refresh_cb(lv_timer_t *t)
+{
+    lv_obj_t *row = lv_timer_get_user_data(t);
+    watch_theme_row_set_value(row, watch_theme_wallpaper_name(watch_theme_get_wallpaper()));
 }
 
 static void timeout_cb(lv_event_t *e)
@@ -73,9 +69,10 @@ lv_obj_t *ui_display_page_create(lv_obj_t *parent)
     lv_obj_set_style_pad_left(note, 16, 0);
 
     watch_theme_section(list, "Fondo de la esfera");
-    lv_obj_t *wall = watch_theme_list_row(list, FLEX_ICON_IMAGE, FLEX_C_CAT_SUN, "Fondo", wall_name(ws.wallpaper),
-                                          false);
+    lv_obj_t *wall = watch_theme_list_row(list, FLEX_ICON_IMAGE, FLEX_C_CAT_SUN, "Fondo",
+                                          watch_theme_wallpaper_name((flex_wall_t)ws.wallpaper), true);
     lv_obj_add_event_cb(wall, wall_cb, LV_EVENT_CLICKED, NULL);
+    ui_page_timer(page, wall_refresh_cb, 500, wall);
     lv_obj_t *wnote = watch_theme_label(list, FLEX_FONT_SMALL, FLEX_C_MUTE,
                                         "Negro: los píxeles se apagan y gastan menos.");
     lv_label_set_long_mode(wnote, LV_LABEL_LONG_MODE_WRAP);

@@ -490,6 +490,66 @@ static void test_wallpaper(void)
     free(buf);
 }
 
+/* Canales de 8 bits (aprox.) de un RGB565 */
+static void rgb_of(uint16_t p, int *r, int *g, int *b)
+{
+    *r = ((p >> 11) & 0x1F) * 255 / 31;
+    *g = ((p >> 5) & 0x3F) * 255 / 63;
+    *b = (p & 0x1F) * 255 / 31;
+}
+
+static void test_wallpapers(void)
+{
+    const int w = FLEX_SCREEN_W, h = FLEX_SCREEN_H;
+    uint16_t *a = malloc((size_t)w * h * 2), *b = malloc((size_t)w * h * 2);
+    CHECK(a && b);
+    if (!a || !b) {
+        free(a);
+        free(b);
+        return;
+    }
+    CHECK(strcmp(flex_wallpaper_name(FLEX_WP_AURORA), "Aurora") == 0);
+    CHECK(strcmp(flex_wallpaper_name((flex_wp_t)99), "Flex Original") == 0);
+    int r, g, bl;
+
+    /* Flex Original: arriba a la derecha verde (80,224,74), abajo a la izquierda violeta (112,46,230) */
+    flex_wallpaper_render(FLEX_WP_FLEX_ORIGINAL, a, w, h);
+    rgb_of(a[0 * w + (w - 1)], &r, &g, &bl);
+    CHECK(g > 180 && g > r && g > bl);
+    rgb_of(a[(h - 1) * w + 0], &r, &g, &bl);
+    CHECK(bl > 180 && r > g);
+    /* Fuera de rango = Flex Original (la ruta segura de la referencia) */
+    flex_wallpaper_render((flex_wp_t)99, b, w, h);
+    CHECK(memcmp(a, b, (size_t)w * h * 2) == 0);
+
+    /* Por bandas = de una vez (el selector y el reloj pueden repartir el trabajo) */
+    for (int id = 0; id < FLEX_WP_COUNT_; id++) {
+        flex_wallpaper_render((flex_wp_t)id, a, w, h);
+        memset(b, 0xAA, (size_t)w * h * 2);
+        for (int y = 0; y < h; y += 37) {
+            flex_wallpaper_render_rows((flex_wp_t)id, b, w, h, y, y + 36);
+        }
+        CHECK(memcmp(a, b, (size_t)w * h * 2) == 0);
+    }
+
+    /* Aurora: esquina superior izquierda clara (205,238,236): luma > 140 */
+    flex_wallpaper_render(FLEX_WP_AURORA, a, w, h);
+    CHECK(flex_wallpaper_region_luma(a, w, h, 0, 0, 20, 20) > 140);
+    /* Halo: el núcleo (17,22,58) es oscuro y el anillo fino de r=122 (176,198,255) brilla */
+    flex_wallpaper_render(FLEX_WP_HALO, a, w, h);
+    const int hx = 206 * w / 480, hy = 402 * h / 800, rr = 122 * w / 480;
+    rgb_of(a[hy * w + hx], &r, &g, &bl);
+    CHECK(bl < 90 && r < 40);
+    rgb_of(a[hy * w + hx + rr], &r, &g, &bl);
+    CHECK(bl > 200 && g > 140);
+    CHECK(flex_wallpaper_region_luma(a, w, h, 0, 0, w, h) < 140);
+    /* Onyx: negro fuera del halo */
+    flex_wallpaper_render(FLEX_WP_ONYX, a, w, h);
+    CHECK_EQ(flex_wallpaper_region_luma(a, w, h, 0, 0, 40, 40), 0);
+    free(a);
+    free(b);
+}
+
 int main(void)
 {
     test_decode();
@@ -501,6 +561,7 @@ int main(void)
     test_flash_probe();
     test_glass();
     test_wallpaper();
+    test_wallpapers();
     test_ui_all();
     test_alerts_all();
     test_time_all();

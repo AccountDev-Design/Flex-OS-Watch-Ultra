@@ -1,7 +1,7 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 30,3 %   [██████░░░░░░░░░░░░░░]   69,7 % pendiente   (verificado en el reloj: 8,6 %)
+PROGRESO GLOBAL: 32,8 %   [███████░░░░░░░░░░░░░]   67,2 % pendiente   (verificado en el reloj: 8,6 %)
 ```
 
 El 2026-10-16 el alcance creció con el prompt maestro de migración (iconos y fondos originales, todas las apps del
@@ -76,15 +76,15 @@ Dentro de F2 queda:
 - Calibración de los umbrales con la batería real (❓ D4).
 - F2.1 y F2.2 siguen al 50 %. B2-6 y B4-C2 cambiaron el muestreo y la animación después de la prueba, así que hay que repetirla (T41, T43). Los estados "completa" y "externa sin carga" no tienen resultado físico.
 
-### F3 · Interfaz, tema y navegación — 10 / 25
+### F3 · Interfaz, tema y navegación — 12,5 / 25
 | Tarea | Peso | Estado | Puntos |
 |---|---|---|---|
 | F3.1 Identidad Flex OS Ultra: paleta, Outfit, iconos, radios, fondo Onyx, **Liquid Glass** base (tinte adaptativo, brillo, sombra, bordes). **B3-1:** 12 iconos vectoriales, estados pulsado/activo/no disponible, cabecera, lista y fila de Ajustes (`docs/B3-INTERFAZ.md`). Pendiente: fondo pre-desenfocado para fondos con detalle | 5 | 🟡 faltan T2, T13 y T23-T25 | 2,5 |
 | F3.2 Esfera del reloj: hora y fecha reales del RTC (servicio de solo lectura; poner en hora es F4.2), batería real, estados sin datos (B3-2) | 5 | 🟡 faltan T26-T29 | 2,5 |
 | F3.3 Panel rápido: cortina que sigue al dedo, brillo real (mín. 10 %), batería real, acceso a Ajustes, Wi-Fi/Bluetooth marcados "Pendiente" (B3-4) | 5 | 🟡 faltan T33-T36 | 2,5 |
 | F3.4 Ajustes (Pantalla, Batería, Diagnóstico, Acerca de), navegación por gestos y **animaciones/transiciones** (apertura y cierre 210/190 ms, volver, arranque) (B3-3, B3-5) | 5 | 🟡 faltan T30-T32 y T37-T40 | 2,5 |
-| F3.5 **Iconos originales** de las apps (`drawAppIcon`, Icons.h) prerenderizados a su tamaño físico + **lanzador en rejilla** como la Caja de aplicaciones (`docs/MIGRACION.md` §3) | 3 | ⬜ | 0 |
-| F3.6 **Fondos originales** (los 8 de Wallpaper.h) a 410×502, uno en PSRAM a la vez, selector en Ajustes | 2 | ⬜ | 0 |
+| F3.5 **Iconos originales** de las apps (`drawAppIcon`, Icons.h) prerenderizados a su tamaño físico + **lanzador en rejilla** como la Caja de aplicaciones (`docs/F3-IDENTIDAD-ORIGINAL.md`) | 3 | 🟡 faltan T67-T70 | 1,5 |
+| F3.6 **Fondos originales** (los 8 de Wallpaper.h) a 410×502, uno en PSRAM a la vez, selector en Ajustes | 2 | 🟡 faltan T71-T73 | 1 |
 
 ### F4 · Servicios del sistema — 5 / 10
 
@@ -133,10 +133,10 @@ Limitación conocida: sin servidor de renderizado o sin el móvil, no hay web. N
 | F8.4 Consumo medido y optimización (pantalla, radio, sondeos) | 2 | ⬜ |
 | F8.5 Pruebas finales: 24 h de estabilidad, memoria y regresión completa en el reloj | 3 | ⬜ |
 
-### F9 · Apps de Flex OS Ultra (inventario: `docs/INVENTARIO-APPS.md`) — 0 / 15
+### F9 · Apps de Flex OS Ultra (inventario: `docs/INVENTARIO-APPS.md`) — 0,5 / 15
 | Tarea | Peso | Estado |
 |---|---|---|
-| F9.1 Reloj (agrupa Alarmas, Cronómetro y Temporizador con el icono original) | 1 | ⬜ |
+| F9.1 Reloj (agrupa Alarmas, Cronómetro y Temporizador con el icono original) | 1 | 🟡 falta T69 |
 | F9.2 Calculadora (lógica de `calcKey` transcrita, rejilla 5×4) | 1,5 | ⬜ |
 | F9.3 Calendario (vista de mes, hoy resaltado, cambio de mes) | 1 | ⬜ |
 | F9.4 Flex Compass (pantalla de requisito sin magnetómetro + cabeceo/alabeo reales) | 1 | ⬜ |
@@ -223,3 +223,4 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-16 | 36,5 % | +0,75 | F4.4 (IMU QMI8658 y app Sensores) compila y pasa las pruebas de PC y de la vista previa: 50 % de 1,5 |
 | 2026-10-16 | **37 %** | +0,5 | F4.6 (LittleFS en storage) compila y pasa las pruebas de PC y de la vista previa: 50 % de 1. Todas las tareas de F4 están implementadas y probadas en el PC; falta la prueba física |
 | 2026-10-16 | **30,3 %** | −6,7 | **Ampliación del alcance** (prompt maestro de migración): F3 sube de 20 a 25 (F3.5 iconos originales y lanzador, F3.6 fondos originales), F5 de 15 a 17 (F5.5 pasa a ser el transporte BLE, canal principal: 1 → 3) y se añade F9 (apps del inventario, 15). Peso total 122; puntos sin cambios (37). Global = 37 / 122. Verificado en el reloj = 10,5 / 122 = 8,6 % |
+| 2026-10-16 | **32,8 %** | +2,5 | F3.5 (iconos originales y lanzador, 50 % de 3), F3.6 (fondos originales y selector, 50 % de 2) y F9.1 (app Reloj, 50 % de 1) compilan y pasan las pruebas de PC y de la vista previa. Puntos 40 / 122 |

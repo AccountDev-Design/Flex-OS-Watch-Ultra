@@ -86,6 +86,7 @@ lv_obj_t *ui_diag_create(lv_obj_t *parent);
 /** Raíz de Ajustes y sus páginas. */
 lv_obj_t *ui_settings_create(lv_obj_t *parent);
 lv_obj_t *ui_display_page_create(lv_obj_t *parent);
+lv_obj_t *ui_wallpaper_create(lv_obj_t *parent); /**< Ajustes > Pantalla > Fondo (F3.6) */
 lv_obj_t *ui_battery_page_create(lv_obj_t *parent);
 lv_obj_t *ui_about_create(lv_obj_t *parent);
 /* Apps de tiempo (F4.3): estado y motor (ui_clock_core), páginas */
@@ -102,6 +103,7 @@ bool ui_ring_active(void);                /**< aviso de alarma o temporizador en
 lv_obj_t *ui_ring_obj(void);
 void ui_ring_dismiss(void);
 lv_obj_t *ui_apps_create(lv_obj_t *parent);
+lv_obj_t *ui_reloj_create(lv_obj_t *parent); /**< app Reloj: alarmas, cronómetro y temporizador */
 void ui_apps_attach(lv_obj_t *face_page); /**< deslizar la esfera a la izquierda abre las apps */
 lv_obj_t *ui_stopwatch_create(lv_obj_t *parent);
 lv_obj_t *ui_timer_create(lv_obj_t *parent);

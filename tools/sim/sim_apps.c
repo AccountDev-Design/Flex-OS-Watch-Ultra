@@ -1,6 +1,8 @@
 /*
  * Apps de tiempo (F4.3) en la vista previa:
- *  - deslizar la esfera a la izquierda abre el lanzador;
+ *  - deslizar la esfera a la izquierda abre el lanzador (F3.5): rejilla con
+ *    los iconos originales; Reloj agrupa alarmas, cronómetro y temporizador
+ *    con su estado, y su icono lleva un punto mientras algo cuenta;
  *  - cronómetro: iniciar, vueltas, pausa, seguir, reiniciar; sigue contando
  *    fuera de su página;
  *  - temporizador: atajo, iniciar, pausa, aviso "Tiempo agotado" en
@@ -12,6 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "flex_app_icons.h"
 #include "sim.h"
 #include "ui_internal.h"
 #include "watch_theme.h"
@@ -95,11 +98,30 @@ void sim_suite_apps(const char *out)
     sim_release();
     sim_run(400);
     EXPECT(ui_nav_depth() == 2 && sim_find_label(ui_nav_top(), "Aplicaciones"), "deslizar no abrio las apps");
-    EXPECT(sim_find_label(ui_nav_top(), "Parado") && sim_find_label(ui_nav_top(), "Listo") &&
-               sim_find_label(ui_nav_top(), "Ninguna"),
-           "el lanzador no muestra el estado de las apps");
+    /* Cada app del lanzador muestra su icono original (imagen RGB565A8 de
+     * 104 px) y su nombre. */
+    static const char *const names[] = {"Reloj", "Sensores", "Almacenamiento", "Ajustes"};
+    for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+        lv_obj_t *c = clickable_of(sim_find_label(ui_nav_top(), names[i]));
+        lv_obj_t *img = c ? lv_obj_get_child(c, 0) : NULL;
+        const lv_image_dsc_t *d = img && lv_obj_check_type(img, &lv_image_class) ? lv_image_get_src(img) : NULL;
+        EXPECT(d && d->header.cf == LV_COLOR_FORMAT_RGB565A8 && d->header.w == FLEX_APP_ICON_SIZE &&
+                   ((uintptr_t)d->data & 3) == 0,
+               "lanzador: %s sin icono original alineado", names[i]);
+    }
+    EXPECT(sim_find_label(ui_nav_top(), "Calculadora") == NULL, "lanzador: aparece una app sin funcion");
+    lv_obj_t *reloj_cell = clickable_of(sim_find_label(ui_nav_top(), "Reloj"));
+    lv_obj_t *reloj_badge = reloj_cell ? lv_obj_get_child(reloj_cell, 2) : NULL;
+    EXPECT(reloj_badge && lv_obj_has_flag(reloj_badge, LV_OBJ_FLAG_HIDDEN), "lanzador: punto de Reloj sin nada en marcha");
     lint_page("aplicaciones", out, "f4_apps");
     sim_check_residue("aplicaciones");
+
+    /* ---- Reloj: estado en vivo de las tres funciones ---- */
+    EXPECT(tap_text(ui_nav_top(), "Reloj"), "no se abrio Reloj");
+    EXPECT(sim_find_label(ui_nav_top(), "Parado") && sim_find_label(ui_nav_top(), "Listo") &&
+               sim_find_label(ui_nav_top(), "Ninguna"),
+           "Reloj no muestra el estado de sus funciones");
+    lint_page("reloj", out, "f9_reloj");
 
     /* ---- Cronómetro ---- */
     EXPECT(tap_text(ui_nav_top(), "Cronómetro"), "no se abrio el cronometro");
@@ -130,7 +152,15 @@ void sim_suite_apps(const char *out)
            "cronometro: no sigue contando fuera de su pagina");
     sim_run(600);
     lv_obj_t *swt = clickable_of(sim_find_label(ui_nav_top(), "Cronómetro"));
-    EXPECT(swt && !sim_find_label(swt, "Parado"), "el lanzador no muestra el cronometro en marcha");
+    EXPECT(swt && !sim_find_label(swt, "Parado"), "Reloj no muestra el cronometro en marcha");
+    ui_nav_back();
+    sim_run(700);
+    reloj_cell = clickable_of(sim_find_label(ui_nav_top(), "Reloj"));
+    reloj_badge = reloj_cell ? lv_obj_get_child(reloj_cell, 2) : NULL;
+    EXPECT(reloj_badge && !lv_obj_has_flag(reloj_badge, LV_OBJ_FLAG_HIDDEN),
+           "lanzador: sin punto en Reloj con el cronometro en marcha");
+    sim_save(out, "f3_apps_punto");
+    tap_text(ui_nav_top(), "Reloj");
     tap_text(ui_nav_top(), "Cronómetro");
     tap_text(ui_nav_top(), "Pausa");
     EXPECT(tap_text(ui_nav_top(), "Reiniciar"), "cronometro: no hay Reiniciar en pausa");

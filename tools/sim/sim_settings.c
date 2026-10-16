@@ -113,7 +113,8 @@ void sim_suite_settings(const char *out)
     EXPECT(sim_ws_updates == 1, "el brillo se guardo %d veces (esperado 1, al soltar)", sim_ws_updates);
     EXPECT(ws.brightness == bright, "brillo guardado %d, aplicado %d", ws.brightness, bright);
 
-    /* Fondo: Negro -> Onyx rehace la esfera de debajo y se guarda; y vuelta. */
+    /* Fondo (F3.6): la fila abre el selector con los 9 fondos; elegir uno
+     * rehace la esfera de debajo y se guarda; y vuelta al negro. */
     lv_obj_t *wrow = NULL;
     for (lv_obj_t *o = sim_find_label(ui_nav_top(), "Negro"); o; o = lv_obj_get_parent(o)) {
         if (lv_obj_has_flag(o, LV_OBJ_FLAG_CLICKABLE)) {
@@ -123,18 +124,44 @@ void sim_suite_settings(const char *out)
     }
     EXPECT(wrow, "la pagina Pantalla no tiene la fila Fondo");
     if (wrow) {
-        lv_obj_t *face0 = ui_nav_page(0);
         lv_obj_send_event(wrow, LV_EVENT_CLICKED, NULL);
+        sim_run(400);
+        EXPECT(sim_find_label(ui_nav_top(), "Fondo de pantalla"), "la fila Fondo no abre el selector");
+        for (int i = 0; i < FLEX_WALL_COUNT_; i++) {
+            EXPECT(sim_find_label(ui_nav_top(), watch_theme_wallpaper_name((flex_wall_t)i)),
+                   "el selector no ofrece %s", watch_theme_wallpaper_name((flex_wall_t)i));
+        }
+        sim_lint("selector de fondos");
+        sim_check_glyphs(ui_nav_top(), "selector de fondos");
+        sim_save(out, "f3_fondos");
+        lv_obj_t *face0 = ui_nav_page(0);
+        lv_obj_t *aur = sim_find_label(ui_nav_top(), "Aurora");
+        while (aur && !lv_obj_has_flag(aur, LV_OBJ_FLAG_CLICKABLE)) {
+            aur = lv_obj_get_parent(aur);
+        }
+        EXPECT(aur, "el selector no tiene la celda Aurora");
+        if (aur) {
+            lv_obj_send_event(aur, LV_EVENT_CLICKED, NULL);
+        }
         sim_run(100);
         watch_settings_get(&ws);
-        EXPECT(ws.wallpaper == FLEX_WALL_ONYX, "el fondo Onyx no se guardo");
-        EXPECT(sim_find_label(ui_nav_top(), "Onyx"), "la fila no muestra Onyx");
+        EXPECT(ws.wallpaper == FLEX_WALL_AURORA, "el fondo Aurora no se guardo (%d)", ws.wallpaper);
         EXPECT(ui_nav_page(0) != face0 && lv_obj_get_index(ui_nav_page(0)) == 0, "la esfera no se rehizo debajo");
         EXPECT(lv_obj_has_flag(ui_nav_page(0), LV_OBJ_FLAG_HIDDEN), "la esfera nueva se ve encima de Ajustes");
-        lv_obj_send_event(wrow, LV_EVENT_CLICKED, NULL);
+        sim_save(out, "f3_fondos_aurora");
+        lv_obj_t *blk = sim_find_label(ui_nav_top(), "Negro");
+        while (blk && !lv_obj_has_flag(blk, LV_OBJ_FLAG_CLICKABLE)) {
+            blk = lv_obj_get_parent(blk);
+        }
+        if (blk) {
+            lv_obj_send_event(blk, LV_EVENT_CLICKED, NULL);
+        }
         sim_run(100);
         watch_settings_get(&ws);
         EXPECT(ws.wallpaper == FLEX_WALL_BLACK, "no se volvio al fondo negro");
+        back();
+        sim_run(600);
+        EXPECT(sim_find_label(ui_nav_top(), "Negro"), "Pantalla no muestra el fondo actual al volver");
     }
     back();
     sim_run(1100);
@@ -255,9 +282,33 @@ void sim_suite_settings(const char *out)
     back();
     EXPECT(ui_nav_depth() == 1 && !ui_nav_busy(), "no se volvio a la esfera");
 
+    /* ---- La esfera con cada fondo (F3.6): legible y sin recortes; el
+     * texto pasa a oscuro sobre los fondos claros ---- */
+    for (int i = 1; i < FLEX_WALL_COUNT_; i++) {
+        watch_theme_set_wallpaper((flex_wall_t)i);
+        ui_nav_replace_root(ui_face_create);
+        sim_run(1100);
+        char where[48];
+        snprintf(where, sizeof(where), "esfera con %s", watch_theme_wallpaper_name((flex_wall_t)i));
+        sim_lint(where);
+        char png[32];
+        snprintf(png, sizeof(png), "f3_esfera_fondo_%d", i);
+        sim_save(out, png);
+    }
+    watch_theme_set_wallpaper(FLEX_WALL_AURORA);
+    ui_nav_replace_root(ui_face_create);
+    sim_run(1100);
+    lv_obj_t *tl = sim_find_label(ui_nav_page(0), "9:41");
+    EXPECT(!tl || lv_color_to_u32(lv_obj_get_style_text_color(tl, 0)) != lv_color_to_u32(lv_color_hex(FLEX_C_TXT)) ||
+               !watch_theme_wall_is_light(FLEX_SAFE_X, 112, FLEX_SCREEN_W - 2 * FLEX_SAFE_X, 86),
+           "Aurora: la hora sigue en blanco sobre un fondo claro");
+    watch_theme_set_wallpaper(FLEX_WALL_BLACK);
+    ui_nav_replace_root(ui_face_create);
+    sim_run(400);
+
     /* ---- Fugas: cada página 5 veces ---- */
     static const ui_page_create_t pages[] = {ui_display_page_create, ui_battery_page_create, ui_diag_create,
-                                             ui_about_create, ui_touchtest_create};
+                                             ui_about_create, ui_touchtest_create, ui_wallpaper_create};
     for (int r = 0; r < 5; r++) {
         for (size_t i = 0; i < sizeof(pages) / sizeof(pages[0]); i++) {
             ui_nav_push(pages[i]);
