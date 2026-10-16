@@ -21,3 +21,4 @@ void test_clock_all(void);
 void test_screen_all(void);
 void test_imu_all(void);
 void test_storage_all(void);
+void test_apps_all(void);

@@ -23,6 +23,7 @@ SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test
        test_screen.c $(FW)/components/watch_ui/ui_screen_logic.c \
        test_imu.c $(FW)/components/watch_imu/qmi8658.c \
        test_storage.c $(FW)/components/watch_storage/stg_logic.c \
+       test_apps.c $(FW)/components/watch_ui/apps_logic.c \
        $(FW)/components/watch_power/battery_model.c \
        $(FW)/components/watch_power/battery_alerts.c \
        $(FW)/components/watch_power/power_sched.c \

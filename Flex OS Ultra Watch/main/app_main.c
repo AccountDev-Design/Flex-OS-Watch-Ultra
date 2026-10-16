@@ -75,6 +75,37 @@ static void pwr_key_init(void)
     ESP_LOGI(TAG, "boton PWR (GPIO10): nivel al arrancar %d", s_pwr_key_ok ? gpio_get_level(PWR_KEY_GPIO) : -1);
 }
 
+/* Motivo del arranque en palabras (Device Care). Normal = encendido, reinicio
+ * pedido (también al flashear por USB) o salida de reposo. */
+static const char *reset_text(esp_reset_reason_t r, bool *ok)
+{
+    *ok = (r == ESP_RST_POWERON || r == ESP_RST_SW || r == ESP_RST_DEEPSLEEP || r == ESP_RST_USB ||
+           r == ESP_RST_JTAG || r == ESP_RST_EXT);
+    switch (r) {
+    case ESP_RST_POWERON:
+        return "Encendido";
+    case ESP_RST_SW:
+        return "Reinicio pedido";
+    case ESP_RST_USB:
+    case ESP_RST_JTAG:
+        return "Reinicio por USB";
+    case ESP_RST_EXT:
+        return "Botón de reinicio";
+    case ESP_RST_DEEPSLEEP:
+        return "Salida de reposo";
+    case ESP_RST_PANIC:
+        return "Fallo (panic)";
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT:
+        return "Watchdog";
+    case ESP_RST_BROWNOUT:
+        return "Caída de tensión";
+    default:
+        return "Otro";
+    }
+}
+
 void app_main(void)
 {
     const esp_app_desc_t *app = esp_app_get_description();
@@ -111,6 +142,7 @@ void app_main(void)
     pwr_key_init();
     boot.button_level = ui_button_level;
     boot.fw_version = app->version;
+    boot.reset_text = reset_text(esp_reset_reason(), &boot.reset_ok);
     boot.idf_version = esp_get_idf_version();
     watch_display_info_t dinfo;
     watch_display_get_info(&dinfo);

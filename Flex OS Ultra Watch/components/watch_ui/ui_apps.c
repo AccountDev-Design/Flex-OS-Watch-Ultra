@@ -49,6 +49,10 @@ typedef struct {
  * hace algo real; el orden es el de la rejilla. */
 static const app_entry_t kApps[] = {
     {FLEX_APP_RELOJ, ui_reloj_create},
+    {FLEX_APP_CALENDARIO, ui_calendar_create},
+    {FLEX_APP_CALCULADORA, ui_calc_create},
+    {FLEX_APP_FLEX_COMPASS, ui_compass_create},
+    {FLEX_APP_DEVICE_CARE, ui_devcare_create},
     {FLEX_APP_SENSORES, ui_sensors_create},
     {FLEX_APP_ALMACENAMIENTO, ui_storage_create},
     {FLEX_APP_AJUSTES, ui_settings_create},

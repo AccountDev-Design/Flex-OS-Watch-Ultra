@@ -10,6 +10,7 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | T41-T45 | [B4-CALIDAD.md](B4-CALIDAD.md) y [B2-ENERGIA.md](B2-ENERGIA.md) |
 | T46-T66 | [F4-SERVICIOS.md](F4-SERVICIOS.md) |
 | T67-T73 | [F3-IDENTIDAD-ORIGINAL.md](F3-IDENTIDAD-ORIGINAL.md) (iconos, lanzador, Reloj y fondos) |
+| T74-T77 | [F9-APPS.md](F9-APPS.md) (Calculadora, Calendario, Flex Compass, Device Care) |
 | Flash de 32 MB | [FLASH-32MB.md](FLASH-32MB.md) |
 
 **Verificado en el reloj hasta ahora** (fotos y vídeo del 2026-10-15): pantalla, táctil, LVGL y la sonda de 32 MB (T10). Lo demás no. Compilar y pasar las pruebas de PC no prueba el reloj: cada resultado que me envíes es lo que convierte una tarea del 50 % al 100 %.
@@ -99,6 +100,12 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 |---|---|
 | T67-T70 | Deslizar la esfera a la izquierda: iconos nítidos y sin bordes raros; "Almacenamiento" entero; punto en Reloj con el cronómetro en marcha; FPS al desplazar. En el registro, ningún `LoadStoreAlignment` |
 | T71-T73 | Ajustes > Pantalla > Fondo: tiempo de generación en el registro, degradados sin escalones, hora legible sobre Aurora y Naturaleza |
+
+## 8. Apps (`F9-APPS.md`)
+
+| Pruebas | Qué mirar |
+|---|---|
+| T74-T77 | Calculadora (25 + 10, 5 / 0), Calendario (hoy y cambio de mes), Flex Compass (Pitch/Roll al inclinar, sin rumbo), Device Care (puntuación y semáforos) |
 
 ## Qué enviarme
 

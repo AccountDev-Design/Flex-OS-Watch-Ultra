@@ -47,6 +47,24 @@ static bool tap_text(lv_obj_t *root, const char *text)
     return true;
 }
 
+/* Pulsa la tecla de la calculadora con esa etiqueta (user_data de la tecla). */
+static bool calc_press(const char *t)
+{
+    lv_obj_t *top = ui_nav_top();
+    for (uint32_t i = 0; i < lv_obj_get_child_count(top); i++) {
+        lv_obj_t *o = lv_obj_get_child(top, (int32_t)i);
+        const char *u = lv_obj_get_user_data(o);
+        if (u && lv_obj_has_flag(o, LV_OBJ_FLAG_CLICKABLE) && strcmp(u, t) == 0) {
+            lv_area_t a;
+            lv_obj_get_coords(o, &a);
+            sim_tap((a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2);
+            sim_run(150);
+            return true;
+        }
+    }
+    return false;
+}
+
 static lv_obj_t *roller_n(lv_obj_t *o, int idx, int *n)
 {
     if (lv_obj_check_type(o, &lv_roller_class) && (*n)++ == idx) {
@@ -100,7 +118,8 @@ void sim_suite_apps(const char *out)
     EXPECT(ui_nav_depth() == 2 && sim_find_label(ui_nav_top(), "Aplicaciones"), "deslizar no abrio las apps");
     /* Cada app del lanzador muestra su icono original (imagen RGB565A8 de
      * 104 px) y su nombre. */
-    static const char *const names[] = {"Reloj", "Sensores", "Almacenamiento", "Ajustes"};
+    static const char *const names[] = {"Reloj",    "Calendario", "Calculadora",    "Flex Compass",
+                                        "Device Care", "Sensores", "Almacenamiento", "Ajustes"};
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         lv_obj_t *c = clickable_of(sim_find_label(ui_nav_top(), names[i]));
         lv_obj_t *img = c ? lv_obj_get_child(c, 0) : NULL;
@@ -109,7 +128,7 @@ void sim_suite_apps(const char *out)
                    ((uintptr_t)d->data & 3) == 0,
                "lanzador: %s sin icono original alineado", names[i]);
     }
-    EXPECT(sim_find_label(ui_nav_top(), "Calculadora") == NULL, "lanzador: aparece una app sin funcion");
+    EXPECT(sim_find_label(ui_nav_top(), "Clima") == NULL, "lanzador: aparece una app sin funcion");
     lv_obj_t *reloj_cell = clickable_of(sim_find_label(ui_nav_top(), "Reloj"));
     lv_obj_t *reloj_badge = reloj_cell ? lv_obj_get_child(reloj_cell, 2) : NULL;
     EXPECT(reloj_badge && lv_obj_has_flag(reloj_badge, LV_OBJ_FLAG_HIDDEN), "lanzador: punto de Reloj sin nada en marcha");
@@ -322,6 +341,103 @@ void sim_suite_apps(const char *out)
     sim_run(600);
     EXPECT(sim_imu_users == 0, "al salir de Sensores el IMU sigue midiendo (%d)", sim_imu_users);
     memset(&sim_imu, 0, sizeof(sim_imu));
+
+    /* ---- Calculadora (F9.2): la línea muestra la operación; 5/0 = Error ---- */
+    ui_nav_home();
+    sim_run(400);
+    ui_nav_push(ui_apps_create);
+    sim_run(400);
+    EXPECT(tap_text(ui_nav_top(), "Calculadora"), "no se abrio la Calculadora");
+    static const char *const seq[] = {"2", "5", "+", "1", "0"};
+    for (size_t i = 0; i < sizeof(seq) / sizeof(seq[0]); i++) {
+        EXPECT(calc_press(seq[i]), "calculadora: no hay tecla %s", seq[i]);
+    }
+    EXPECT(sim_find_label(ui_nav_top(), "25 + 10"), "calculadora: la linea no muestra la operacion");
+    lint_page("calculadora", out, "f9_calculadora");
+    calc_press("=");
+    EXPECT(sim_find_label(ui_nav_top(), "35"), "calculadora: 25 + 10 no da 35");
+    calc_press("C");
+    calc_press("5");
+    calc_press("/");
+    calc_press("0");
+    calc_press("=");
+    EXPECT(sim_find_label(ui_nav_top(), "Error"), "calculadora: 5/0 no da Error");
+    sim_lint("calculadora con error");
+    ui_nav_back();
+    sim_run(400);
+    tap_text(ui_nav_top(), "Calculadora");
+    EXPECT(sim_find_label(ui_nav_top(), "Error"), "calculadora: no conserva la operacion al volver");
+    calc_press("C");
+    ui_nav_back();
+    sim_run(400);
+
+    /* ---- Calendario (F9.3): mes actual, hoy resaltado, cambiar de mes ---- */
+    sim_set_time(WATCH_TIME_OK, 2026, 10, 15, 9, 41, 0);
+    sim_run(1100);
+    EXPECT(tap_text(ui_nav_top(), "Calendario"), "no se abrio el Calendario");
+    EXPECT(sim_find_label(ui_nav_top(), "octubre 2026"), "calendario: no muestra octubre 2026");
+    lv_obj_t *hoy = sim_find_label(ui_nav_top(), "15");
+    EXPECT(hoy && lv_obj_get_style_bg_opa(lv_obj_get_parent(hoy), 0) == LV_OPA_COVER, "calendario: hoy sin resaltar");
+    lint_page("calendario", out, "f9_calendario");
+    EXPECT(tap_text(ui_nav_top(), "octubre 2026"), "calendario: el titulo no es pulsable");
+    lv_obj_t *nb = NULL;
+    for (uint32_t i = 0; i < lv_obj_get_child_count(ui_nav_top()); i++) {
+        lv_obj_t *o = lv_obj_get_child(ui_nav_top(), (int32_t)i);
+        if (lv_obj_has_flag(o, LV_OBJ_FLAG_CLICKABLE) && lv_obj_get_x(o) > FLEX_SCREEN_W / 2 &&
+            lv_obj_get_y(o) > FLEX_HDR_H) {
+            nb = o;
+        }
+    }
+    EXPECT(nb, "calendario: no hay boton de mes siguiente");
+    if (nb) {
+        lv_obj_send_event(nb, LV_EVENT_CLICKED, NULL);
+        sim_run(100);
+        EXPECT(sim_find_label(ui_nav_top(), "noviembre 2026"), "calendario: no pasa a noviembre");
+        sim_lint("calendario noviembre");
+        EXPECT(sim_find_label(ui_nav_top(), "15") &&
+                   lv_obj_get_style_bg_opa(lv_obj_get_parent(sim_find_label(ui_nav_top(), "15")), 0) != LV_OPA_COVER,
+               "calendario: marca hoy en otro mes");
+        tap_text(ui_nav_top(), "noviembre 2026");
+        EXPECT(sim_find_label(ui_nav_top(), "octubre 2026"), "calendario: el titulo no vuelve a hoy");
+    }
+    ui_nav_back();
+    sim_run(400);
+
+    /* ---- Flex Compass (F9.4): sin magnetómetro, ningún rumbo; inclinación real ---- */
+    memset(&sim_imu, 0, sizeof(sim_imu));
+    sim_imu.state = IMU_RUNNING;
+    sim_imu.samples = 100;
+    sim_imu.acc_mg[2] = 1000;
+    sim_imu.acc_mg[0] = 174; /* ~10° */
+    EXPECT(tap_text(ui_nav_top(), "Flex Compass"), "no se abrio Flex Compass");
+    EXPECT(sim_imu_users == 1, "Flex Compass no pidio medidas al IMU");
+    sim_run(400);
+    EXPECT(sim_find_label(ui_nav_top(), "Requiere magnetómetro") && sim_find_label(ui_nav_top(), "No presente"),
+           "compass: no dice que falta el magnetometro");
+    lv_obj_t *hd = sim_find_label(ui_nav_top(), "Heading");
+    EXPECT(hd && sim_find_label(lv_obj_get_parent(hd), "No disponible"), "compass: muestra un rumbo sin magnetometro");
+    EXPECT(sim_find_label(ui_nav_top(), "Conectado"), "compass: el estado del IMU no es real");
+    lint_page("flex compass", out, "f9_compass");
+    ui_nav_back();
+    sim_run(500);
+    EXPECT(sim_imu_users == 0, "al salir de Flex Compass el IMU sigue midiendo");
+    memset(&sim_imu, 0, sizeof(sim_imu));
+
+    /* ---- Device Care (F9.5): puntuación de métricas reales, semáforos, pruebas ---- */
+    EXPECT(tap_text(ui_nav_top(), "Device Care"), "no se abrio Device Care");
+    sim_run(400);
+    EXPECT(sim_find_label(ui_nav_top(), "Salud de Flex OS") && sim_find_label(ui_nav_top(), "/100"),
+           "device care: sin tarjeta de puntuacion");
+    EXPECT(!sim_find_label(ui_nav_top(), "--") && !sim_find_label(ui_nav_top(), "Sin datos"),
+           "device care: no calcula la puntuacion");
+    EXPECT(sim_find_label(ui_nav_top(), "Batería") && sim_find_label(ui_nav_top(), "84 %"),
+           "device care: no muestra la bateria real");
+    lint_page("device care", out, "f9_devcare");
+    EXPECT(tap_text(ui_nav_top(), "Diagnóstico completo"), "device care: no abre el diagnostico");
+    ui_nav_back();
+    sim_run(400);
+    ui_nav_back();
+    sim_run(400);
 
     ui_nav_home();
     sim_run(1500);

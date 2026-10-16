@@ -223,7 +223,8 @@ void sim_suite_monkey(const char *out)
                     ui_settings_create, ui_display_page_create, ui_battery_page_create, ui_diag_create,
                     ui_about_create,    ui_apps_create,         ui_stopwatch_create,    ui_timer_create,
                     ui_alarms_create,   ui_datetime_create,     ui_tz_create,           ui_timeset_create,
-                    ui_reloj_create,
+                    ui_reloj_create,    ui_calc_create,         ui_calendar_create,
+                    ui_compass_create,  ui_devcare_create,
                 };
                 ui_nav_push(pages[rnd(sizeof(pages) / sizeof(pages[0]))]);
             }

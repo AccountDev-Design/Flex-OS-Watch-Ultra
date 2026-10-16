@@ -35,6 +35,10 @@ typedef struct {
     uint32_t disp_buf_bytes;
     bool disp_double_buffer;
     bool disp_buf_psram;
+    /* Motivo del último arranque (esp_reset_reason) para Device Care.
+     * NULL = desconocido. reset_ok = encendido, reinicio pedido o USB. */
+    const char *reset_text;
+    bool reset_ok;
 } watch_ui_boot_info_t;
 
 /**

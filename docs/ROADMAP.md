@@ -1,7 +1,7 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 32,8 %   [███████░░░░░░░░░░░░░]   67,2 % pendiente   (verificado en el reloj: 8,6 %)
+PROGRESO GLOBAL: 35,0 %   [███████░░░░░░░░░░░░░]   65,0 % pendiente   (verificado en el reloj: 8,6 %)
 ```
 
 El 2026-10-16 el alcance creció con el prompt maestro de migración (iconos y fondos originales, todas las apps del
@@ -133,14 +133,14 @@ Limitación conocida: sin servidor de renderizado o sin el móvil, no hay web. N
 | F8.4 Consumo medido y optimización (pantalla, radio, sondeos) | 2 | ⬜ |
 | F8.5 Pruebas finales: 24 h de estabilidad, memoria y regresión completa en el reloj | 3 | ⬜ |
 
-### F9 · Apps de Flex OS Ultra (inventario: `docs/INVENTARIO-APPS.md`) — 0,5 / 15
+### F9 · Apps de Flex OS Ultra (inventario: `docs/INVENTARIO-APPS.md`) — 3,25 / 15
 | Tarea | Peso | Estado |
 |---|---|---|
 | F9.1 Reloj (agrupa Alarmas, Cronómetro y Temporizador con el icono original) | 1 | 🟡 falta T69 |
-| F9.2 Calculadora (lógica de `calcKey` transcrita, rejilla 5×4) | 1,5 | ⬜ |
-| F9.3 Calendario (vista de mes, hoy resaltado, cambio de mes) | 1 | ⬜ |
-| F9.4 Flex Compass (pantalla de requisito sin magnetómetro + cabeceo/alabeo reales) | 1 | ⬜ |
-| F9.5 Device Care (estado real, memoria, almacenamiento, pruebas) | 2 | ⬜ |
+| F9.2 Calculadora (lógica de `calcKey` transcrita, rejilla 5×4) (`docs/F9-APPS.md`) | 1,5 | 🟡 falta T74 |
+| F9.3 Calendario (vista de mes, hoy resaltado, cambio de mes) | 1 | 🟡 falta T75 |
+| F9.4 Flex Compass (pantalla de requisito sin magnetómetro + cabeceo/alabeo reales) | 1 | 🟡 falta T76 |
+| F9.5 Device Care (estado real, memoria, almacenamiento, pruebas) | 2 | 🟡 falta T77 |
 | F9.6 Almacenamiento: explorador de LittleFS | 1 | ⬜ |
 | F9.7 Notas (lista y lectura en LittleFS; teclado compacto) | 2 | ⬜ |
 | F9.8 Clima (Open-Meteo por Wi-Fi, estado sin conexión) | 2 | ⬜ |
@@ -224,3 +224,4 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-16 | **37 %** | +0,5 | F4.6 (LittleFS en storage) compila y pasa las pruebas de PC y de la vista previa: 50 % de 1. Todas las tareas de F4 están implementadas y probadas en el PC; falta la prueba física |
 | 2026-10-16 | **30,3 %** | −6,7 | **Ampliación del alcance** (prompt maestro de migración): F3 sube de 20 a 25 (F3.5 iconos originales y lanzador, F3.6 fondos originales), F5 de 15 a 17 (F5.5 pasa a ser el transporte BLE, canal principal: 1 → 3) y se añade F9 (apps del inventario, 15). Peso total 122; puntos sin cambios (37). Global = 37 / 122. Verificado en el reloj = 10,5 / 122 = 8,6 % |
 | 2026-10-16 | **32,8 %** | +2,5 | F3.5 (iconos originales y lanzador, 50 % de 3), F3.6 (fondos originales y selector, 50 % de 2) y F9.1 (app Reloj, 50 % de 1) compilan y pasan las pruebas de PC y de la vista previa. Puntos 40 / 122 |
+| 2026-10-16 | **35,0 %** | +2,25 | F9.2 Calculadora (50 % de 1,5), F9.3 Calendario (50 % de 1), F9.4 Flex Compass (50 % de 1) y F9.5 Device Care (50 % de 2) compilan y pasan las pruebas de PC y de la vista previa. Puntos 42,75 / 122 |

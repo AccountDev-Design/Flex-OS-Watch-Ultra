@@ -402,6 +402,7 @@ void watch_diag_mem(watch_mem_report_t *out)
     out->internal_largest = 110 * 1024;
     out->psram_total = 8 * 1024 * 1024;
     out->psram_free = 7200 * 1024;
+    out->psram_largest = 6900 * 1024;
 }
 
 void sim_scenario(int pct, int mv, batt_state_t st, batt_level_t lv, bool vbus)
