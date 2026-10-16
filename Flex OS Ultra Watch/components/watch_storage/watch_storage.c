@@ -123,8 +123,10 @@ static void sector_test(void)
         err = crc_at(abs - ALIAS_DIST, buf, &alias0);
     }
     stg_pattern(pat, STG_SECTOR, abs);
+    bool touched = false; /* solo se vuelve a borrar si se llegó a borrar */
     if (err == ESP_OK) {
         err = esp_partition_erase_range(p, off, STG_SECTOR);
+        touched = true;
     }
     if (err == ESP_OK) {
         err = esp_partition_write(p, off, pat, STG_SECTOR);
@@ -134,13 +136,15 @@ static void sector_test(void)
     }
     if (err != ESP_OK) {
         ok = -1;
-        res = "Error de flash";
+        res = touched ? "Error de flash" : "No se pudo leer la zona baja (no se escribió)";
     } else if (memcmp(buf, pat, STG_SECTOR) != 0) {
         ok = -1;
         res = "Lo leído no coincide";
     }
     /* ¿Se tocó algo de abajo? */
-    if (crc_at(0x0, buf, &boot1) != ESP_OK || crc_at(abs - ALIAS_DIST, buf, &alias1) != ESP_OK) {
+    if (!touched) {
+        /* nada escrito: no hay nada que comprobar ni que borrar */
+    } else if (crc_at(0x0, buf, &boot1) != ESP_OK || crc_at(abs - ALIAS_DIST, buf, &alias1) != ESP_OK) {
         ok = -1;
         res = "Error al releer la zona baja";
     } else if (boot0 != boot1 || alias0 != alias1) {
@@ -151,7 +155,9 @@ static void sector_test(void)
                  (unsigned long)alias1);
     }
     /* El sector queda borrado (como estaba en una flash nueva). */
-    esp_partition_erase_range(p, off, STG_SECTOR);
+    if (touched) {
+        esp_partition_erase_range(p, off, STG_SECTOR);
+    }
     free(pat);
     free(buf);
     ESP_LOGI(TAG, "prueba del sector 0x%08lx: %s", (unsigned long)abs, res);

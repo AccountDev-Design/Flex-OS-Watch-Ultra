@@ -19,11 +19,18 @@ Detalles, archivos generados y avisos: [`Flex OS Ultra Watch/README.md`](Flex%20
 
 ## Estado
 
-**Progreso global: 28,5 %**, del que un 7 % está verificado en el reloj.
+**Progreso global: 37 %**, del que un 10,5 % está verificado en el reloj.
 
 - Referencia única: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Ahí están el plan completo, los pesos, las decisiones pendientes y el historial.
-- F2 (batería y energía) y F3 (interfaz, tema y navegación) están hechas en software: compilan y pasan las pruebas de PC y de la vista previa.
-- Esperan las pruebas físicas en el reloj: [docs/B2-ENERGIA.md](docs/B2-ENERGIA.md) y [docs/B3-INTERFAZ.md](docs/B3-INTERFAZ.md).
+- F2 (batería y energía), F3 (interfaz, tema y navegación) y F4 (servicios) están hechas en software: compilan y pasan las pruebas de PC y de la vista previa.
+- F4 incluye:
+  - ajustes guardados;
+  - puesta en hora y zona horaria;
+  - cronómetro, temporizador y alarmas;
+  - sensores;
+  - apagado de pantalla;
+  - LittleFS.
+- Esperan las pruebas físicas en el reloj: [docs/PRUEBAS-RELOJ.md](docs/PRUEBAS-RELOJ.md) (T1-T66).
 
 ## Estructura del repositorio
 
@@ -57,6 +64,9 @@ tools/sim/build/sim tools/sim/out && python3 tools/sim/to_png.py tools/sim/out
 # La misma vista previa con ASan + UBSan, y otra semilla para la prueba mono
 make -C tools/sim LVGL_DIR=/ruta/a/lvgl-9.5.0 SAN=1
 SIM_SEED=7 tools/sim/build-san/sim tools/sim/out
+# Solo una batería (tras el arranque): tema, energia, esfera, nav, panel,
+# ajustes, hora, apps, pantalla, mono, visual, banco
+SIM_ONLY=apps tools/sim/build/sim tools/sim/out
 ```
 
 Los datos de la vista previa (batería, hora, memoria) son **escenarios
@@ -66,6 +76,8 @@ simulados**: sirven para probar la interfaz, no el hardware.
 
 - [docs/ROADMAP.md](docs/ROADMAP.md): hoja de ruta y progreso global
 - [docs/PRUEBAS-RELOJ.md](docs/PRUEBAS-RELOJ.md): **próxima prueba en el reloj**, todas las pruebas pendientes en orden
+- [docs/F4-SERVICIOS.md](docs/F4-SERVICIOS.md): ajustes, hora, apps de tiempo, sensores, apagado de pantalla y almacenamiento (F4)
+- [docs/B4-CALIDAD.md](docs/B4-CALIDAD.md): respuesta de carga, rendimiento, negro AMOLED, esquinas e integridad visual (B4)
 - [docs/B3-INTERFAZ.md](docs/B3-INTERFAZ.md): interfaz, tema, hora, navegación, panel rápido y Ajustes (B3)
 - [docs/B2-ENERGIA.md](docs/B2-ENERGIA.md): batería y energía (B2)
 - [docs/B1-ARRANQUE.md](docs/B1-ARRANQUE.md): contenido de B1, dependencias, pruebas físicas
