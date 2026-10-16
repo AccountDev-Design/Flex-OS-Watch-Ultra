@@ -576,6 +576,7 @@ int main(void)
     test_apps_all();
     test_net_all();
     test_flexlink_all();
+    test_files_all();
     printf("%d comprobaciones, %d fallos\n", g_checks, g_fail);
     return g_fail ? 1 : 0;
 }

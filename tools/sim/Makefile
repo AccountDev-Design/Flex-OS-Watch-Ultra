@@ -31,7 +31,8 @@ CFLAGS := -std=gnu11 -O1 -g -Wall $(SANFLAGS) -DLV_CONF_INCLUDE_SIMPLE -DLV_LVGL
           -I$(FW)/components/watch_storage/include \
           -I$(FW)/components/watch_net/include \
           -I$(FW)/components/flexlink/include \
-          -I$(FW)/components/watch_phone/include
+          -I$(FW)/components/watch_phone/include \
+          -I$(FW)/components/watch_files/include
 
 LVGL_SRC := $(shell find $(LVGL_DIR)/src -name '*.c')
 APP_SRC := $(wildcard sim_*.c) \
@@ -50,6 +51,8 @@ APP_SRC := $(wildcard sim_*.c) \
            $(wildcard $(FW)/components/flexlink/*.c) \
            $(FW)/components/watch_phone/phone_core.c \
            $(FW)/components/watch_phone/phone_text.c \
+           $(FW)/components/watch_files/files_logic.c \
+           $(FW)/components/watch_files/flexfs.c \
            $(FW)/components/watch_diag/flash_probe_logic.c
 
 LVGL_OBJ := $(patsubst $(LVGL_DIR)/%.c,$(BUILD)/lvgl/%.o,$(LVGL_SRC))

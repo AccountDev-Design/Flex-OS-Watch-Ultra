@@ -123,4 +123,5 @@ void sim_suite_datetime(const char *out);
 void sim_suite_apps(const char *out);
 void sim_suite_wifi(const char *out);
 void sim_suite_phone(const char *out);
+void sim_suite_notes(const char *out);
 void sim_suite_screen(const char *out);

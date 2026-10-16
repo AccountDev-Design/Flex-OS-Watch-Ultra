@@ -113,6 +113,28 @@ lv_obj_t *ui_compass_create(lv_obj_t *parent);  /**< app Flex Compass (F9.4) */
 lv_obj_t *ui_devcare_create(lv_obj_t *parent);  /**< app Device Care (F9.5) */
 lv_obj_t *ui_wifi_create(lv_obj_t *parent);     /**< Ajustes > Wi-Fi (F5.1) */
 lv_obj_t *ui_wifi_password_create(lv_obj_t *parent);
+/* Teclado de pantalla compartido (ui_keyboard.c) */
+enum { UI_KB_ASCII = 0, UI_KB_TEXT = 1, UI_KB_NEWLINE = 2 };
+typedef void (*ui_kb_cb_t)(void *ud);
+/** Teclado que escribe en ta. flags: UI_KB_TEXT (ñ, tildes), UI_KB_NEWLINE ("Intro" en vez de "OK"). */
+lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta, int flags, ui_kb_cb_t ok, void *ud);
+/** Estilo de campo de texto del sistema (cursor fijo, sin parpadeo). */
+void ui_textarea_style(lv_obj_t *ta);
+/* Notas y archivos (F9.6, F9.7; ui_notes.c, ui_files.c) */
+lv_obj_t *ui_notes_create(lv_obj_t *parent);       /**< app Notas: lista de /Notas */
+lv_obj_t *ui_note_edit_create(lv_obj_t *parent);   /**< editor de la nota de ui_note_open() */
+void ui_note_open(const char *path);
+lv_obj_t *ui_files_create(lv_obj_t *parent);       /**< explorador (carpeta de ui_files_open_dir, o "/") */
+lv_obj_t *ui_file_opts_create(lv_obj_t *parent);   /**< opciones del archivo de ui_file_options() */
+lv_obj_t *ui_file_rename_create(lv_obj_t *parent);
+void ui_files_open_dir(const char *dir);
+void ui_file_options(const char *path);
+void ui_files_changed(void);                        /**< algo cambió en el disco: las listas se rehacen */
+uint32_t ui_files_gen(void);
+/** ¿Hay almacenamiento montado? Si no, *why dice por qué. Crea las carpetas fijas la primera vez. */
+bool ui_fs_ready(const char **why);
+/** Tarjeta "<app> sin almacenamiento" con el motivo (fkNoFsScreen de la referencia). */
+lv_obj_t *ui_fs_notice(lv_obj_t *list, const char *app, const char *why);
 /* Flex Phone (F5.2/F5.3/F9.9/F9.10) */
 lv_obj_t *ui_flexphone_create(lv_obj_t *parent);    /**< app Flex Phone: estado, emparejamiento, secciones */
 lv_obj_t *ui_phone_conn_create(lv_obj_t *parent);   /**< Flex Phone > Conexión */

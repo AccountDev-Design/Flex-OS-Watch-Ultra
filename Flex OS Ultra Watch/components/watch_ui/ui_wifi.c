@@ -12,11 +12,8 @@
  * La página no toca la radio: manda órdenes a watch_net y lee su instantánea
  * cada 500 ms. Nada se bloquea mientras conecta.
  *
- * Teclado: la referencia tiene su propio teclado (FlexOS_Ultra_Keyboard.h) y
- * el buscador de la Caja de aplicaciones otro compacto (AppDrawer.h:584). Aquí
- * es una matriz de botones con teclas de texto ("DEL", "OK"...): los
- * símbolos de LVGL no existen en la fuente Outfit. Cubre todo el ASCII
- * imprimible de una contraseña Wi-Fi (4 páginas).
+ * Teclado: el compartido del sistema (ui_keyboard.c) en modo ASCII: todo el
+ * ASCII imprimible de una contraseña Wi-Fi en 4 páginas.
  */
 #include "ui_internal.h"
 
@@ -85,92 +82,13 @@ static void switch_style(lv_obj_t *sw)
 
 typedef struct {
     lv_obj_t *ta;
-    lv_obj_t *kb;
-    int page; /* 0 minúsculas, 1 mayúsculas, 2 números, 3 símbolos */
 } pw_page_t;
 
-static const char *const kMapLower[] = {"q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "\n",
-                                        "a", "s", "d", "f", "g", "h", "j", "k", "l", "\n",
-                                        "ABC", "z", "x", "c", "v", "b", "n", "m", "DEL", "\n",
-                                        "123", "Espacio", "OK", ""};
-static const char *const kMapUpper[] = {"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "\n",
-                                        "A", "S", "D", "F", "G", "H", "J", "K", "L", "\n",
-                                        "abc", "Z", "X", "C", "V", "B", "N", "M", "DEL", "\n",
-                                        "123", "Espacio", "OK", ""};
-static const char *const kMapNum[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "\n",
-                                      "-", "_", ".", ",", "@", "#", "$", "%", "&", "*", "\n",
-                                      "#+=", "!", "?", "(", ")", "/", ":", ";", "DEL", "\n",
-                                      "abc", "Espacio", "OK", ""};
-static const char *const kMapSym[] = {"[", "]", "{", "}", "<", ">", "^", "~", "`", "|", "\n",
-                                      "\\", "'", "\"", "+", "=", "\n",
-                                      "123", "DEL", "\n",
-                                      "abc", "Espacio", "OK", ""};
-static const char *const *const kMaps[4] = {kMapLower, kMapUpper, kMapNum, kMapSym};
-
-/* Anchos relativos: las teclas de control, más anchas. */
-static void set_ctrl(lv_obj_t *kb, int page)
+static void pw_connect(void *ud)
 {
-    const char *const *map = kMaps[page];
-    for (uint32_t i = 0, b = 0; map[i][0]; i++) {
-        if (strcmp(map[i], "\n") == 0) {
-            continue;
-        }
-        const char *t = map[i];
-        uint32_t w = 2;
-        if (!strcmp(t, "Espacio")) {
-            w = 8;
-        } else if (!strcmp(t, "DEL") || !strcmp(t, "OK") || !strcmp(t, "ABC") || !strcmp(t, "abc") ||
-                   !strcmp(t, "123") || !strcmp(t, "#+=")) {
-            w = 3;
-        }
-        lv_buttonmatrix_set_button_width(kb, b++, w);
-    }
-}
-
-static void kb_page(pw_page_t *p, int page)
-{
-    p->page = page;
-    lv_buttonmatrix_set_map(p->kb, kMaps[page]);
-    set_ctrl(p->kb, page);
-}
-
-static void pw_connect(pw_page_t *p)
-{
+    pw_page_t *p = ud;
     watch_net_connect(s_pw_ssid, lv_textarea_get_text(p->ta));
     ui_nav_back();
-}
-
-static void kb_cb(lv_event_t *e)
-{
-    pw_page_t *p = lv_event_get_user_data(e);
-    const uint32_t id = lv_buttonmatrix_get_selected_button(p->kb);
-    if (id == LV_BUTTONMATRIX_BUTTON_NONE) {
-        return;
-    }
-    const char *t = lv_buttonmatrix_get_button_text(p->kb, id);
-    if (!t) {
-        return;
-    }
-    if (!strcmp(t, "DEL")) {
-        lv_textarea_delete_char(p->ta);
-    } else if (!strcmp(t, "ABC")) {
-        kb_page(p, 1);
-    } else if (!strcmp(t, "abc")) {
-        kb_page(p, 0);
-    } else if (!strcmp(t, "123")) {
-        kb_page(p, 2);
-    } else if (!strcmp(t, "#+=")) {
-        kb_page(p, 3);
-    } else if (!strcmp(t, "Espacio")) {
-        lv_textarea_add_char(p->ta, ' ');
-    } else if (!strcmp(t, "OK")) {
-        pw_connect(p);
-    } else {
-        lv_textarea_add_text(p->ta, t);
-        if (p->page == 1) {
-            kb_page(p, 0); /* mayúscula para una letra, como los teclados de móvil */
-        }
-    }
 }
 
 static void show_cb(lv_event_t *e)
@@ -209,22 +127,7 @@ lv_obj_t *ui_wifi_password_create(lv_obj_t *parent)
     lv_textarea_set_placeholder_text(p->ta, "Contraseña de la red");
     lv_obj_set_size(p->ta, FLEX_SCREEN_W - 2 * FLEX_SAFE_X - 100, 56);
     lv_obj_set_pos(p->ta, FLEX_SAFE_X, FLEX_HDR_H + 22);
-    lv_obj_set_style_bg_color(p->ta, flex_color(FLEX_C_SURF), 0);
-    lv_obj_set_style_bg_opa(p->ta, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(p->ta, 0, 0);
-    lv_obj_set_style_radius(p->ta, 16, 0);
-    lv_obj_set_style_text_font(p->ta, FLEX_FONT_BODY, 0);
-    lv_obj_set_style_text_color(p->ta, flex_color(FLEX_C_TXT), 0);
-    lv_obj_set_style_text_color(p->ta, flex_color(FLEX_C_MUTE), LV_PART_TEXTAREA_PLACEHOLDER);
-    lv_obj_set_style_pad_hor(p->ta, 14, 0);
-    lv_obj_set_style_pad_ver(p->ta, 14, 0);
-    lv_obj_set_style_bg_color(p->ta, flex_color(FLEX_C_ACCENT), LV_PART_CURSOR);
-    lv_obj_set_style_border_color(p->ta, flex_color(FLEX_C_ACCENT), LV_PART_CURSOR | LV_STATE_FOCUSED);
-    /* Cursor fijo, sin parpadeo: una animación infinita redibuja la pantalla
-     * sin parar (batería) y nunca deja la interfaz en reposo. */
-    lv_obj_set_style_anim_duration(p->ta, 0, LV_PART_CURSOR);
-    lv_obj_set_style_anim_duration(p->ta, 0, LV_PART_CURSOR | LV_STATE_FOCUSED); /* el tema lo pone ahí */
-    lv_obj_add_state(p->ta, LV_STATE_FOCUSED); /* cursor visible */
+    ui_textarea_style(p->ta);
 
     lv_obj_t *show = watch_theme_button(page, "Ver", FLEX_C_SURF2, 88, 56);
     lv_obj_set_pos(show, FLEX_SCREEN_W - FLEX_SAFE_X - 88, FLEX_HDR_H + 22);
@@ -236,23 +139,9 @@ lv_obj_t *ui_wifi_password_create(lv_obj_t *parent)
     lv_obj_set_width(hint, FLEX_SCREEN_W - 2 * FLEX_SAFE_X - 16);
     lv_obj_set_pos(hint, FLEX_SAFE_X + 8, FLEX_HDR_H + 92);
 
-    p->kb = lv_buttonmatrix_create(page);
-    lv_obj_set_size(p->kb, FLEX_SCREEN_W - 2 * 16, 452 - 236);
-    lv_obj_set_pos(p->kb, 16, 236);
-    lv_obj_set_style_bg_opa(p->kb, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(p->kb, 0, 0);
-    lv_obj_set_style_pad_all(p->kb, 0, 0);
-    lv_obj_set_style_pad_gap(p->kb, 5, 0);
-    lv_obj_set_style_bg_color(p->kb, flex_color(FLEX_C_SURF2), LV_PART_ITEMS);
-    lv_obj_set_style_bg_opa(p->kb, LV_OPA_COVER, LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(p->kb, flex_color(FLEX_C_GLASS_PRESSED), LV_PART_ITEMS | LV_STATE_PRESSED);
-    lv_obj_set_style_radius(p->kb, 10, LV_PART_ITEMS);
-    lv_obj_set_style_border_width(p->kb, 0, LV_PART_ITEMS);
-    lv_obj_set_style_shadow_width(p->kb, 0, LV_PART_ITEMS);
-    lv_obj_set_style_text_font(p->kb, FLEX_FONT_SMALL, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(p->kb, flex_color(FLEX_C_TXT), LV_PART_ITEMS);
-    kb_page(p, 0);
-    lv_obj_add_event_cb(p->kb, kb_cb, LV_EVENT_VALUE_CHANGED, p);
+    lv_obj_t *kb = ui_keyboard_create(page, p->ta, UI_KB_ASCII, pw_connect, p);
+    lv_obj_set_size(kb, FLEX_SCREEN_W - 2 * 16, 452 - 236);
+    lv_obj_set_pos(kb, 16, 236);
 
     lv_obj_add_event_cb(page, pw_free_cb, LV_EVENT_DELETE, p);
     return page;

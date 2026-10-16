@@ -30,6 +30,8 @@ typedef struct {
     lv_obj_t *b_sector;
     lv_obj_t *b_format;
     lv_obj_t *b_file;
+    lv_obj_t *b_browse;
+    lv_obj_t *b_trash;
     uint32_t confirm_ms; /* primer toque de "Formatear" (0 = no) */
 } stp_t;
 
@@ -83,10 +85,17 @@ static void refresh(stp_t *p)
     enable(p->b_sector, open && !busy && in.state != STG_MOUNTED && in.sector_test != 1);
     enable(p->b_format, open && !busy && in.state != STG_MOUNTED && in.sector_test == 1);
     enable(p->b_file, open && !busy && in.state == STG_MOUNTED);
+    enable(p->b_browse, in.state == STG_MOUNTED);
+    enable(p->b_trash, in.state == STG_MOUNTED);
     if (p->confirm_ms && lv_tick_elaps(p->confirm_ms) > CONFIRM_MS) {
         p->confirm_ms = 0;
         watch_theme_row_set_value(p->b_format, NULL);
     }
+}
+
+static void browse_cb(lv_event_t *e)
+{
+    ui_files_open_dir(lv_event_get_user_data(e));
 }
 
 static void tick_cb(lv_timer_t *t)
@@ -142,6 +151,13 @@ lv_obj_t *ui_storage_create(lv_obj_t *parent)
     p->space = watch_theme_info_row(list, "Espacio", "--");
     p->sector = watch_theme_info_row(list, "Prueba del sector", "--");
     p->file = watch_theme_info_row(list, "Archivo de prueba", "--");
+
+    /* Explorador (F9.6, AppFiles.h): lo que hay de verdad en el disco */
+    watch_theme_section(list, "Archivos");
+    p->b_browse = watch_theme_list_row(list, FLEX_ICON_STORAGE, FLEX_C_CAT_SUN, "Explorar archivos", NULL, true);
+    lv_obj_add_event_cb(p->b_browse, browse_cb, LV_EVENT_CLICKED, (void *)"/");
+    p->b_trash = watch_theme_list_row(list, FLEX_ICON_CROSS, FLEX_C_MUTE, "Papelera", NULL, true);
+    lv_obj_add_event_cb(p->b_trash, browse_cb, LV_EVENT_CLICKED, (void *)"/Papelera");
 
     watch_theme_section(list, "Acciones");
     p->b_sector = watch_theme_list_row(list, FLEX_ICON_STORAGE, FLEX_C_CAT_BLUE, "Probar escritura", NULL, false);

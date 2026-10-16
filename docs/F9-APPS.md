@@ -101,9 +101,50 @@ reinicios y la detección de caídas con BNO085.
 
 ![Device Care](img/f9_devcare.png)
 
+## Archivos y Notas (F9.6, F9.7)
+
+**Capa de archivos (`components/watch_files`)**: `flexfs` con la semántica de `FlexOS_FS` de la referencia, en POSIX
+sobre el LittleFS que monta `watch_storage` en `/storage` (en el PC, sobre una carpeta real):
+
+- carpetas fijas `/Notas`, `/Documentos`, `/Paint` y `/Papelera`, creadas al usarse por primera vez;
+- la papelera guarda la ruta original en el nombre (`/` → `@`, `FS.cpp:451-469`), sin índice aparte;
+- nombres nuevos "Sin título 1.txt", "Sin título 2.txt"...; renombrar conserva la extensión y nunca pisa otro
+  archivo; borrar una carpeta borra su contenido; el conteo de una carpeta sale de abrirla;
+- escritura de texto **atómica** (temporal + renombrado): un corte de batería no deja una nota a medias.
+- Cambios propios (`RELOJ:`): `@` prohibido en los nombres (era lo que rompía la restauración) y las colisiones en la
+  papelera se numeran `@@N` en vez de `(N)`, que la referencia dejaba pegado al nombre al restaurar ("a.txt(2)").
+
+**Notas** (`ui_notes.c`, icono `IC_NOTAS`): como `AppNotes.h`, cada tarjeta es un `.txt` real (título = nombre del
+archivo, vista previa = sus primeros 96 bytes leídos del disco, "(vacía)" si no hay nada); "Nueva nota" crea y abre
+"Sin título N"; el editor guarda 2 s después de la última tecla y al salir; mantener pulsada una nota abre sus
+opciones. Tope de 4 KB por nota.
+
+**Explorador** (`ui_files.c`, desde Almacenamiento > Explorar archivos / Papelera): carpetas con su número real de
+elementos, archivos con su tamaño, ruta actual arriba; un `.txt` se abre en Notas y lo que el reloj no sabe abrir lo
+dice. Opciones: Abrir, Renombrar, Mover a la papelera, Borrar definitivamente (con segundo toque); en la papelera,
+cada elemento dice de dónde vino y se puede Restaurar (recrea la carpeta si ya no existe) o vaciar la papelera.
+
+**Teclado compartido** (`ui_keyboard.c`): el de la contraseña Wi-Fi pasa a ser del sistema, con un modo de texto en
+español (ñ/Ñ, página de tildes con ¿ ¡ ç º ª) e "Intro" para las notas.
+
+Coste de escribir: las notas se guardan desde la tarea de la interfaz. Una escritura en la flash puede tardar decenas
+de ms (borrado de un sector); con notas de hasta 4 KB y autoguardado cada 2 s como mínimo es un tirón ocasional
+aceptable. Medirlo en el reloj (T95).
+
+| Notas | Editor | Opciones | Papelera | Explorador |
+|---|---|---|---|---|
+| ![](img/f9_notas.png) | ![](img/f9_nota_editor.png) | ![](img/f9_nota_opciones.png) | ![](img/f9_papelera.png) | ![](img/f9_archivos.png) |
+
 ## Pruebas
 
 ### En el PC
+
+- `tests/host/test_files.c`: nombres, rutas, papelera, tamaños y UTF-8 (lógica pura) y la capa `flexfs` sobre una
+  carpeta temporal real: crear, leer, reescribir atómico, listar ordenado con conteos, renombrar, papelera con
+  colisión, restaurar (también a una carpeta borrada), vaciar y borrar.
+- Vista previa (`SIM_ONLY=notas`): sin almacenamiento, nota nueva, teclado (ñ, tildes, Intro), autoguardado y
+  guardado al salir comprobados en el disco, vista previa real, renombrar (rechaza "/"), papelera y restaurar,
+  explorador con conteos, archivo que no se abre, borrar con doble toque y abrir un .txt desde el explorador.
 
 - `tests/host`: 1062 comprobaciones, entre ellas la calculadora, el calendario y la fórmula y los umbrales de Device
   Care (ASan + UBSan).
@@ -122,3 +163,7 @@ reinicios y la detección de caídas con BNO085.
 | T75 | Calendario: abrir, cambiar de mes con los botones y deslizando | Mes actual con hoy resaltado; el título vuelve a hoy |
 | T76 | Flex Compass: inclinar el reloj | Pitch y Roll cambian; Heading "No disponible"; al salir el registro no muestra el IMU midiendo |
 | T77 | Device Care | Puntuación y semáforos coherentes con Ajustes > Diagnóstico; "Estabilidad" con el tiempo encendido |
+| T94 | Con el almacenamiento montado (F4.6): Notas > Nueva nota, escribir con ñ y tildes, salir | La nota aparece con su vista previa; tras reiniciar sigue ahí |
+| T95 | Escribir sin parar 20 s en una nota | Sin tirones visibles al autoguardar; anotar si se nota alguno |
+| T96 | Mover una nota a la papelera, restaurarla, renombrarla | Vuelve a /Notas con su contenido; el nombre cambia en la lista |
+| T97 | Almacenamiento > Explorar archivos | Carpetas con su número de elementos; la papelera dice de dónde vino cada cosa |

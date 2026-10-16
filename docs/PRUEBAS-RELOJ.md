@@ -10,7 +10,7 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | T41-T45 | [B4-CALIDAD.md](B4-CALIDAD.md) y [B2-ENERGIA.md](B2-ENERGIA.md) |
 | T46-T66 | [F4-SERVICIOS.md](F4-SERVICIOS.md) |
 | T67-T73 | [F3-IDENTIDAD-ORIGINAL.md](F3-IDENTIDAD-ORIGINAL.md) (iconos, lanzador, Reloj y fondos) |
-| T74-T77 | [F9-APPS.md](F9-APPS.md) (Calculadora, Calendario, Flex Compass, Device Care) |
+| T74-T77, T94-T97 | [F9-APPS.md](F9-APPS.md) (Calculadora, Calendario, Flex Compass, Device Care, Notas, Archivos) |
 | T78-T83 | [F5-CONECTIVIDAD.md](F5-CONECTIVIDAD.md) (Wi-Fi) |
 | T84-T93 | [F5-CONECTIVIDAD.md](F5-CONECTIVIDAD.md) §3.6 (Flex Phone por Bluetooth; T86-T93 necesitan la app Android con el servidor v2, [FLEX-PHONE-ANDROID.md](FLEX-PHONE-ANDROID.md)) |
 | Flash de 32 MB | [FLASH-32MB.md](FLASH-32MB.md) |
@@ -108,6 +108,7 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | Pruebas | Qué mirar |
 |---|---|
 | T74-T77 | Calculadora (25 + 10, 5 / 0), Calendario (hoy y cambio de mes), Flex Compass (Pitch/Roll al inclinar, sin rumbo), Device Care (puntuación y semáforos) |
+| T94-T97 | Con el almacenamiento montado: Notas (crear, escribir con ñ y tildes, reiniciar y que siga), tirones al autoguardar, papelera/restaurar/renombrar, explorador |
 
 ## 9. Wi-Fi (`F5-CONECTIVIDAD.md`)
 
