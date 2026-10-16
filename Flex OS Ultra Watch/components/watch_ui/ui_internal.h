@@ -124,6 +124,9 @@ void ui_textarea_style(lv_obj_t *ta);
 lv_obj_t *ui_notes_create(lv_obj_t *parent);       /**< app Notas: lista de /Notas */
 lv_obj_t *ui_note_edit_create(lv_obj_t *parent);   /**< editor de la nota de ui_note_open() */
 void ui_note_open(const char *path);
+lv_obj_t *ui_paint_create(lv_obj_t *parent);        /**< app Paint: galería de /Paint (F9.11) */
+lv_obj_t *ui_paint_canvas_create(lv_obj_t *parent); /**< lienzo del dibujo de ui_paint_open() */
+void ui_paint_open(const char *path);
 lv_obj_t *ui_files_create(lv_obj_t *parent);       /**< explorador (carpeta de ui_files_open_dir, o "/") */
 lv_obj_t *ui_file_opts_create(lv_obj_t *parent);   /**< opciones del archivo de ui_file_options() */
 lv_obj_t *ui_file_rename_create(lv_obj_t *parent);

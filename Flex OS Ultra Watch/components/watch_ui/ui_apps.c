@@ -52,6 +52,7 @@ static const app_entry_t kApps[] = {
     {FLEX_APP_FLEX_PHONE, ui_flexphone_create},
     {FLEX_APP_MUSICA, ui_music_create},
     {FLEX_APP_NOTAS, ui_notes_create},
+    {FLEX_APP_PAINT, ui_paint_create},
     {FLEX_APP_CALENDARIO, ui_calendar_create},
     {FLEX_APP_CALCULADORA, ui_calc_create},
     {FLEX_APP_FLEX_COMPASS, ui_compass_create},

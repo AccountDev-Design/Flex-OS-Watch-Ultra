@@ -135,6 +135,24 @@ aceptable. Medirlo en el reloj (T95).
 |---|---|---|---|---|
 | ![](img/f9_notas.png) | ![](img/f9_nota_editor.png) | ![](img/f9_nota_opciones.png) | ![](img/f9_papelera.png) | ![](img/f9_archivos.png) |
 
+## Paint (F9.11)
+
+`ui_paint.c` (icono `IC_PAINT`) con el formato **FXP1** de la referencia, escrito byte a byte por `watch_files/fxp.c`
+(cabecera de 12 B "FXP1", ancho, alto, trazos; cada trazo con color RGB565, radio y puntos int16): un dibujo hecho en
+Flex OS Ultra se abre en el reloj y al revés.
+
+- Cada trazo se escribe al levantar el dedo (no hay botón "guardar"); un corte solo pierde el trazo en curso.
+- El lienzo y las miniaturas de la galería se reconstruyen desde el ARCHIVO, a cualquier escala.
+- 6 colores y 3 grosores de la referencia (`P_PAL`, `P_SIZES`); "Deshacer" real (quita el último trazo del archivo,
+  con escritura atómica) y "Limpiar" (con segundo toque, `RELOJ:`; en la referencia era inmediato).
+- Reducido al reloj: lienzo de 378 × 250 px (un dibujo de otro tamaño se encaja centrado y los trazos nuevos se
+  guardan en sus coordenadas, radio incluido) y sin gesto de volver desde el borde, para poder dibujar hasta él.
+- Memoria: el lienzo (189 KB) y las miniaturas (un bloque de 196 KB) van en PSRAM y se liberan al salir.
+
+| Lienzo | Galería |
+|---|---|
+| ![](img/f9_paint.png) | ![](img/f9_paint_galeria.png) |
+
 ## Pruebas
 
 ### En el PC
@@ -145,6 +163,9 @@ aceptable. Medirlo en el reloj (T95).
 - Vista previa (`SIM_ONLY=notas`): sin almacenamiento, nota nueva, teclado (ñ, tildes, Intro), autoguardado y
   guardado al salir comprobados en el disco, vista previa real, renombrar (rechaza "/"), papelera y restaurar,
   explorador con conteos, archivo que no se abre, borrar con doble toque y abrir un .txt desde el explorador.
+- `test_files.c` (FXP1): los bytes exactos de la cabecera y de un trazo, reproducción escalada, deshacer exacto,
+  limpiar, archivo cortado y archivo que no es un dibujo. Vista previa: dibujo nuevo, dos trazos con el dedo
+  simulado (guardados al levantarlo), cambio de color, deshacer, confirmación de limpiar y miniatura en la galería.
 
 - `tests/host`: 1062 comprobaciones, entre ellas la calculadora, el calendario y la fórmula y los umbrales de Device
   Care (ASan + UBSan).
@@ -167,3 +188,5 @@ aceptable. Medirlo en el reloj (T95).
 | T95 | Escribir sin parar 20 s en una nota | Sin tirones visibles al autoguardar; anotar si se nota alguno |
 | T96 | Mover una nota a la papelera, restaurarla, renombrarla | Vuelve a /Notas con su contenido; el nombre cambia en la lista |
 | T97 | Almacenamiento > Explorar archivos | Carpetas con su número de elementos; la papelera dice de dónde vino cada cosa |
+| T98 | Paint: dibujar varios trazos rápidos, cambiar color y grosor, deshacer | El trazo sigue al dedo sin cortes; deshacer quita el último; tras reiniciar el dibujo sigue igual |
+| T99 | Copiar un .fxp de Flex OS Ultra a /Paint del reloj (cuando haya forma de pasar archivos) | Se ve igual, encajado |

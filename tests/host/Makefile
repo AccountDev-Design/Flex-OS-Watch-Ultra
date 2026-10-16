@@ -31,7 +31,7 @@ SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test
        test_flexlink.c $(FW)/components/flexlink/flex_link.c $(FW)/components/flexlink/flex_auth.c \
        $(FW)/components/flexlink/flex_phone.c $(FW)/components/flexlink/flex_phone_transport.c \
        $(FW)/components/flexlink/flex_phone_link.c \
-       test_files.c $(FW)/components/watch_files/files_logic.c $(FW)/components/watch_files/flexfs.c \
+       test_files.c $(FW)/components/watch_files/files_logic.c $(FW)/components/watch_files/flexfs.c $(FW)/components/watch_files/fxp.c \
        $(FW)/components/watch_power/battery_model.c \
        $(FW)/components/watch_power/battery_alerts.c \
        $(FW)/components/watch_power/power_sched.c \

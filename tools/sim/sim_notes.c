@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 
 #include "flexfs.h"
+#include "fxp.h"
 #include "sim.h"
 #include "ui_internal.h"
 #include "watch_storage.h"
@@ -221,6 +222,43 @@ void sim_suite_notes(const char *out)
     ta = find_class(ui_nav_top(), &lv_textarea_class);
     EXPECT(ta && strcmp(lv_textarea_get_text(ta), "Hola ñ\ná¿x") == 0, "explorador: el .txt no abre en Notas");
 
+    ui_nav_home();
+    sim_run(600);
+
+    /* Paint (F9.11): dibujo nuevo, trazos al levantar el dedo, deshacer */
+    ui_nav_push(ui_paint_create);
+    sim_run(400);
+    EXPECT(has("Nuevo dibujo"), "paint: falta Nuevo dibujo");
+    click(tap_of("Nuevo dibujo"));
+    sim_run(600);
+    EXPECT(has("Dibujo 1") && has("0 trazos guardados"), "paint: no abre el lienzo");
+    fxp_info_t fi;
+    EXPECT(fxp_info("/Paint/Dibujo 1.fxp", &fi) && fi.w == 378 && fi.h == 250 && fi.strokes == 0,
+           "paint: el archivo nuevo no es FXP1 de 378x250");
+    sim_drag(70, 150, 330, 320, 12, 16);
+    sim_release();
+    sim_run(200);
+    EXPECT(fxp_info("/Paint/Dibujo 1.fxp", &fi) && fi.strokes == 1 && has("1 trazo guardado"),
+           "paint: el trazo no se guarda al levantar el dedo");
+    sim_tap(16 + (FLEX_SCREEN_W - (6 * 38 + 5 * 8 + 12 + 56)) / 2 - 16 + 1 * 46 + 19, 366 + 19); /* rojo */
+    sim_run(100);
+    sim_drag(80, 320, 320, 140, 10, 16);
+    sim_release();
+    sim_run(200);
+    EXPECT(fxp_info("/Paint/Dibujo 1.fxp", &fi) && fi.strokes == 2, "paint: segundo trazo");
+    sim_lint("paint lienzo");
+    sim_save(out, "f9_paint");
+    click(tap_of("Deshacer"));
+    sim_run(200);
+    EXPECT(fxp_info("/Paint/Dibujo 1.fxp", &fi) && fi.strokes == 1, "paint: deshacer no quita el trazo");
+    click(tap_of("Limpiar"));
+    sim_run(100);
+    EXPECT(has("¿Seguro?") && fxp_info("/Paint/Dibujo 1.fxp", &fi) && fi.strokes == 1, "limpiar: sin confirmación");
+    ui_nav_back();
+    sim_run(1200);
+    EXPECT(has("Dibujo 1") && has("1 trazo"), "paint: la galería no enseña el dibujo");
+    sim_lint("paint galería");
+    sim_save(out, "f9_paint_galeria");
     ui_nav_home();
     sim_run(1200);
     EXPECT(sim_mem_blocks() == blocks0, "fuga en Notas/Archivos: %u -> %u bloques", (unsigned)blocks0,

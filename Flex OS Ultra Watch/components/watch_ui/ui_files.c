@@ -9,14 +9,16 @@
  *  - borrar para siempre pide confirmación (aquí, un segundo toque);
  *  - sin almacenamiento montado se dice por qué, no se enseña una lista
  *    vacía (fkNoFsScreen).
- * Abrir un .txt lo lleva al editor de Notas; lo que el reloj no sabe abrir
- * lo dice ("El reloj no abre este tipo de archivo").
+ * Abrir un .txt lo lleva al editor de Notas y un .fxp al lienzo de Paint;
+ * lo que el reloj no sabe abrir lo dice ("El reloj no abre este tipo de
+ * archivo").
  */
 #include "ui_internal.h"
 
 #include <stdio.h>
 #include <string.h>
 #include "flexfs.h"
+#include "fxp.h"
 #include "watch_storage.h"
 #include "watch_theme.h"
 
@@ -130,6 +132,8 @@ static void entry_cb(lv_event_t *e)
         ui_files_open_dir(path);
     } else if (!in_trash(path) && !strcmp(fl_ext(path), FFS_EXT_NOTE)) {
         ui_note_open(path);
+    } else if (!in_trash(path) && !strcmp(fl_ext(path), FXP_EXT)) {
+        ui_paint_open(path);
     } else {
         ui_file_options(path);
     }
@@ -266,7 +270,11 @@ static void op_done(op_page_t *p, bool ok, const char *fail)
 static void op_open_cb(lv_event_t *e)
 {
     op_page_t *p = lv_event_get_user_data(e);
-    ui_note_open(p->path);
+    if (!strcmp(fl_ext(p->path), FXP_EXT)) {
+        ui_paint_open(p->path);
+    } else {
+        ui_note_open(p->path);
+    }
 }
 
 static void op_rename_cb(lv_event_t *e)
@@ -359,7 +367,7 @@ lv_obj_t *ui_file_opts_create(lv_obj_t *parent)
     if (trash) {
         op_button(list, "Restaurar", FLEX_C_PRIMARY, op_restore_cb, p);
     } else {
-        if (!strcmp(fl_ext(p->path), FFS_EXT_NOTE)) {
+        if (!strcmp(fl_ext(p->path), FFS_EXT_NOTE) || !strcmp(fl_ext(p->path), FXP_EXT)) {
             op_button(list, "Abrir", FLEX_C_PRIMARY, op_open_cb, p);
         } else if (!ffs_is_dir(p->path)) {
             watch_theme_label(list, FLEX_FONT_SMALL, FLEX_C_TXT2, "El reloj no abre este tipo de archivo");

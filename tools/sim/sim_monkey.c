@@ -228,7 +228,7 @@ void sim_suite_monkey(const char *out)
                     ui_flexphone_create, ui_notifs_create,      ui_notif_detail_create, ui_notif_reply_create,
                     ui_music_create,    ui_phone_conn_create,   ui_phone_state_create,
                     ui_notes_create,    ui_note_edit_create,    ui_files_create,        ui_file_opts_create,
-                    ui_file_rename_create,
+                    ui_file_rename_create, ui_paint_create,     ui_paint_canvas_create,
                 };
                 ui_nav_push(pages[rnd(sizeof(pages) / sizeof(pages[0]))]);
             }

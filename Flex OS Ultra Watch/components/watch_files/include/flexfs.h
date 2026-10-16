@@ -68,6 +68,8 @@ bool ffs_restore(const char *trash_name);
 bool ffs_empty_trash(void);
 /** Primer nombre libre "base N ext" en dir. */
 bool ffs_new_name(const char *dir, const char *base, const char *ext, char *out, size_t n);
+/** Ruta real (en el sistema de archivos) de una virtual. false si no es válida. */
+bool ffs_real_path(const char *vpath, char *out, size_t n);
 /** Lee texto (siempre termina en 0). Devuelve bytes o -1. */
 int ffs_read_text(const char *path, char *out, size_t n);
 /** Escribe texto de forma atómica (temporal + renombrado): un corte no deja medio archivo. */

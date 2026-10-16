@@ -53,6 +53,7 @@ APP_SRC := $(wildcard sim_*.c) \
            $(FW)/components/watch_phone/phone_text.c \
            $(FW)/components/watch_files/files_logic.c \
            $(FW)/components/watch_files/flexfs.c \
+           $(FW)/components/watch_files/fxp.c \
            $(FW)/components/watch_diag/flash_probe_logic.c
 
 LVGL_OBJ := $(patsubst $(LVGL_DIR)/%.c,$(BUILD)/lvgl/%.o,$(LVGL_SRC))

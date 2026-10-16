@@ -35,6 +35,11 @@ static bool real(const char *vpath, char *out, size_t n)
     return k > 0 && (size_t)k < n;
 }
 
+bool ffs_real_path(const char *vpath, char *out, size_t n)
+{
+    return real(vpath, out, n);
+}
+
 bool ffs_ready(void)
 {
     DIR *d = opendir(s_root);

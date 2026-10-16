@@ -12,6 +12,7 @@
 
 #include "files_logic.h"
 #include "flexfs.h"
+#include "fxp.h"
 #include "test_util.h"
 
 static void test_logic(void)
@@ -142,8 +143,94 @@ static void test_fs(void)
     ffs_set_root(NULL);
 }
 
+typedef struct {
+    int n, dots;
+    int x0[8], y0[8], x1[8], y1[8], rad[8];
+    uint16_t color[8];
+} segs_t;
+
+static void seg_cb(int x0, int y0, int x1, int y1, uint16_t color, int radius, void *user)
+{
+    segs_t *s = user;
+    if (x0 == x1 && y0 == y1) {
+        s->dots++;
+    }
+    if (s->n < 8) {
+        s->x0[s->n] = x0;
+        s->y0[s->n] = y0;
+        s->x1[s->n] = x1;
+        s->y1[s->n] = y1;
+        s->rad[s->n] = radius;
+        s->color[s->n] = color;
+    }
+    s->n++;
+}
+
+static size_t file_bytes(const char *vpath, uint8_t *buf, size_t cap)
+{
+    char r[400];
+    if (!ffs_real_path(vpath, r, sizeof(r))) {
+        return 0;
+    }
+    FILE *f = fopen(r, "rb");
+    if (!f) {
+        return 0;
+    }
+    const size_t k = fread(buf, 1, cap, f);
+    fclose(f);
+    return k;
+}
+
+static void test_fxp(void)
+{
+    const char *tmp = getenv("TMPDIR");
+    char root[200];
+    snprintf(root, sizeof(root), "%s/fxp_XXXXXX", tmp && tmp[0] ? tmp : "/tmp");
+    CHECK(mkdtemp(root) != NULL);
+    ffs_set_root(root);
+    ffs_init_dirs();
+    const char *d = "/Paint/Dibujo 1.fxp";
+    uint8_t b[128];
+    CHECK(fxp_create(d, 378, 250));
+    /* FXP1 byte a byte (FlexOS_FS.h:286-292): magia, ancho, alto, trazos, reservado */
+    CHECK(file_bytes(d, b, sizeof(b)) == 12 && !memcmp(b, "FXP1\x7A\x01\xFA\x00\x00\x00\x00\x00", 12));
+    const int16_t xy[] = {10, 20, 30, -5};
+    CHECK(fxp_append(d, 0xF800, 6, xy, 2));
+    /* trazo: color, radio, banderas, puntos y pares int16 (FS.h:296-301) */
+    static const uint8_t want[] = {'F', 'X', 'P', '1', 0x7A, 0x01, 0xFA, 0x00, 0x01, 0x00, 0x00, 0x00,
+                                   0x00, 0xF8, 0x06, 0x00, 0x02, 0x00, 0x0A, 0x00, 0x14, 0x00, 0x1E, 0x00, 0xFB, 0xFF};
+    CHECK(file_bytes(d, b, sizeof(b)) == sizeof(want) && !memcmp(b, want, sizeof(want)));
+    fxp_info_t in;
+    CHECK(fxp_info(d, &in) && in.w == 378 && in.h == 250 && in.strokes == 1);
+    segs_t s;
+    memset(&s, 0, sizeof(s));
+    CHECK(fxp_replay(d, 0.5f, 100, 200, seg_cb, &s));
+    CHECK(s.n == 2 && s.dots == 1 && s.x0[0] == 105 && s.y0[0] == 210 && s.x1[1] == 115 && s.y1[1] == 198);
+    CHECK(s.rad[0] == 3 && s.color[1] == 0xF800);
+    const int16_t xy2[] = {1, 1, 2, 2, 3, 3};
+    CHECK(fxp_append(d, fxp_rgb565(60, 120, 235), 3, xy2, 3));
+    CHECK(fxp_info(d, &in) && in.strokes == 2);
+    CHECK(fxp_undo(d) && fxp_info(d, &in) && in.strokes == 1);
+    CHECK(file_bytes(d, b, sizeof(b)) == sizeof(want) && !memcmp(b, want, sizeof(want))); /* deshacer exacto */
+    CHECK(fxp_clear(d) && fxp_info(d, &in) && in.strokes == 0 && in.w == 378);
+    CHECK(!fxp_undo(d));
+    CHECK(file_bytes(d, b, sizeof(b)) == 12);
+    CHECK(!fxp_append(d, 0, 1, xy, 0) && !fxp_info("/Paint/no.fxp", &in));
+    /* Un archivo cortado a mitad de trazo se pinta hasta donde llega */
+    char r[400];
+    CHECK(fxp_append(d, 0x001F, 2, xy2, 3) && ffs_real_path(d, r, sizeof(r)));
+    CHECK(truncate(r, 12 + 6 + 4 * 2) == 0);
+    memset(&s, 0, sizeof(s));
+    CHECK(fxp_replay(d, 1.0f, 0, 0, seg_cb, &s) && s.n == 2);
+    CHECK(ffs_write_text("/Paint/malo.fxp", "no es un dibujo") && !fxp_info("/Paint/malo.fxp", &in));
+    CHECK_EQ(fxp_rgb565(230, 60, 60), 0xE1E7);
+    rm_rf(root);
+    ffs_set_root(NULL);
+}
+
 void test_files_all(void)
 {
     test_logic();
     test_fs();
+    test_fxp();
 }
