@@ -26,7 +26,8 @@ CFLAGS := -std=gnu11 -O1 -g -Wall $(SANFLAGS) -DLV_CONF_INCLUDE_SIMPLE -DLV_LVGL
           -I. -Istubs -I$(LVGL_DIR) -I$(LVGL_DIR)/src \
           -I$(FW)/components/watch_ui -I$(FW)/components/watch_ui/include -I$(FW)/components/watch_theme/include \
           -I$(FW)/components/watch_power/include -I$(FW)/components/watch_diag/include \
-          -I$(FW)/components/watch_time/include -I$(FW)/components/watch_settings/include
+          -I$(FW)/components/watch_time/include -I$(FW)/components/watch_settings/include \
+          -I$(FW)/components/watch_imu/include
 
 LVGL_SRC := $(shell find $(LVGL_DIR)/src -name '*.c')
 APP_SRC := $(wildcard sim_*.c) \
@@ -37,7 +38,8 @@ APP_SRC := $(wildcard sim_*.c) \
            $(FW)/components/watch_power/battery_alerts.c \
            $(FW)/components/watch_time/wt_time.c \
            $(FW)/components/watch_time/rtc_pcf85063.c \
-           $(FW)/components/watch_settings/ws_logic.c
+           $(FW)/components/watch_settings/ws_logic.c \
+           $(FW)/components/watch_imu/qmi8658.c
 
 LVGL_OBJ := $(patsubst $(LVGL_DIR)/%.c,$(BUILD)/lvgl/%.o,$(LVGL_SRC))
 

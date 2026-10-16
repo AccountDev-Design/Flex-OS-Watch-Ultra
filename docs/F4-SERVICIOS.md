@@ -7,7 +7,7 @@ Estado de cada bloque de F4 (pesos de `ROADMAP.md`). Las referencias son la audi
 | F4.1 | Ajustes persistentes en NVS, escritor único | implementado · pruebas de PC · prueba física pendiente (T46, T47) |
 | F4.2 | Poner en hora el RTC, zona horaria, 12/24 h | implementado · pruebas de PC · prueba física pendiente (T48-T51) |
 | F4.3 | Cronómetro, temporizador, alarmas y lanzador de apps | implementado · pruebas de PC · prueba física pendiente (T52-T55) |
-| F4.4 | IMU QMI8658 y app de sensores | pendiente |
+| F4.4 | IMU QMI8658 y app Sensores | implementado · pruebas de PC · prueba física pendiente (T60-T62) |
 | F4.5 | Apagado de pantalla por inactividad, botón lateral | implementado · pruebas de PC · prueba física pendiente (T56-T59) |
 | F4.6 | LittleFS en `storage` | pendiente |
 
@@ -221,3 +221,46 @@ La CPU **no** entra en reposo ligero automático (`CONFIG_PM_ENABLE`). Exige med
 | T57 | Botón lateral | Ajustes > Diagnóstico > Pantalla y botón lateral: anota "reposo N". Luego pulsa el botón PWR brevemente dos veces | El reposo se aprende (0 o 1) y "ahora" cambia al pulsar. La 1.ª pulsación apaga y la 2.ª enciende. **No** mantengas el botón 4 s: apaga el reloj |
 | T58 | Despertar | Con la pantalla apagada: conecta el USB; y en otra prueba, espera a que suene un temporizador de 1 min | Se enciende sola en ambos casos |
 | T59 | Imagen tras encender | Apaga y enciende 10 veces | La imagen vuelve completa, sin basura ni franjas, y el táctil responde al momento. En el registro: `pantalla apagada (DISPOFF)` / `pantalla encendida`, sin errores |
+
+## F4.4. IMU QMI8658 y app Sensores
+
+La referencia usa un BNO085: no hay nada que portar. El BSP declara `BSP_CAPS_IMU 0` y el controlador de Waveshare tiene errores:
+- su "reinicio" pone el modo SPI de 3 hilos;
+- los rangos pisan la frecuencia;
+- lee la temperatura y el contador en transacciones separadas.
+
+Por eso hay un controlador mínimo propio, según la hoja de datos (componente `watch_imu`).
+
+**Arranque.**
+- Sondeo de 0x6B e identidad 0x05. **Si no responde o es otro chip, no se le escribe nada**: la app dice "No disponible".
+- Si es el chip:
+  1. Reinicio por software (0x60 = 0xB0) y espera a 0x4D = 0x80.
+  2. Configuración registro a registro: ±4 g y ±512 °/s, 56 Hz los dos, autoincremento, sin interrupciones.
+  3. Relectura de la configuración.
+  4. **Reposo** (oscilador apagado, ~6 µA según la hoja de datos).
+
+**Medir solo cuando hace falta.** Los sensores se encienden al abrir Sensores (unos 250 ms para que el giroscopio se estabilice) y se apagan al salir. Mientras tanto, una ráfaga de 19 bytes cada 20 ms en la tarea del IMU: la interfaz nunca hace I2C. Se cuentan las muestras perdidas con el contador de 24 bits del chip.
+
+**Lógica pura con pruebas de PC (`qmi8658.c`).**
+- Decodificación, con temperatura con signo bajo 0 °C (la librería de Arduino falla ahí).
+- Contador de muestras con vuelta.
+- Unidades e inclinación.
+- La tabla de configuración: CTRL1 primero; sensores apagados antes de tocar rangos; nunca el bit SIM ni registros reservados; misma frecuencia en los dos sensores.
+
+**App Sensores** (en Aplicaciones):
+- **Nivel de burbuja:** el punto se pone verde con menos de 2°. Se muestra la inclinación.
+- Aceleración X/Y/Z en g, giro X/Y/Z en °/s y temperatura del chip.
+- Batería: tensión, nivel y estado.
+- Estado del IMU: muestras, perdidas y errores de I2C.
+
+**Pendiente de comprobar en el reloj:** la correspondencia entre los ejes del chip y la esfera, y que la variante C se comporta como la A de la hoja de datos.
+
+**Fuera de alcance:** podómetro (comandos CTRL9), brújula, caídas y despertar al levantar la muñeca.
+
+### Pruebas en el reloj
+
+| # | Prueba | Cómo | Resultado esperado |
+|---|---|---|---|
+| T60 | Detección | Arranca con el monitor serie | `QMI8658 (id 0x05, revision 0x..) configurado`. Si sale "no responde", envíame el registro |
+| T61 | Ejes | Aplicaciones > Sensores con el reloj **plano** sobre la mesa; luego inclínalo hacia la derecha y hacia ti | Plano: Z ≈ 1,00 g (o −1,00), X e Y ≈ 0, el punto verde en el centro. Dime hacia dónde se mueve el punto al inclinar: así se ajustan los ejes |
+| T62 | Giro y reposo | Gira el reloj sobre la mesa; luego sal de la app | Giro Z cambia de signo según el sentido; "Perdidas" casi 0 y "Errores I2C" 0. En el registro, al salir: `en reposo` |

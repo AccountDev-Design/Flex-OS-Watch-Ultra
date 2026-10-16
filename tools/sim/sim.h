@@ -10,6 +10,7 @@
 #include "watch_power.h"
 #include "watch_time_types.h"
 #include "watch_settings.h"
+#include "watch_imu.h"
 
 #define SIM_W FLEX_SCREEN_W
 #define SIM_H FLEX_SCREEN_H
@@ -69,6 +70,10 @@ int sim_timer_count(void);
 extern int sim_time_sets;
 extern int64_t sim_time_set_utc;
 extern wt_set_result_t sim_time_set_result;
+
+/* IMU simulado (sim_main.c) */
+extern watch_imu_snapshot_t sim_imu;
+extern int sim_imu_users;
 
 /* Ajustes persistentes en RAM (sim_ws.c) */
 extern int sim_ws_updates;

@@ -86,6 +86,7 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T40) en **una sola s
 | T50 | Diferencia con el móvil a los 15 min y a las 24 h |
 | T51 | Cambiar zona y formato 12/24 h: la hora se ve bien y el RTC no cambia |
 | T52-T55 | Apps (desliza la esfera a la izquierda): cronómetro, temporizador con aviso, alarma que suena y se conserva tras reiniciar |
+| T60-T62 | IMU: línea `QMI8658 ... configurado` en el registro; Aplicaciones > Sensores plano (Z ≈ 1 g, punto verde) y hacia dónde va el punto al inclinar |
 | T56-T59 | Apagado de pantalla: atenuada y apagada sin tocar, botón lateral (anota "reposo N" en Diagnóstico; **no** lo mantengas 4 s), despertar con USB y temporizador, imagen correcta tras encender |
 
 ## Qué enviarme

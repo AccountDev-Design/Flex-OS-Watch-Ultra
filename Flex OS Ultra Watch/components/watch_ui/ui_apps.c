@@ -127,10 +127,8 @@ lv_obj_t *ui_apps_create(lv_obj_t *parent)
     a->sw = tile(list, FLEX_ICON_STOPWATCH, FLEX_C_CAT_GREEN, "Cronómetro", ui_stopwatch_create, w);
     a->tmr = tile(list, FLEX_ICON_HOURGLASS, FLEX_C_ACCENT, "Temporizador", ui_timer_create, w);
     a->al = tile(list, FLEX_ICON_BELL, FLEX_C_WARN, "Alarmas", ui_alarms_create, w);
-    /* Sensores llega con el controlador del QMI8658 (F4.4). */
-    lv_obj_t *sen = tile(list, FLEX_ICON_MOTION, FLEX_C_MUTE, "Sensores", NULL, w);
-    lv_obj_add_state(sen, LV_STATE_DISABLED);
-    set_status(sen, "Pendiente");
+    lv_obj_t *sen = tile(list, FLEX_ICON_MOTION, FLEX_C_CAT_NET, "Sensores", ui_sensors_create, w);
+    set_status(sen, "Movimiento");
     lv_obj_t *set = tile(list, FLEX_ICON_GEAR, FLEX_C_CAT_BLUE, "Ajustes", ui_settings_create, w);
     set_status(set, "Brillo, hora, zona");
 

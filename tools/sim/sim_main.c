@@ -257,6 +257,27 @@ int64_t esp_timer_get_time(void)
     return (int64_t)s_ms * 1000;
 }
 
+/* IMU de la vista previa: lo que ponga cada prueba en sim_imu. */
+watch_imu_snapshot_t sim_imu;
+int sim_imu_users;
+static uint32_t s_imu_gen;
+
+bool watch_imu_get(watch_imu_snapshot_t *out)
+{
+    *out = sim_imu;
+    return true;
+}
+
+uint32_t watch_imu_generation(void)
+{
+    return ++s_imu_gen; /* cada consulta ve datos "nuevos" */
+}
+
+void watch_imu_set_active(bool on)
+{
+    sim_imu_users += on ? 1 : -1;
+}
+
 /* ---- Datos simulados que sustituyen a watch_power / watch_time / watch_diag ---- */
 /* La hora simulada (s_time) es LOCAL; la zona solo convierte a/desde UTC. */
 static int s_tz = -300;

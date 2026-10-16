@@ -241,6 +241,58 @@ void sim_suite_apps(const char *out)
     sim_run(600);
     EXPECT(ui_alarms()->n == 0 && sim_find_label(ui_nav_top(), "Sin alarmas"), "alarmas: no se elimino");
 
+    /* ---- Sensores (F4.4): sin IMU dice "No disponible"; con datos, los muestra ---- */
+    ui_nav_home();
+    sim_run(400);
+    memset(&sim_imu, 0, sizeof(sim_imu));
+    sim_imu.state = IMU_ABSENT;
+    ui_nav_push(ui_apps_create);
+    sim_run(400);
+    EXPECT(tap_text(ui_nav_top(), "Sensores"), "no se abrio Sensores");
+    EXPECT(sim_imu_users == 1, "Sensores no pidio medidas al IMU (%d)", sim_imu_users);
+    sim_run(300);
+    EXPECT(sim_find_label(ui_nav_top(), "No disponible") &&
+               sim_find_label(ui_nav_top(), "El IMU (QMI8658, 0x6B) no responde."),
+           "sensores: sin IMU no lo dice");
+    EXPECT(sim_find_label(ui_nav_top(), "4,08 V") && sim_find_label(ui_nav_top(), "84 %"),
+           "sensores: no muestra la bateria");
+    lint_page("sensores sin IMU", out, NULL);
+    sim_imu.state = IMU_RUNNING;
+    sim_imu.samples = 560;
+    sim_imu.acc_mg[0] = 10;
+    sim_imu.acc_mg[1] = -20;
+    sim_imu.acc_mg[2] = 998;
+    sim_imu.gyro_mdps[0] = 1500;
+    sim_imu.gyro_mdps[1] = -250;
+    sim_imu.temp_c100 = 2650;
+    sim_run(300);
+    EXPECT(sim_find_label(ui_nav_top(), "0,01 g") && sim_find_label(ui_nav_top(), "-0,02 g") &&
+               sim_find_label(ui_nav_top(), "0,99 g"),
+           "sensores: aceleracion mal mostrada");
+    EXPECT(sim_find_label(ui_nav_top(), "1,5 °/s") && sim_find_label(ui_nav_top(), "-0,2 °/s"),
+           "sensores: giro mal mostrado");
+    EXPECT(sim_find_label(ui_nav_top(), "26,5 °C"), "sensores: temperatura mal mostrada");
+    lv_obj_t *warn = sim_find_label(ui_nav_top(), "El IMU (QMI8658, 0x6B) no responde.");
+    EXPECT(!warn || lv_obj_has_flag(warn, LV_OBJ_FLAG_HIDDEN), "sensores: el aviso sigue con el IMU midiendo");
+    EXPECT(sim_find_label(ui_nav_top(), "-1,1° · 0,6°"), "sensores: inclinacion mal mostrada");
+    lint_page("sensores", out, "f4_sensores");
+    lv_obj_t *slist = NULL;
+    for (uint32_t i = 0; i < lv_obj_get_child_count(ui_nav_top()); i++) {
+        lv_obj_t *c = lv_obj_get_child(ui_nav_top(), (int32_t)i);
+        if (lv_obj_has_flag(c, LV_OBJ_FLAG_SCROLLABLE) && lv_obj_get_scroll_bottom(c) > 0) {
+            slist = c;
+        }
+    }
+    if (slist) {
+        lv_obj_scroll_to_y(slist, LV_COORD_MAX, LV_ANIM_OFF);
+        sim_run(100);
+        sim_lint("sensores (final)");
+    }
+    ui_nav_home();
+    sim_run(600);
+    EXPECT(sim_imu_users == 0, "al salir de Sensores el IMU sigue midiendo (%d)", sim_imu_users);
+    memset(&sim_imu, 0, sizeof(sim_imu));
+
     ui_nav_home();
     sim_run(1500);
     sim_check_residue("tras las apps");

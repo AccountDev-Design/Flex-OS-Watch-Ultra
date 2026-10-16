@@ -9,8 +9,9 @@
  *   3. táctil FT3168 (watch_touch)        — si falla, se sigue sin táctil
  *   4. AXP2101 en solo lectura (watch_power) — si falla, batería "sin datos"
  *   5. RTC PCF85063 (watch_time; lo escribe solo al poner en hora) — si falla, hora "no disponible"
- *   6. sonda de flash de solo lectura (watch_diag)
- *   7. interfaz: del splash a la esfera (watch_ui)
+ *   6. IMU QMI8658 (watch_imu; en reposo hasta que la app Sensores lo pida)
+ *   7. sonda de flash de solo lectura (watch_diag)
+ *   8. interfaz: del splash a la esfera (watch_ui)
  */
 #include "esp_app_desc.h"
 #include "esp_err.h"
@@ -20,6 +21,7 @@
 #include "bsp/esp-bsp.h"
 #include "watch_diag.h"
 #include "watch_display.h"
+#include "watch_imu.h"
 #include "watch_power.h"
 #include "watch_settings.h"
 #include "watch_time.h"
@@ -132,6 +134,12 @@ void app_main(void)
     err = watch_time_start(bsp_i2c_get_handle());
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "servicio de hora no disponible: %s", esp_err_to_name(err));
+    }
+
+    /* IMU: si no responde o no es un QMI8658 no se le escribe nada. */
+    err = watch_imu_start(bsp_i2c_get_handle());
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "IMU no disponible: %s", esp_err_to_name(err));
     }
 
     watch_diag_flash_probe(&boot.flash);
