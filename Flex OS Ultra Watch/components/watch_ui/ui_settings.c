@@ -7,12 +7,15 @@
 
 #include <stdio.h>
 #include "ui_logic.h"
+#include "watch_settings.h"
 #include "watch_theme.h"
+#include "watch_time.h"
 
 #define SETTINGS_TICK_MS 1000
 
 typedef struct {
     lv_obj_t *display;
+    lv_obj_t *time;
     lv_obj_t *battery;
 } settings_t;
 
@@ -50,6 +53,21 @@ static void refresh(settings_t *s)
     } else {
         watch_theme_row_set_value(s->display, NULL);
     }
+    wt_datetime_t dt;
+    if (watch_time_now(&dt) == WATCH_TIME_OK) {
+        watch_settings_t ws;
+        watch_settings_get(&ws);
+        if (ws.h24) {
+            wt_fmt_hhmm(buf, sizeof(buf), &dt);
+        } else {
+            char h[8];
+            wt_fmt_hhmm12(h, sizeof(h), &dt);
+            snprintf(buf, sizeof(buf), "%s %s", h, wt_ampm(&dt));
+        }
+        watch_theme_row_set_value(s->time, buf);
+    } else {
+        watch_theme_row_set_value(s->time, "Sin configurar");
+    }
     watch_power_snapshot_t snap;
     if (ui_system_power(&snap) && snap.track.percent >= 0) {
         snprintf(buf, sizeof(buf), "%d %%", snap.track.percent);
@@ -85,6 +103,7 @@ lv_obj_t *ui_settings_create(lv_obj_t *parent)
     watch_theme_header(page, "Ajustes", back_cb, NULL);
     lv_obj_t *list = watch_theme_list(page);
     s->display = row(list, FLEX_ICON_SUN, FLEX_C_CAT_SUN, "Pantalla", "", ui_display_page_create);
+    s->time = row(list, FLEX_ICON_CLOCK, FLEX_C_CAT_BLUE, "Fecha y hora", "", ui_datetime_create);
     s->battery = row(list, FLEX_ICON_BOLT, FLEX_C_CAT_GREEN, "Batería", "", ui_battery_page_create);
     row(list, FLEX_ICON_PULSE, FLEX_C_CAT_BLUE, "Diagnóstico", NULL, ui_diag_create);
     const watch_ui_boot_info_t *bi = ui_boot_info();

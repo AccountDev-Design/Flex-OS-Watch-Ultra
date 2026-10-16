@@ -5,7 +5,8 @@
  *  - Prueba de pantalla y táctil (T2, T3): abre ui_touchtest.
  *  - Memoria libre (watch_diag), búferes de LVGL (watch_display, al arrancar).
  *  - Flash: tamaño declarado, identificador y la sonda de >16 MB de B1.
- *  - Reloj: estado del servicio de hora y registros crudos del PCF85063.
+ *  - Reloj: estado del servicio de hora, marca de Flex OS, zona, puestas en
+ *    hora y registros crudos del PCF85063.
  *  - Batería: lecturas, errores y tiempos del servicio del AXP2101.
  *  - Ajustes guardados (NVS): estado, escrituras y errores (F4.1).
  * Sustituye a la pantalla de inicio de B1 (con sus mismos datos).
@@ -28,6 +29,8 @@ typedef struct {
     lv_obj_t *rtc_detail;
     lv_obj_t *rtc_reads;
     lv_obj_t *rtc_regs;
+    lv_obj_t *rtc_mark;
+    lv_obj_t *rtc_writes;
     lv_obj_t *pwr_reads;
     lv_obj_t *pwr_i2c;
     lv_obj_t *pwr_stack;
@@ -84,6 +87,12 @@ static void refresh(diag_t *d)
         snprintf(buf, sizeof(buf), "--");
     }
     watch_theme_info_set(d->rtc_regs, buf);
+    char tz[16];
+    wt_fmt_utc_offset(tz, sizeof(tz), ti.tz_min);
+    snprintf(buf, sizeof(buf), "%s · %s", ti.marker_ok ? "UTC de Flex OS" : "sin marca", tz);
+    watch_theme_info_set(d->rtc_mark, ti.reads ? buf : "--");
+    snprintf(buf, sizeof(buf), "%lu · errores %lu", (unsigned long)ti.writes, (unsigned long)ti.write_errors);
+    watch_theme_info_set(d->rtc_writes, buf);
 
     watch_power_snapshot_t s;
     if (ui_system_power(&s) && s.driver_ok) {
@@ -169,11 +178,13 @@ lv_obj_t *ui_diag_create(lv_obj_t *parent)
     watch_theme_info_row(list, "JEDEC", buf);
     watch_theme_info_row(list, "Sonda > 16 MB", flash_text(bi->flash.verdict));
 
-    watch_theme_section(list, "Reloj (PCF85063, solo lectura)");
+    watch_theme_section(list, "Reloj (PCF85063)");
     d->rtc_state = watch_theme_info_row(list, "Hora", "--");
     d->rtc_detail = watch_theme_info_row(list, "Última lectura", "--");
     d->rtc_reads = watch_theme_info_row(list, "Lecturas", "--");
     d->rtc_regs = watch_theme_info_row(list, "Registros", "--");
+    d->rtc_mark = watch_theme_info_row(list, "Contenido", "--");
+    d->rtc_writes = watch_theme_info_row(list, "Puestas en hora", "--");
 
     watch_theme_section(list, "Batería (AXP2101, solo lectura)");
     d->pwr_reads = watch_theme_info_row(list, "Lecturas", "--");

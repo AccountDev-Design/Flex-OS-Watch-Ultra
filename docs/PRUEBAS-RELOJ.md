@@ -81,6 +81,10 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T40) en **una sola s
 |---|---|
 | T46 | Cambia brillo y fondo, espera 3 s y reinicia: deben conservarse |
 | T47 | Diagnóstico > Ajustes guardados: "leídos", escrituras y 0 errores |
+| T48 | Ajustes > Fecha y hora > Poner en hora: "Hora guardada y comprobada" (con esta versión el reloj pide hora una vez) |
+| T49 | Tras RESET y tras apagar y encender, la hora se conserva |
+| T50 | Diferencia con el móvil a los 15 min y a las 24 h |
+| T51 | Cambiar zona y formato 12/24 h: la hora se ve bien y el RTC no cambia |
 
 ## Qué enviarme
 

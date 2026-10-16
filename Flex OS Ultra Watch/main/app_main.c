@@ -8,7 +8,7 @@
  *   2. pantalla CO5300 + LVGL (watch_display) y splash de arranque (watch_ui)
  *   3. táctil FT3168 (watch_touch)        — si falla, se sigue sin táctil
  *   4. AXP2101 en solo lectura (watch_power) — si falla, batería "sin datos"
- *   5. RTC PCF85063 en solo lectura (watch_time) — si falla, hora "no disponible"
+ *   5. RTC PCF85063 (watch_time; lo escribe solo al poner en hora) — si falla, hora "no disponible"
  *   6. sonda de flash de solo lectura (watch_diag)
  *   7. interfaz: del splash a la esfera (watch_ui)
  */
@@ -87,6 +87,7 @@ void app_main(void)
         ESP_LOGE(TAG, "AXP2101 no disponible: %s", esp_err_to_name(err));
     }
 
+    watch_time_set_tz(ws.tz_min); /* el RTC guarda UTC; la zona viene de los ajustes */
     err = watch_time_start(bsp_i2c_get_handle());
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "servicio de hora no disponible: %s", esp_err_to_name(err));

@@ -48,9 +48,13 @@ typedef struct {
     int64_t key;
     char time[8];
     char date[40];
+    char ampm[3];  /**< "AM"/"PM" en 12 h; "" en 24 h o sin hora */
 } ui_face_time_t;
 
+/** Textos de la esfera en 24 h. */
 void ui_face_time(watch_time_state_t state, const wt_datetime_t *dt, ui_face_time_t *out);
+/** Igual, en 24 h o en 12 h (la clave cambia también con el formato). */
+void ui_face_time_fmt(watch_time_state_t state, const wt_datetime_t *dt, bool h24, ui_face_time_t *out);
 
 /**
  * Brillo del panel rápido. Mínimo 10 %: por debajo, a plena luz la pantalla
@@ -77,6 +81,17 @@ const char *ui_time_state_text(watch_time_state_t st);
 
 int ui_brightness_clamp(int percent);
 bool ui_brightness_should_apply(int value, int applied, uint32_t last_ms, uint32_t now_ms, bool final);
+
+/* ---- Zonas horarias (F4.2): desfases fijos con ciudades de ejemplo ---- */
+typedef struct {
+    int16_t off_min;   /**< minutos respecto a UTC */
+    const char *where; /**< ciudades de ejemplo (corto: cabe en una fila) */
+} ui_tz_entry_t;
+
+extern const ui_tz_entry_t ui_tz_table[];
+extern const size_t ui_tz_count;
+/** Índice de la zona con ese desfase, o -1. */
+int ui_tz_index(int off_min);
 
 #ifdef __cplusplus
 }

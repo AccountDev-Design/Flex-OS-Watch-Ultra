@@ -87,6 +87,10 @@ lv_obj_t *ui_settings_create(lv_obj_t *parent);
 lv_obj_t *ui_display_page_create(lv_obj_t *parent);
 lv_obj_t *ui_battery_page_create(lv_obj_t *parent);
 lv_obj_t *ui_about_create(lv_obj_t *parent);
+/* Fecha y hora (F4.2): lista, zona horaria y poner en hora */
+lv_obj_t *ui_datetime_create(lv_obj_t *parent);
+lv_obj_t *ui_tz_create(lv_obj_t *parent);
+lv_obj_t *ui_timeset_create(lv_obj_t *parent);
 /** Prueba de pantalla (marco de 1 px) y táctil (coordenadas). */
 lv_obj_t *ui_touchtest_create(lv_obj_t *parent);
 

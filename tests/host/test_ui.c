@@ -205,8 +205,51 @@ static void test_mix(void)
     CHECK_EQ(flex_mix_rgb(0xFFFFFF, 0xFFFFFF, 77), 0xFFFFFF);
 }
 
+static void test_tz_table(void)
+{
+    CHECK(ui_tz_count >= 30);
+    int sorted = 1, steps = 1, range = 1, names = 1;
+    for (size_t i = 0; i < ui_tz_count; i++) {
+        const int off = ui_tz_table[i].off_min;
+        if (i && off <= ui_tz_table[i - 1].off_min) {
+            sorted = 0;
+        }
+        if (off % 15 != 0) {
+            steps = 0;
+        }
+        if (off < -720 || off > 840) {
+            range = 0;
+        }
+        if (!ui_tz_table[i].where || !ui_tz_table[i].where[0] || strlen(ui_tz_table[i].where) > 20) {
+            names = 0;
+        }
+    }
+    CHECK(sorted);
+    CHECK(steps);
+    CHECK(range);
+    CHECK(names);
+    CHECK(ui_tz_index(-300) >= 0); /* la zona por defecto está en la lista */
+    CHECK_EQ(ui_tz_index(0), 14);
+    CHECK_EQ(ui_tz_index(7), -1);
+}
+
+static void test_face_12h(void)
+{
+    wt_datetime_t dt = {2026, 10, 15, 21, 41, 0, 4};
+    ui_face_time_t a, b;
+    ui_face_time_fmt(WATCH_TIME_OK, &dt, true, &a);
+    ui_face_time_fmt(WATCH_TIME_OK, &dt, false, &b);
+    CHECK(strcmp(a.time, "21:41") == 0 && a.ampm[0] == 0);
+    CHECK(strcmp(b.time, "9:41") == 0 && strcmp(b.ampm, "PM") == 0);
+    CHECK(a.key != b.key); /* cambiar el formato refresca la esfera */
+    ui_face_time_fmt(WATCH_TIME_NOT_SET, NULL, false, &b);
+    CHECK(strcmp(b.time, "--:--") == 0 && b.ampm[0] == 0);
+}
+
 void test_ui_all(void)
 {
+    test_tz_table();
+    test_face_12h();
     test_mix();
     test_formats();
     test_brightness();

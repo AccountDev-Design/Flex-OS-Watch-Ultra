@@ -15,6 +15,7 @@
 #include <string.h>
 #include "flex_battery_icon.h"
 #include "ui_logic.h"
+#include "watch_settings.h"
 #include "watch_theme.h"
 #include "watch_time.h"
 
@@ -31,6 +32,7 @@
 
 typedef struct {
     lv_obj_t *time;
+    lv_obj_t *ampm; /* "AM"/"PM" junto a la hora en 12 h */
     lv_obj_t *date;
     lv_obj_t *batt_icon;
     lv_obj_t *batt_pct;
@@ -46,14 +48,24 @@ static void update_time(face_t *f)
 {
     wt_datetime_t dt;
     const watch_time_state_t st = watch_time_now(&dt);
+    watch_settings_t ws;
+    watch_settings_get(&ws);
     ui_face_time_t t;
-    ui_face_time(st, st == WATCH_TIME_OK ? &dt : NULL, &t);
+    ui_face_time_fmt(st, st == WATCH_TIME_OK ? &dt : NULL, ws.h24, &t);
     if (t.key == f->last_key) {
         return;
     }
     f->last_key = t.key;
     lv_label_set_text(f->time, t.time);
     lv_obj_set_style_text_color(f->time, flex_color(t.valid ? FLEX_C_TXT : FLEX_C_MUTE), 0);
+    if (t.ampm[0]) {
+        lv_label_set_text(f->ampm, t.ampm);
+        lv_obj_update_layout(f->time);
+        lv_obj_align_to(f->ampm, f->time, LV_ALIGN_OUT_RIGHT_TOP, 6, 16);
+        lv_obj_remove_flag(f->ampm, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(f->ampm, LV_OBJ_FLAG_HIDDEN);
+    }
     if (strcmp(lv_label_get_text(f->date), t.date) != 0) {
         lv_label_set_text(f->date, t.date);
     }
@@ -118,6 +130,8 @@ lv_obj_t *ui_face_create(lv_obj_t *parent)
 
     f->time = watch_theme_label(scr, FLEX_FONT_CLOCK, FLEX_C_MUTE, "--:--");
     lv_obj_align(f->time, LV_ALIGN_TOP_MID, 0, TIME_Y);
+    f->ampm = watch_theme_label(scr, FLEX_FONT_BODY, FLEX_C_TXT2, "");
+    lv_obj_add_flag(f->ampm, LV_OBJ_FLAG_HIDDEN);
     f->date = watch_theme_label(scr, FLEX_FONT_BODY, FLEX_C_TXT2, "");
     lv_obj_set_width(f->date, FLEX_SCREEN_W - 2 * FLEX_SAFE_X);
     lv_obj_set_style_text_align(f->date, LV_TEXT_ALIGN_CENTER, 0);

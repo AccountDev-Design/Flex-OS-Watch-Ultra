@@ -14,11 +14,17 @@
  *
  * El firmware lee 00h-0Ah en UNA transacción: el chip congela los contadores
  * durante la lectura y el puntero de registro avanza solo, así que la hora no
- * puede cambiar a mitad (p. ej. 09:59:59 -> 09:00:00). Este módulo NO escribe
- * el RTC: ponerlo en hora es F4.2.
+ * puede cambiar a mitad (p. ej. 09:59:59 -> 09:00:00).
+ *
+ * Para escribir (F4.2) este módulo solo CODIFICA los bytes; la escritura con
+ * STOP la hace watch_time. Control_1 se escribe conservando CIE y CAP_SEL y
+ * nunca con el patrón de reinicio por software (58h).
+ *   03h RAM_byte  byte libre del usuario: aquí, la marca de Flex OS
+ *                 (PCF85063_MARKER) que dice "hora UTC escrita por Flex OS".
  */
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 #include "wt_time.h"
 
@@ -31,8 +37,15 @@ extern "C" {
 #define PCF85063_REG_SECONDS 0x04
 #define PCF85063_READ_LEN    11 /* 00h..0Ah */
 
+#define PCF85063_REG_RAM     0x03
+#define PCF85063_TIME_LEN    7  /* 04h..0Ah */
+#define PCF85063_CTRL1_EXT_TEST (1u << 7)
 #define PCF85063_CTRL1_STOP  (1u << 5)
+#define PCF85063_CTRL1_SR    (1u << 4)
+#define PCF85063_CTRL1_CIE   (1u << 2)
 #define PCF85063_CTRL1_12H   (1u << 1)
+#define PCF85063_CTRL1_CAP_SEL (1u << 0)
+#define PCF85063_MARKER      0x5A /* en RAM_byte: hora UTC escrita por Flex OS */
 #define PCF85063_SEC_OS      (1u << 7)
 #define PCF85063_HOUR_PM     (1u << 5)
 
@@ -56,6 +69,28 @@ rtc_read_t pcf85063_decode(const uint8_t regs[PCF85063_READ_LEN], wt_datetime_t 
 
 /** Texto corto para registros y diagnóstico. */
 const char *pcf85063_read_text(rtc_read_t r);
+
+typedef enum {
+    RTC_ENC_OK = 0,
+    RTC_ENC_BAD_YEAR, /**< fuera de 2000..2099 */
+    RTC_ENC_BAD_DATE, /**< mes o día imposibles */
+    RTC_ENC_BAD_TIME, /**< hora, minuto o segundo imposibles */
+} rtc_enc_t;
+
+/**
+ * Bytes de los registros 04h..0Ah para la fecha y hora dadas (OS = 0; el día
+ * de la semana se calcula, se ignora dt->weekday). mode_12h solo existe para
+ * probar la simetría con el decodificador: el firmware escribe en 24 h. No
+ * toca out si hay error.
+ */
+rtc_enc_t pcf85063_encode(const wt_datetime_t *dt, bool mode_12h, uint8_t out[PCF85063_TIME_LEN]);
+/** Igual, desde segundos UTC desde 1970 (946684800..4102444799). */
+rtc_enc_t pcf85063_encode_utc(int64_t utc_s, bool mode_12h, uint8_t out[PCF85063_TIME_LEN]);
+/**
+ * Control_1 para escribir la hora: conserva CIE y CAP_SEL del valor leído,
+ * pone 24 h, borra EXT_TEST y SR (nunca un reinicio) y pone o quita STOP.
+ */
+uint8_t pcf85063_ctrl1_for_set(uint8_t ctrl1_read, bool stop);
 
 #ifdef __cplusplus
 }

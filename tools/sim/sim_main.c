@@ -228,10 +228,53 @@ void sim_set_time(watch_time_state_t st, int y, int mo, int d, int h, int mi, in
 }
 
 /* ---- Datos simulados que sustituyen a watch_power / watch_time / watch_diag ---- */
+/* La hora simulada (s_time) es LOCAL; la zona solo convierte a/desde UTC. */
+static int s_tz = -300;
+int sim_time_sets;
+int64_t sim_time_set_utc;
+wt_set_result_t sim_time_set_result = WT_SET_OK;
+
 void watch_time_info(watch_time_info_t *out)
 {
     memset(out, 0, sizeof(*out));
     out->state = s_time.state;
+    out->tz_min = (int16_t)s_tz;
+    out->marker_ok = s_time.state == WATCH_TIME_OK;
+    out->writes = (uint32_t)sim_time_sets;
+    out->set_result = sim_time_sets ? sim_time_set_result : WT_SET_NONE;
+}
+
+bool watch_time_now_utc(int64_t *utc_s)
+{
+    if (s_time.state != WATCH_TIME_OK) {
+        return false;
+    }
+    *utc_s = s_time.base_sec + (s_ms - s_time.base_ms) / 1000 - (int64_t)s_tz * 60;
+    return true;
+}
+
+esp_err_t watch_time_set_utc(int64_t utc_s)
+{
+    if (utc_s < 1735689600LL || utc_s > 4102444799LL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    sim_time_sets++;
+    sim_time_set_utc = utc_s;
+    s_time.state = WATCH_TIME_OK;
+    s_time.base_sec = utc_s + (int64_t)s_tz * 60;
+    s_time.base_ms = s_ms;
+    return ESP_OK;
+}
+
+void watch_time_set_tz(int off_min)
+{
+    s_time.base_sec += (int64_t)(off_min - s_tz) * 60; /* misma hora UTC, otra local */
+    s_tz = off_min;
+}
+
+int watch_time_get_tz(void)
+{
+    return s_tz;
 }
 
 watch_time_state_t watch_time_now(wt_datetime_t *out)
@@ -304,6 +347,7 @@ int main(int argc, char **argv)
     sim_suite_nav(out);
     sim_suite_qp(out);
     sim_suite_settings(out);
+    sim_suite_datetime(out);
     sim_suite_monkey(out);
     sim_suite_visual(out);
     sim_suite_bench(out);

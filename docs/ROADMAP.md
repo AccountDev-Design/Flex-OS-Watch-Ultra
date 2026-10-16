@@ -1,7 +1,7 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 33 %   [███████░░░░░░░░░░░░░]   (verificado en el reloj: 10,5 %)
+PROGRESO GLOBAL: 34 %   [███████░░░░░░░░░░░░░]   (verificado en el reloj: 10,5 %)
 ```
 
 - **Completado:**
@@ -22,7 +22,7 @@ PROGRESO GLOBAL: 33 %   [███████░░░░░░░░░░░�
   - Pruebas físicas de F2/F3 sobre el firmware con B4 (T41-T45 y las T de F2/F3 aún sin resultado).
   - La calibración de umbrales (❓ D4).
   - Flex Phone, el navegador, OTA, la seguridad y las pruebas finales.
-- **Siguiente:** F4.2 (poner en hora el RTC, zona horaria y 12/24 h).
+- **Siguiente:** F4.3 (cronómetro, temporizador y alarmas, con lanzador de apps).
 
 ## Cómo se calcula
 
@@ -73,13 +73,13 @@ Dentro de F2 queda:
 | F3.3 Panel rápido: cortina que sigue al dedo, brillo real (mín. 10 %), batería real, acceso a Ajustes, Wi-Fi/Bluetooth marcados "Pendiente" (B3-4) | 5 | 🟡 faltan T33-T36 | 2,5 |
 | F3.4 Ajustes (Pantalla, Batería, Diagnóstico, Acerca de), navegación por gestos y **animaciones/transiciones** (apertura y cierre 210/190 ms, volver, arranque) (B3-3, B3-5) | 5 | 🟡 faltan T30-T32 y T37-T40 | 2,5 |
 
-### F4 · Servicios del sistema — 1 / 10
+### F4 · Servicios del sistema — 2 / 10
 
 Detalle y pruebas en `docs/F4-SERVICIOS.md`.
 | Tarea | Peso | Estado |
 |---|---|---|
 | F4.1 Ajustes persistentes (NVS, escritor único): brillo, fondo, hora, zona, apagado, esfera, bloque de alarmas | 2 | 🟡 faltan T46-T47 |
-| F4.2 Hora: RTC PCF85063 + zona horaria (+ SNTP cuando haya Wi-Fi) | 2 | ⬜ |
+| F4.2 Hora: poner en hora el RTC PCF85063 (UTC + marca, verificado), zona horaria, 12/24 h. SNTP llega con el Wi-Fi (F5) | 2 | 🟡 faltan T48-T51 |
 | F4.3 Alarmas y funciones temporales (alcance concreto ❓ D15) | 2 | ⬜ |
 | F4.4 IMU QMI8658 + información de batería y sensores | 1,5 | ⬜ |
 | F4.5 Suspensión de pantalla, brillo, bloqueo por inactividad, consumo en reposo | 1,5 | ⬜ |
@@ -160,8 +160,8 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | D14 | Nombre "Liquid Glass" (denominación de terceros) en el producto | F3 |
 | D15 | Alcance de "funciones temporales" (cronómetro, temporizador...) | F4.3 |
 | D16 | ¿Bloqueo con código? (no acordado) | — |
-| D17 | Zona horaria y contenido del RTC: hoy la hora del RTC se muestra como hora local; ¿guardar UTC más la zona, como la referencia (Lima, UTC-5)? | F4.2 |
-| D18 | Formato de hora: 24 h por defecto ("9:05"); ¿ofrecer 12 h? | F4.2 |
+| D17 | ✅ Resuelta (F4.2): el RTC guarda UTC con una marca de Flex OS; la zona es un desfase fijo elegible (por defecto Lima, UTC-5) | — |
+| D18 | ✅ Resuelta (F4.2): 24 h por defecto; 12 h opcional en Ajustes > Fecha y hora | — |
 
 ## Verificaciones pendientes en el reloj
 
@@ -188,4 +188,5 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-15 | 28,5 % | +2,5 | F3.4 (navegación, arranque y páginas de Ajustes) compila y pasa las pruebas de PC y de la vista previa: 50 % de 5 |
 | 2026-10-15 | 28,5 % | 0 | B3-6 (integración y robustez en el PC) no añade tareas: las de F2 y F3 solo suben con las pruebas físicas |
 | 2026-10-15 | 32 % | +3,5 | Prueba física del usuario (fotos y vídeo): F1.2, F1.3 y F1.4 pasan de 50 % a 100 %. F1.5 no tiene prueba larga. B4 (C1-C4) corrige lo visto en esa prueba y no suma: mejora tareas que ya contaban |
-| 2026-10-16 | **33 %** | +1 | F4.1 (ajustes persistentes en NVS) compila y pasa las pruebas de PC y de la vista previa: 50 % de 2 |
+| 2026-10-16 | 33 % | +1 | F4.1 (ajustes persistentes en NVS) compila y pasa las pruebas de PC y de la vista previa: 50 % de 2 |
+| 2026-10-16 | **34 %** | +1 | F4.2 (poner en hora, zona horaria y 12/24 h) compila y pasa las pruebas de PC y de la vista previa: 50 % de 2 |

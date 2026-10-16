@@ -25,6 +25,7 @@
 #include "flex_safe.h"
 #include "ui_gesture.h"
 #include "ui_logic.h"
+#include "watch_settings.h"
 #include "watch_theme.h"
 #include "watch_time.h"
 
@@ -56,6 +57,9 @@ typedef enum {
 static struct {
     qp_state_t st;
     lv_obj_t *root;
+    lv_obj_t *hdr;
+    lv_obj_t *hdr_left;
+    lv_obj_t *hdr_right;
     lv_obj_t *time;
     lv_obj_t *date;
     lv_obj_t *batt_icon;
@@ -74,15 +78,38 @@ static struct {
 
 /* ---- Contenido ---- */
 
+/* La fecha corta se muestra solo si cabe entre la hora y la batería (en
+ * 12 h, "12:59 PM" con "mié, 30 sep" y "100 %" no caben con aire). */
+#define HDR_MIN_GAP 16
+
+static void fit_header(void)
+{
+    if (!s_qp.hdr) {
+        return;
+    }
+    lv_obj_remove_flag(s_qp.date, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_update_layout(s_qp.hdr);
+    const int32_t need = lv_obj_get_width(s_qp.hdr_left) + lv_obj_get_width(s_qp.hdr_right) + HDR_MIN_GAP;
+    if (need > lv_obj_get_content_width(s_qp.hdr)) {
+        lv_obj_add_flag(s_qp.date, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
 static void update(void)
 {
     wt_datetime_t dt;
     const watch_time_state_t st = watch_time_now(&dt);
+    watch_settings_t ws;
+    watch_settings_get(&ws);
     ui_face_time_t t;
-    ui_face_time(st, st == WATCH_TIME_OK ? &dt : NULL, &t);
+    ui_face_time_fmt(st, st == WATCH_TIME_OK ? &dt : NULL, ws.h24, &t);
     if (t.key != s_qp.last_time_key) {
         s_qp.last_time_key = t.key;
-        lv_label_set_text(s_qp.time, t.time);
+        if (t.ampm[0]) {
+            lv_label_set_text_fmt(s_qp.time, "%s %s", t.time, t.ampm); /* barra: "9:41 PM" */
+        } else {
+            lv_label_set_text(s_qp.time, t.time);
+        }
         char d[24];
         if (t.valid) {
             wt_fmt_date_short(d, sizeof(d), &dt);
@@ -90,6 +117,7 @@ static void update(void)
             lv_snprintf(d, sizeof(d), "%s", "");
         }
         lv_label_set_text(s_qp.date, d);
+        fit_header();
     }
 
 }
@@ -117,6 +145,7 @@ static void update_battery(const watch_power_snapshot_t *snap)
         lv_label_set_text(s_qp.batt_tile_pct, "--");
     }
     lv_label_set_text(s_qp.batt_tile_state, ui_batt_state_text(bst));
+    fit_header();
 }
 
 static void tick_cb(lv_timer_t *t)
@@ -183,6 +212,7 @@ static void destroy(void)
     if (s_qp.root) {
         lv_obj_delete_async(s_qp.root);
         s_qp.root = NULL;
+        s_qp.hdr = NULL;
     }
     s_qp.st = QP_CLOSED;
 }
@@ -271,10 +301,12 @@ static void build(void)
     const int32_t hh = lv_font_get_line_height(FLEX_FONT_TITLE);
     const int32_t hx = flex_safe_left(HDR_Y, HDR_Y + hh - 1, FLEX_SAFE_MARGIN);
     lv_obj_t *hdr = row_box(root);
+    s_qp.hdr = hdr;
     lv_obj_set_pos(hdr, hx, HDR_Y);
     lv_obj_set_size(hdr, flex_safe_right(HDR_Y, HDR_Y + hh - 1, FLEX_SAFE_MARGIN) + 1 - hx, hh);
     lv_obj_set_flex_align(hdr, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_t *left = row_box(hdr);
+    s_qp.hdr_left = left;
     lv_obj_set_size(left, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_flex_align(left, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
     lv_obj_set_style_pad_column(left, 10, 0);
@@ -282,6 +314,7 @@ static void build(void)
     s_qp.date = watch_theme_label(left, FLEX_FONT_SMALL, FLEX_C_TXT2, "");
     lv_obj_set_style_pad_bottom(s_qp.date, 3, 0);
     lv_obj_t *right = row_box(hdr);
+    s_qp.hdr_right = right;
     lv_obj_set_size(right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_style_pad_column(right, 8, 0);
     s_qp.batt_pct = watch_theme_label(right, FLEX_FONT_SMALL, FLEX_C_TXT, "--");

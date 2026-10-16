@@ -233,8 +233,173 @@ static void test_pcf85063(void)
     }
 }
 
+static wt_datetime_t mk(int y, int mo, int d, int h, int mi, int sec)
+{
+    wt_datetime_t dt = {y, mo, d, h, mi, sec, 0};
+    return dt;
+}
+
+/* F4.2: codificación para escribir el RTC (casos E1-E9 de la auditoría). */
+static void test_encode(void)
+{
+    uint8_t o[PCF85063_TIME_LEN];
+    wt_datetime_t dt = mk(2026, 10, 15, 9, 5, 7);
+    CHECK_EQ(pcf85063_encode(&dt, false, o), RTC_ENC_OK);
+    static const uint8_t e1[PCF85063_TIME_LEN] = {0x07, 0x05, 0x09, 0x15, 0x04, 0x10, 0x26};
+    CHECK(memcmp(o, e1, sizeof(e1)) == 0);
+
+    /* 12 h, simétrico con el decodificador */
+    static const struct { int h; uint8_t b; } h12[] = {{0, 0x12}, {1, 0x01}, {11, 0x11}, {12, 0x32}, {13, 0x21}, {23, 0x31}};
+    for (size_t i = 0; i < sizeof(h12) / sizeof(h12[0]); i++) {
+        dt = mk(2026, 10, 15, h12[i].h, 0, 0);
+        pcf85063_encode(&dt, true, o);
+        CHECK_EQ(o[2], h12[i].b);
+    }
+    /* Límites */
+    dt = mk(2000, 1, 1, 0, 0, 0);
+    CHECK_EQ(pcf85063_encode(&dt, false, o), RTC_ENC_OK);
+    static const uint8_t e3a[PCF85063_TIME_LEN] = {0x00, 0x00, 0x00, 0x01, 0x06, 0x01, 0x00};
+    CHECK(memcmp(o, e3a, sizeof(e3a)) == 0);
+    dt = mk(2099, 12, 31, 23, 59, 59);
+    CHECK_EQ(pcf85063_encode(&dt, false, o), RTC_ENC_OK);
+    static const uint8_t e3b[PCF85063_TIME_LEN] = {0x59, 0x59, 0x23, 0x31, 0x04, 0x12, 0x99};
+    CHECK(memcmp(o, e3b, sizeof(e3b)) == 0);
+    /* Fechas y horas imposibles: error y out sin tocar */
+    memset(o, 0xEE, sizeof(o));
+    dt = mk(2028, 2, 29, 0, 0, 0);
+    CHECK_EQ(pcf85063_encode(&dt, false, o), RTC_ENC_OK);
+    memset(o, 0xEE, sizeof(o));
+    dt = mk(2027, 2, 29, 0, 0, 0);
+    CHECK_EQ(pcf85063_encode(&dt, false, o), RTC_ENC_BAD_DATE);
+    CHECK_EQ(o[0], 0xEE);
+    dt = mk(2026, 11, 31, 0, 0, 0);
+    CHECK_EQ(pcf85063_encode(&dt, false, o), RTC_ENC_BAD_DATE);
+    dt = mk(2026, 13, 1, 0, 0, 0);
+    CHECK_EQ(pcf85063_encode(&dt, false, o), RTC_ENC_BAD_DATE);
+    dt = mk(2026, 0, 1, 0, 0, 0);
+    CHECK_EQ(pcf85063_encode(&dt, false, o), RTC_ENC_BAD_DATE);
+    dt = mk(1999, 12, 31, 0, 0, 0);
+    CHECK_EQ(pcf85063_encode(&dt, false, o), RTC_ENC_BAD_YEAR);
+    dt = mk(2100, 1, 1, 0, 0, 0);
+    CHECK_EQ(pcf85063_encode(&dt, false, o), RTC_ENC_BAD_YEAR);
+    dt = mk(2026, 1, 1, 24, 0, 0);
+    CHECK_EQ(pcf85063_encode(&dt, false, o), RTC_ENC_BAD_TIME);
+    dt = mk(2026, 1, 1, -1, 0, 0);
+    CHECK_EQ(pcf85063_encode(&dt, false, o), RTC_ENC_BAD_TIME);
+    dt = mk(2026, 1, 1, 0, 60, 0);
+    CHECK_EQ(pcf85063_encode(&dt, false, o), RTC_ENC_BAD_TIME);
+    dt = mk(2026, 1, 1, 0, 0, 60);
+    CHECK_EQ(pcf85063_encode(&dt, false, o), RTC_ENC_BAD_TIME);
+    /* Se ignora el día de la semana de entrada; OS siempre a 0 */
+    dt = mk(2026, 10, 15, 9, 5, 59);
+    dt.weekday = 99;
+    pcf85063_encode(&dt, false, o);
+    CHECK_EQ(o[4], 4);
+    CHECK_EQ(o[0] & PCF85063_SEC_OS, 0);
+    /* Rango en segundos UTC */
+    CHECK_EQ(pcf85063_encode_utc(946684799LL, false, o), RTC_ENC_BAD_YEAR);
+    CHECK_EQ(pcf85063_encode_utc(4102444800LL, false, o), RTC_ENC_BAD_YEAR);
+    CHECK_EQ(pcf85063_encode_utc(946684800LL, false, o), RTC_ENC_OK);
+    CHECK_EQ(pcf85063_encode_utc(4102444799LL, false, o), RTC_ENC_OK);
+
+    /* Ida y vuelta con el decodificador: cada segundo de un día (24 h y
+     * 12 h) y cada día de 2000 a 2099. */
+    uint8_t r[PCF85063_READ_LEN];
+    int bad = 0;
+    for (int mode = 0; mode < 2; mode++) {
+        for (int t = 0; t < 86400; t++) {
+            wt_datetime_t in = mk(2026, 10, 15, t / 3600, (t / 60) % 60, t % 60), got;
+            memset(r, 0, sizeof(r));
+            r[0] = mode ? PCF85063_CTRL1_12H : 0;
+            if (pcf85063_encode(&in, mode, &r[4]) != RTC_ENC_OK || pcf85063_decode(r, &got) != RTC_READ_OK ||
+                wt_to_seconds(&got) != wt_to_seconds(&in)) {
+                bad++;
+            }
+        }
+    }
+    for (int64_t d = wt_days_from_civil(2000, 1, 1); d <= wt_days_from_civil(2099, 12, 31); d++) {
+        wt_datetime_t in, got;
+        wt_from_seconds(d * 86400 + 12 * 3600, &in);
+        memset(r, 0, sizeof(r));
+        if (pcf85063_encode(&in, false, &r[4]) != RTC_ENC_OK) {
+            bad++;
+            continue;
+        }
+        const rtc_read_t res = pcf85063_decode(r, &got);
+        if ((in.year >= WT_MIN_PLAUSIBLE_YEAR ? res != RTC_READ_OK : res != RTC_READ_IMPLAUSIBLE) ||
+            wt_to_seconds(&got) != wt_to_seconds(&in) || r[8] != got.weekday) {
+            bad++;
+        }
+    }
+    CHECK_EQ(bad, 0);
+
+    /* Control_1: conserva CIE y CAP_SEL, 24 h, nunca SR ni EXT_TEST */
+    static const struct { uint8_t in, stop, run; } c1[] = {
+        {0x00, 0x20, 0x00}, {0x01, 0x21, 0x01}, {0x07, 0x25, 0x05}, {0xFF, 0x25, 0x05}, {0x58, 0x20, 0x00}, {0x22, 0x20, 0x00},
+    };
+    for (size_t i = 0; i < sizeof(c1) / sizeof(c1[0]); i++) {
+        CHECK_EQ(pcf85063_ctrl1_for_set(c1[i].in, true), c1[i].stop);
+        CHECK_EQ(pcf85063_ctrl1_for_set(c1[i].in, false), c1[i].run);
+        CHECK((pcf85063_ctrl1_for_set(c1[i].in, true) & PCF85063_CTRL1_SR) == 0);
+    }
+}
+
+/* F4.2: zona horaria (desfase fijo) y formatos de 12 h. */
+static void test_tz(void)
+{
+    wt_datetime_t dt;
+    /* 2026-10-15 14:05:07Z en Lima (-300) = 9:05:07 del 15 */
+    wt_utc_to_local(1792073107LL, -300, &dt);
+    CHECK_EQ(dt.year, 2026);
+    CHECK_EQ(dt.month, 10);
+    CHECK_EQ(dt.day, 15);
+    CHECK_EQ(dt.hour, 9);
+    CHECK_EQ(dt.minute, 5);
+    CHECK_EQ(dt.second, 7);
+    /* Cambio de año hacia atrás */
+    wt_datetime_t z = mk(2026, 1, 1, 3, 0, 0);
+    wt_utc_to_local(wt_to_seconds(&z), -300, &dt);
+    CHECK_EQ(dt.year, 2025);
+    CHECK_EQ(dt.month, 12);
+    CHECK_EQ(dt.day, 31);
+    CHECK_EQ(dt.hour, 22);
+    /* Ida y vuelta local -> UTC -> local para todos los desfases de 15 min */
+    int bad = 0;
+    for (int off = -720; off <= 840; off += 15) {
+        wt_datetime_t in = mk(2026, 3, 1, 0, 30, 0), out;
+        wt_utc_to_local(wt_local_to_utc(&in, off), off, &out);
+        if (wt_to_seconds(&out) != wt_to_seconds(&in) || out.day != 1 || out.month != 3) {
+            bad++;
+        }
+    }
+    CHECK_EQ(bad, 0);
+    char b[16];
+    wt_fmt_utc_offset(b, sizeof(b), -300);
+    CHECK(strcmp(b, "UTC-05:00") == 0);
+    wt_fmt_utc_offset(b, sizeof(b), 330);
+    CHECK(strcmp(b, "UTC+05:30") == 0);
+    wt_fmt_utc_offset(b, sizeof(b), 345);
+    CHECK(strcmp(b, "UTC+05:45") == 0);
+    wt_fmt_utc_offset(b, sizeof(b), -570);
+    CHECK(strcmp(b, "UTC-09:30") == 0);
+    wt_fmt_utc_offset(b, sizeof(b), 0);
+    CHECK(strcmp(b, "UTC") == 0);
+    /* 12 h */
+    static const struct { int h; const char *t, *ap; } h[] = {
+        {0, "12:05", "AM"}, {1, "1:05", "AM"}, {11, "11:05", "AM"}, {12, "12:05", "PM"}, {13, "1:05", "PM"}, {23, "11:05", "PM"},
+    };
+    for (size_t i = 0; i < sizeof(h) / sizeof(h[0]); i++) {
+        dt = mk(2026, 10, 15, h[i].h, 5, 0);
+        wt_fmt_hhmm12(b, sizeof(b), &dt);
+        CHECK(strcmp(b, h[i].t) == 0);
+        CHECK(strcmp(wt_ampm(&dt), h[i].ap) == 0);
+    }
+}
+
 void test_time_all(void)
 {
+    test_encode();
+    test_tz();
     test_calendar();
     test_seconds();
     test_format();

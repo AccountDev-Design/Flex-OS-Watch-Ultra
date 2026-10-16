@@ -44,6 +44,12 @@ LVGL_OBJ := $(patsubst $(LVGL_DIR)/%.c,$(BUILD)/lvgl/%.o,$(LVGL_SRC))
 .PHONY: all clean
 all: $(BUILD)/sim
 
+# LVGL 9.5 desplaza a la izquierda un valor negativo en el rodillo
+# (lv_roller.c:598, posición proporcional del texto elegido): GCC lo hace bien,
+# pero UBSan lo marca. Solo en ese archivo de LVGL se omite esa comprobación;
+# el código del reloj se sigue comprobando entero.
+$(BUILD)/lvgl/src/widgets/roller/lv_roller.o: CFLAGS += -fno-sanitize=shift-base
+
 $(BUILD)/lvgl/%.o: $(LVGL_DIR)/%.c lv_conf.h
 	@mkdir -p $(dir $@)
 	@$(CC) $(CFLAGS) -w -c $< -o $@

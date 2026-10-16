@@ -42,6 +42,19 @@ void wt_from_seconds(int64_t seconds, wt_datetime_t *dt);
 
 /** "9:05" (24 h). Devuelve lo mismo que snprintf. */
 int wt_fmt_hhmm(char *buf, size_t n, const wt_datetime_t *dt);
+/** "9:05" en 12 h (0 h -> "12:05"), sin AM/PM: la esfera grande no lo lleva
+ * (referencia, Clock.h:179-185). */
+int wt_fmt_hhmm12(char *buf, size_t n, const wt_datetime_t *dt);
+/** "AM" o "PM" (para barras: "9:05 PM", Clock.h:186-196). */
+const char *wt_ampm(const wt_datetime_t *dt);
+
+/* ---- Zona horaria: desfase fijo en minutos respecto a UTC (D17) ---- */
+/** Hora local de un instante UTC con el desfase dado. */
+void wt_utc_to_local(int64_t utc_s, int off_min, wt_datetime_t *out);
+/** Instante UTC de una hora local con el desfase dado. */
+int64_t wt_local_to_utc(const wt_datetime_t *local, int off_min);
+/** "UTC-05:00", "UTC+05:30", "UTC". */
+int wt_fmt_utc_offset(char *buf, size_t n, int off_min);
 /** "Jueves, 15 de octubre" */
 int wt_fmt_date_long(char *buf, size_t n, const wt_datetime_t *dt);
 /** "jue, 15 oct" */

@@ -65,6 +65,11 @@ void sim_check_glyphs(lv_obj_t *obj, const char *where);
 int sim_timer_count(void);
 
 /* Brillo simulado: valor aplicado y comandos enviados al "panel". */
+/* Puesta en hora simulada (sim_main.c) */
+extern int sim_time_sets;
+extern int64_t sim_time_set_utc;
+extern wt_set_result_t sim_time_set_result;
+
 /* Ajustes persistentes en RAM (sim_ws.c) */
 extern int sim_ws_updates;
 void sim_ws_reset(const watch_settings_t *s); /* NULL = valores por defecto */
@@ -91,3 +96,4 @@ void sim_suite_bench(const char *out);
 void sim_suite_visual(const char *out);
 void sim_suite_theme(const char *out);
 void sim_suite_face(const char *out);
+void sim_suite_datetime(const char *out);

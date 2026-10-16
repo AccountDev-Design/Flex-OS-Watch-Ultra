@@ -15,9 +15,23 @@
 #define BACK_X   (FLEX_HDR_X + FLEX_HDR_ZONE / 2)
 #define BACK_Y   (FLEX_SAFE_TOP + FLEX_HDR_ZONE / 2)
 
+/* Abre la fila de Ajustes con ese título (la desplaza a la vista si hace
+ * falta) y comprueba que la página abierta lleva el mismo título. */
 static void open_row(int i, const char *title)
 {
-    sim_tap(205, ROW_Y(i));
+    lv_obj_t *row = sim_find_label(ui_nav_top(), title);
+    while (row && !lv_obj_has_flag(row, LV_OBJ_FLAG_CLICKABLE)) {
+        row = lv_obj_get_parent(row);
+    }
+    EXPECT(row, "no hay fila %s", title);
+    if (!row) {
+        return;
+    }
+    lv_obj_scroll_to_view(row, LV_ANIM_OFF);
+    sim_run(50);
+    lv_area_t a;
+    lv_obj_get_coords(row, &a);
+    sim_tap((a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2);
     sim_run(300);
     EXPECT(ui_nav_depth() == 3 && sim_find_label(ui_nav_top(), title), "la fila %d no abrio %s", i, title);
 }

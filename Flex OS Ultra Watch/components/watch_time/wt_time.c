@@ -91,6 +91,36 @@ int wt_fmt_hhmm(char *buf, size_t n, const wt_datetime_t *dt)
     return snprintf(buf, n, "%d:%02d", dt->hour, dt->minute);
 }
 
+int wt_fmt_hhmm12(char *buf, size_t n, const wt_datetime_t *dt)
+{
+    const int h = dt->hour % 12 == 0 ? 12 : dt->hour % 12;
+    return snprintf(buf, n, "%d:%02d", h, dt->minute);
+}
+
+const char *wt_ampm(const wt_datetime_t *dt)
+{
+    return dt->hour >= 12 ? "PM" : "AM";
+}
+
+void wt_utc_to_local(int64_t utc_s, int off_min, wt_datetime_t *out)
+{
+    wt_from_seconds(utc_s + (int64_t)off_min * 60, out);
+}
+
+int64_t wt_local_to_utc(const wt_datetime_t *local, int off_min)
+{
+    return wt_to_seconds(local) - (int64_t)off_min * 60;
+}
+
+int wt_fmt_utc_offset(char *buf, size_t n, int off_min)
+{
+    if (off_min == 0) {
+        return snprintf(buf, n, "UTC");
+    }
+    const int a = off_min < 0 ? -off_min : off_min;
+    return snprintf(buf, n, "UTC%c%02d:%02d", off_min < 0 ? '-' : '+', a / 60, a % 60);
+}
+
 int wt_fmt_date_long(char *buf, size_t n, const wt_datetime_t *dt)
 {
     if (!valid_names(dt)) {

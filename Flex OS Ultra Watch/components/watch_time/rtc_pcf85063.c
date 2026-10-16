@@ -78,3 +78,51 @@ const char *pcf85063_read_text(rtc_read_t r)
     default:                   return "?";
     }
 }
+
+static uint8_t to_bcd(int v)
+{
+    return (uint8_t)(((v / 10) << 4) | (v % 10));
+}
+
+rtc_enc_t pcf85063_encode(const wt_datetime_t *dt, bool mode_12h, uint8_t out[PCF85063_TIME_LEN])
+{
+    if (!in(dt->year, 2000, 2099)) {
+        return RTC_ENC_BAD_YEAR;
+    }
+    if (!in(dt->month, 1, 12) || !in(dt->day, 1, wt_days_in_month(dt->year, dt->month))) {
+        return RTC_ENC_BAD_DATE;
+    }
+    if (!in(dt->hour, 0, 23) || !in(dt->minute, 0, 59) || !in(dt->second, 0, 59)) {
+        return RTC_ENC_BAD_TIME;
+    }
+    uint8_t hour;
+    if (mode_12h) {
+        const int h12 = dt->hour % 12 == 0 ? 12 : dt->hour % 12;
+        hour = (uint8_t)(to_bcd(h12) | (dt->hour >= 12 ? PCF85063_HOUR_PM : 0));
+    } else {
+        hour = to_bcd(dt->hour);
+    }
+    out[0] = to_bcd(dt->second); /* bit 7 (OS) = 0 */
+    out[1] = to_bcd(dt->minute);
+    out[2] = hour;
+    out[3] = to_bcd(dt->day);
+    out[4] = (uint8_t)wt_weekday_from_days(wt_days_from_civil(dt->year, dt->month, dt->day));
+    out[5] = to_bcd(dt->month);
+    out[6] = to_bcd(dt->year - 2000);
+    return RTC_ENC_OK;
+}
+
+rtc_enc_t pcf85063_encode_utc(int64_t utc_s, bool mode_12h, uint8_t out[PCF85063_TIME_LEN])
+{
+    if (utc_s < 946684800LL || utc_s > 4102444799LL) {
+        return RTC_ENC_BAD_YEAR;
+    }
+    wt_datetime_t dt;
+    wt_from_seconds(utc_s, &dt);
+    return pcf85063_encode(&dt, mode_12h, out);
+}
+
+uint8_t pcf85063_ctrl1_for_set(uint8_t ctrl1_read, bool stop)
+{
+    return (uint8_t)((ctrl1_read & (PCF85063_CTRL1_CIE | PCF85063_CTRL1_CAP_SEL)) | (stop ? PCF85063_CTRL1_STOP : 0));
+}
