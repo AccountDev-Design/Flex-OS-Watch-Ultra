@@ -17,7 +17,8 @@ INC := -I$(FW)/components/watch_power/include \
        -I$(FW)/components/watch_settings/include \
        -I$(FW)/components/watch_imu/include \
        -I$(FW)/components/watch_storage/include \
-       -I$(FW)/components/watch_net/include
+       -I$(FW)/components/watch_net/include \
+       -I$(FW)/components/flexlink/include
 SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test_power_sched.c test_safe.c \
        test_settings.c $(FW)/components/watch_settings/ws_logic.c \
        test_clock.c $(FW)/components/watch_ui/ui_clock_logic.c \
@@ -26,6 +27,9 @@ SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test
        test_storage.c $(FW)/components/watch_storage/stg_logic.c \
        test_apps.c $(FW)/components/watch_ui/apps_logic.c \
        test_net.c $(FW)/components/watch_net/net_logic.c \
+       test_flexlink.c $(FW)/components/flexlink/flex_link.c $(FW)/components/flexlink/flex_auth.c \
+       $(FW)/components/flexlink/flex_phone.c $(FW)/components/flexlink/flex_phone_transport.c \
+       $(FW)/components/flexlink/flex_phone_link.c \
        $(FW)/components/watch_power/battery_model.c \
        $(FW)/components/watch_power/battery_alerts.c \
        $(FW)/components/watch_power/power_sched.c \

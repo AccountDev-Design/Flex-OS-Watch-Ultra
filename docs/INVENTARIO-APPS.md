@@ -30,9 +30,9 @@ No hay más apps nativas. Las apps instalables de Flex Store (`FlexOS_AppVM`, by
 | 13 | Cámara (`IC_CAMARA`) | objetivo (Icons.h:296) | Cámara OV/MIPI (AppCamera.h) | cámara | — | El reloj no tiene cámara | ⛔ (sin hardware) |
 | 14 | **Clima** (`IC_CLIMA`) | sol tras nube (Icons.h:226) | Datos reales de Open-Meteo, horas, días, ubicaciones, buscador (AppWeather.h, Weather.cpp) | — | Wi-Fi (HTTPS) | Misma fuente (Open-Meteo) por Wi-Fi; "sin conexión"/"datos de hh:mm" cuando no hay red | ⬜ (tras F5.1) |
 | 15 | Flex Store (`IC_FLEXSTORE`) | bolsa (Icons.h:240) | Tienda de paquetes .flexpkg con firma y máquina virtual FlexVM (Store.cpp, AppVM.cpp, PkgCore.cpp) | flash | Wi-Fi | Evaluable cuando haya Wi-Fi y OTA: la VM es C++ puro. No prioritario | ⬜ (❓) |
-| 16 | **Flex Phone** (`IC_FLEXPHONE`) | teléfono con ondas (Icons.h:253) | Emparejar, estado del enlace, notificaciones, buscar teléfono, multimedia (FlexPhone*.h/.cpp, android/) | — | BLE (reloj) / Wi-Fi | App de enlace por **BLE** (el reloj es el primer equipo con radio BLE: el `GattServer.kt` de Android estaba escrito para esto) | ⬜ (F5) |
+| 16 | **Flex Phone** (`IC_FLEXPHONE`) | teléfono con ondas (Icons.h:253) | Emparejar, estado del enlace, notificaciones, buscar teléfono, multimedia (FlexPhone*.h/.cpp, android/) | — | BLE (reloj) / Wi-Fi | App de enlace por **BLE** (el reloj es el primer equipo con radio BLE: el `GattServer.kt` de Android estaba escrito para esto) | 🟡 F5.2-F5.5, F9.9 (falta la app Android v2) |
 | 17 | **Device Care** (`IC_DEVCARE`) | escudo con pulso (Icons.h:267) | Estado del dispositivo, salud, optimizar, historial, pruebas, detección de caídas (DeviceCare.h, DeviceTests.h, FallAlert.h) | IMU 9 ejes | — | Estado real (batería, memoria, almacenamiento, temperatura del chip), pruebas de pantalla/táctil/IMU. Caídas: ⚠️ recalibrar para 6 ejes (más adelante) | 🟡 F9.5 (salud y pruebas) · ⬜ caídas |
-| 18 | **Música** (`IC_MUSICA`) | dos corcheas (Icons.h:259) | Biblioteca local y reproductor (AppMusic.h, Audio.cpp) | I2S + códec | — | Control de la música del **teléfono** (T_MEDIA_STATE/T_MEDIA_CMD de Flex Link, `MediaBridge.kt`). Altavoz local ❓ D13 | ⬜ (F5) |
+| 18 | **Música** (`IC_MUSICA`) | dos corcheas (Icons.h:259) | Biblioteca local y reproductor (AppMusic.h, Audio.cpp) | I2S + códec | — | Control de la música del **teléfono** (T_MEDIA_STATE/T_MEDIA_CMD de Flex Link, `MediaBridge.kt`). Altavoz local ❓ D13 | 🟡 F9.10 |
 
 Apps propias del reloj sin equivalente directo en el registro (se conservan): **Sensores** (nivel y movimiento,
 F4.4), que pasa a ser parte de Device Care / Flex Compass.
@@ -44,8 +44,8 @@ F4.4), que pasa a ser parte de Device Care / Flex Compass.
 | Esfera / pantalla de bloqueo | `Lock.h`, `Clock.h` | Esfera con hora del RTC, fecha y batería real | 🟡 |
 | Escritorio (Inicio) y dock | `Home.h`, `HomeCfg.h` (rejilla 4×N, iconos de 72 px) | La esfera hace de Inicio; el escritorio de 4 columnas no cabe en 410 px | ⚠️ |
 | Caja de aplicaciones | `AppDrawer.h` (4 columnas, iconos de 72 px, etiqueta debajo, buscador) | **Lanzador en rejilla de 3 columnas con los iconos originales** (mismo tamaño físico) | 🟡 (F3.5) |
-| Panel rápido | `QuickPanel*.h` (22 mosaicos: Wi-Fi, BLE, brillo, ahorro, No molestar...) | Cortina con Wi-Fi (funcional), Bluetooth, batería, Ajustes y brillo | 🟡 (BT "Pendiente" hasta F5.5) |
-| Notificaciones | `Notif.h`, `FlexPhone_Overlay.h` | Llegan con Flex Phone (F5.3) | ⬜ |
+| Panel rápido | `QuickPanel*.h` (22 mosaicos: Wi-Fi, BLE, brillo, ahorro, No molestar...) | Cortina con Wi-Fi (funcional), Bluetooth, batería, Ajustes y brillo | 🟡 (Wi-Fi y Bluetooth funcionales) |
+| Notificaciones | `Notif.h`, `FlexPhone_Overlay.h` | Lista, detalle con acciones de Android, respuestas rápidas y aviso emergente (F5.3) | 🟡 |
 | Recientes | `AppSwitcher.h` | Pila de navegación + gesto volver | ⚠️ (no se replica la multitarea) |
 | Teclado | `Keyboard.h` (QWERTY completo, 480 px) | Teclado compacto por páginas para 410 px | ⬜ |
 | Fondos de pantalla | `Wallpaper.h` (8 fondos procedurales) | Los 8 fondos regenerados para 410×502 + negro AMOLED, con selector | 🟡 (F3.6) |

@@ -71,3 +71,26 @@ CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL=y
 # interna la necesitan los búferes DMA de la pantalla y, después, el BLE.
 # ---------------------------------------------------------------------------
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+
+# ---------------------------------------------------------------------------
+# Bluetooth LE (F5.5): NimBLE como CENTRAL hacia el GattServer de la app Flex
+# Phone (el teléfono anuncia y sirve; el reloj busca y conecta). Pila de host
+# en PSRAM; vínculos BLE en NVS. MTU 247 obligatorio (tramas de 244 B).
+# ---------------------------------------------------------------------------
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL=y
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=y
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=y
+# El rol de periférico no se usa para anunciar (BROADCASTER apagado): hace
+# falta para el servidor GATT con el servicio GAP, que es de donde Android
+# lee el nombre "Flex OS Watch" que enseña al pedir el emparejamiento.
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=n
+CONFIG_BT_NIMBLE_SVC_GAP_DEVICE_NAME="Flex OS Watch"
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+CONFIG_BT_NIMBLE_NVS_PERSIST=y
+CONFIG_BT_NIMBLE_MAX_BONDS=3
+CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=247
+CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y
+CONFIG_BT_NIMBLE_50_FEATURE_SUPPORT=n

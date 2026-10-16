@@ -14,7 +14,8 @@
  *      en "storage" (watch_storage: monta; nunca formatea solo)
  *   8. interfaz: del splash a la esfera (watch_ui)
  * El Wi-Fi (watch_net) arranca tras los ajustes y solo enciende la radio si el
- * usuario la dejó encendida.
+ * usuario la dejó encendida. Flex Phone (watch_phone, Bluetooth LE) igual: la
+ * pila BLE no se inicia hasta que el usuario enciende el enlace.
  */
 #include "esp_app_desc.h"
 #include "esp_err.h"
@@ -26,6 +27,7 @@
 #include "watch_display.h"
 #include "watch_imu.h"
 #include "watch_net.h"
+#include "watch_phone.h"
 #include "watch_power.h"
 #include "watch_settings.h"
 #include "watch_storage.h"
@@ -128,6 +130,11 @@ void app_main(void)
     err = watch_net_start();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Wi-Fi no disponible: %s", esp_err_to_name(err));
+    }
+    /* Flex Phone (F5.2/F5.5): independiente del Wi-Fi; perder Internet no lo corta. */
+    err = watch_phone_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Flex Phone no disponible: %s", esp_err_to_name(err));
     }
 
     ESP_ERROR_CHECK(bsp_i2c_init());

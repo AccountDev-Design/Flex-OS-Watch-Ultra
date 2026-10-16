@@ -1,7 +1,7 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 36,3 %   [███████░░░░░░░░░░░░░]   63,7 % pendiente   (verificado en el reloj: 8,6 %)
+PROGRESO GLOBAL: 42,2 %   [████████░░░░░░░░░░░░]   57,8 % pendiente   (verificado en el reloj: 8,6 %)
 ```
 
 El 2026-10-16 el alcance creció con el prompt maestro de migración (iconos y fondos originales, todas las apps del
@@ -28,11 +28,16 @@ el porcentaje baja porque ahora mide más trabajo. Detalle en el historial del f
     - IMU y app Sensores;
     - apagado de pantalla;
     - LittleFS.
+  - Identidad original (iconos, lanzador, fondos), apps Reloj, Calculadora, Calendario, Flex Compass y Device Care.
+  - Wi-Fi (F5.1) y Flex Phone por Bluetooth LE (F5.2-F5.5): núcleo Flex Link v2 portado con vectores dorados,
+    central NimBLE, notificaciones, Música y estado del teléfono (`docs/F5-CONECTIVIDAD.md`).
 - **En curso:** pruebas físicas de F2-F4.
 - **Falta:**
   - Pruebas físicas de F2-F4 sobre el firmware actual (T41-T66 y las T de F2/F3 aún sin resultado).
   - La calibración de umbrales (❓ D4).
-  - Flex Phone, el navegador, OTA, la seguridad y las pruebas finales.
+  - Prueba de extremo a extremo de Flex Phone: necesita la app Android con el servidor BLE v2
+    (`docs/FLEX-PHONE-ANDROID.md`).
+  - Notas, Clima, explorador de archivos, Paint, el navegador, OTA, la seguridad y las pruebas finales.
 - **Siguiente:** pruebas físicas de F2-F4 (`docs/PRUEBAS-RELOJ.md`); después F5 (Wi-Fi y Flex Phone).
 
 ## Cómo se calcula
@@ -98,14 +103,14 @@ Detalle y pruebas en `docs/F4-SERVICIOS.md`.
 | F4.5 Apagado de pantalla por inactividad (atenuada, DISPOFF, vuelta a la esfera), botón lateral, despertar por toque, alarma y USB. Sin reposo ligero de la CPU (F8.4, medir antes) | 1,5 | 🟡 faltan T56-T59 |
 | F4.6 Almacenamiento LittleFS en `storage` (> 16 MB): puerta por la sonda de 32 MB, prueba de escritura del sector, formateo confirmado, montaje y archivo atómico (`FLASH-32MB.md` §6) | 1 | 🟡 faltan T63-T66 |
 
-### F5 · Conectividad y Flex Phone — 1,5 / 17
+### F5 · Conectividad y Flex Phone — 7,5 / 17
 | Tarea | Peso | Estado |
 |---|---|---|
 | F5.1 Wi-Fi STA: conexión, credenciales, reconexión, sin bloquear la interfaz, hora por SNTP (`docs/F5-CONECTIVIDAD.md`) | 3 | 🟡 faltan T78-T83 |
-| F5.2 `flex_link`: cliente compatible con Flex Link v2 (descubrimiento, emparejamiento, sesión, reconexión) reutilizando los módulos puros | 4 | ⬜ |
-| F5.3 Notificaciones desde Flex Phone (recibir, listar, descartar) | 3 | ⬜ |
-| F5.4 Otras funciones del protocolo (batería del móvil, multimedia, buscar teléfono...) | 2 | ❓ D10 |
-| F5.5 **Transporte BLE** con Flex Phone (canal principal): central NimBLE contra el `GattServer.kt` de la app (servicio `f1580001-…`), vínculo cifrado, reconexión, BLE independiente del Wi-Fi | 3 | ⬜ |
+| F5.2 `flex_link`: cliente compatible con Flex Link v2 (descubrimiento, emparejamiento, sesión, reconexión) reutilizando los módulos puros (`components/flexlink`, `watch_phone`) | 4 | 🟡 faltan T84-T87, T91 (y la app Android v2) |
+| F5.3 Notificaciones desde Flex Phone (recibir, listar, descartar, responder, aviso) | 3 | 🟡 faltan T88-T90 |
+| F5.4 Otras funciones del protocolo (estado y capacidades del teléfono, multimedia, hacer sonar) | 2 | 🟡 falta T93 |
+| F5.5 **Transporte BLE** con Flex Phone (canal principal): central NimBLE contra el `GattServer.kt` de la app (servicio `f1580001-…`), vínculo cifrado, reconexión, BLE independiente del Wi-Fi | 3 | 🟡 faltan T84-T85, T91-T92 |
 | F5.6 Seguridad del enlace (v3 con ECDH + cifrado autenticado; requiere cambios en Flex Phone, en su repositorio) | 2 | ❓ D7, D8 |
 
 ### F6 · Navegador (renderizado remoto) — 0 / 8
@@ -133,7 +138,7 @@ Limitación conocida: sin servidor de renderizado o sin el móvil, no hay web. N
 | F8.4 Consumo medido y optimización (pantalla, radio, sondeos) | 2 | ⬜ |
 | F8.5 Pruebas finales: 24 h de estabilidad, memoria y regresión completa en el reloj | 3 | ⬜ |
 
-### F9 · Apps de Flex OS Ultra (inventario: `docs/INVENTARIO-APPS.md`) — 3,25 / 15
+### F9 · Apps de Flex OS Ultra (inventario: `docs/INVENTARIO-APPS.md`) — 4,5 / 15
 | Tarea | Peso | Estado |
 |---|---|---|
 | F9.1 Reloj (agrupa Alarmas, Cronómetro y Temporizador con el icono original) | 1 | 🟡 falta T69 |
@@ -144,8 +149,8 @@ Limitación conocida: sin servidor de renderizado o sin el móvil, no hay web. N
 | F9.6 Almacenamiento: explorador de LittleFS | 1 | ⬜ |
 | F9.7 Notas (lista y lectura en LittleFS; teclado compacto) | 2 | ⬜ |
 | F9.8 Clima (Open-Meteo por Wi-Fi, estado sin conexión) | 2 | ⬜ |
-| F9.9 Flex Phone (estado del enlace, emparejar, notificaciones) | 1,5 | ⬜ |
-| F9.10 Música (control de la música del teléfono) | 1 | ⬜ |
+| F9.9 Flex Phone (estado del enlace, emparejar, notificaciones) (`docs/F5-CONECTIVIDAD.md` §3.4) | 1,5 | 🟡 faltan T86-T90 |
+| F9.10 Música (control de la música del teléfono) | 1 | 🟡 falta T93 |
 | F9.11 Paint (lienzo reducido) | 1 | ⬜ |
 
 ### Acordado sin peso asignado
@@ -181,7 +186,7 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | D7 | Protocolo: Flex Link v2 (en claro) o v3 cifrado | F5.6 |
 | D8 | Cambios en Flex Phone (Android): varios dispositivos y tipo "reloj" | F5.6 |
 | D9 | ¿Comunicación directa reloj ↔ Flex OS Ultra (P4)? | F5 |
-| D10 | Funciones de Flex Phone en el reloj más allá de las notificaciones | F5.4 |
+| D10 | ~~Funciones de Flex Phone en el reloj más allá de las notificaciones~~ Resuelta por el prompt maestro (2026-10-16): todo lo que el protocolo y la app ofrecen (estado, capacidades, multimedia, hacer sonar, respuestas) | F5.4 |
 | D11 | Flex Account / Flex Cloud en el reloj (modelo, servidor) | F8.1, F8.2 |
 | D12 | Cifrado de flash y NVS desde el principio | F8.3 |
 | D13 | Uso de audio, motor y microSD | sin peso |
@@ -226,3 +231,4 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-16 | **32,8 %** | +2,5 | F3.5 (iconos originales y lanzador, 50 % de 3), F3.6 (fondos originales y selector, 50 % de 2) y F9.1 (app Reloj, 50 % de 1) compilan y pasan las pruebas de PC y de la vista previa. Puntos 40 / 122 |
 | 2026-10-16 | **35,0 %** | +2,25 | F9.2 Calculadora (50 % de 1,5), F9.3 Calendario (50 % de 1), F9.4 Flex Compass (50 % de 1) y F9.5 Device Care (50 % de 2) compilan y pasan las pruebas de PC y de la vista previa. Puntos 42,75 / 122 |
 | 2026-10-16 | **36,3 %** | +1,5 | F5.1 Wi-Fi (watch_net: servicio de una tarea, redes guardadas con CRC, reintentos, SNTP al RTC, Ajustes > Wi-Fi con teclado propio y mosaico del panel) compila y pasa las pruebas de PC y de la vista previa: 50 % de 3. Puntos 44,25 / 122 |
+| 2026-10-16 | **42,2 %** | +5,9 | Flex Phone por BLE: núcleo Flex Link v2 portado de la referencia (`components/flexlink`, 228 comprobaciones con vectores dorados y apretón de manos contra un teléfono simulado), servicio `watch_phone` con central NimBLE, app Flex Phone, notificaciones con aviso y respuestas, Música y mosaico Bluetooth. Compilan y pasan las pruebas de PC y de la vista previa: F5.2 (50 % de 4), F5.3 (50 % de 3), F5.4 (50 % de 2, D10 resuelta), F5.5 (50 % de 3), F9.9 (50 % de 1,5) y F9.10 (50 % de 1). Sin prueba de extremo a extremo hasta que la app Android sirva v2 por BLE. Puntos 51,5 / 122 |

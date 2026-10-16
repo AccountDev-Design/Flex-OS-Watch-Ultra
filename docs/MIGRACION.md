@@ -53,10 +53,10 @@ LVGL por software no hay sitio para un desenfoque por cuadro.
 
 | Pieza original | Archivo | En el reloj |
 |---|---|---|
-| Protocolo Flex Link v2 (trama de 18 B, CRC16-CCITT, fragmentos de 226 B, anti-repetición, reensamblado) | `protocol/FlexLink.kt`, `FlexOS_FlexLink.cpp` | `flink.c` en C con los vectores dorados de `FlexLinkTest.kt` |
-| Autenticación FlexAuth (reto-respuesta) | `protocol/FlexAuth.kt`, `FlexOS_FlexAuth.cpp` | Transcripción a C sobre mbedTLS |
+| Protocolo Flex Link v2 (trama de 18 B, CRC16-CCITT, fragmentos de 226 B, anti-repetición, reensamblado) | `protocol/FlexLink.kt`, `FlexOS_FlexLink.cpp` | 🟡 `components/flexlink/flex_link.c` (port de la referencia) con los vectores dorados de `FlexLinkTest.kt` |
+| Autenticación FlexAuth (reto-respuesta) | `protocol/FlexAuth.kt`, `FlexOS_FlexAuth.cpp` | 🟡 `flex_auth.c`: el SHA-256/HMAC en C puro de la referencia (mismo código en PC y reloj), con los vectores de `FlexAuthTest.kt` y RFC 4231 |
 | Transporte Wi-Fi (`WifiLinkServer.kt`) | Android | Topología misma LAN (D6) |
-| **Transporte BLE (`GattServer.kt`)**: servicio `f1580001-…`, RX `f1580002` (escritura), TX `f1580003` (notificación), MTU 247, permisos cifrados (exige vínculo) | Android, "escrito y preparado, hoy no se usa" | Central NimBLE en el reloj. **Requiere en Flex Phone**: activar `GattServer` junto al servidor Wi-Fi y pasarlo al apretón de manos v2 (lo dice su propia cabecera) |
+| **Transporte BLE (`GattServer.kt`)**: servicio `f1580001-…`, RX `f1580002` (escritura), TX `f1580003` (notificación), MTU 247, permisos cifrados (exige vínculo) | Android, "escrito y preparado, hoy no se usa" | 🟡 Central NimBLE en el reloj (`watch_phone/ble_link.c`). **Requiere en Flex Phone**: activar `GattServer` junto al servidor Wi-Fi y pasarlo al apretón de manos v2 (lo dice su propia cabecera): lista en `FLEX-PHONE-ANDROID.md` |
 | Notificaciones (`FlexNotificationListener.kt`, T_NOTIF_*) | Android | Lista de notificaciones en el reloj, solo las que el usuario autoriza en el móvil (`AllowedApps.kt`) |
 | Navegador FBP/1 (`server/`, `relay/`) | Node.js / Android | Cliente FBP/1 por Wi-Fi (F6) |
 

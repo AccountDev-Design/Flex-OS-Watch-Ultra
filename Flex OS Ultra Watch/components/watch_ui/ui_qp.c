@@ -10,7 +10,8 @@
  *    Ajustes > Batería.
  *  - Wi-Fi: tocarlo lo enciende o lo apaga; debajo, la red o el estado real
  *    (watch_net, F5.1). Activo (acento) con el Wi-Fi encendido.
- *  - Bluetooth: marcado "Pendiente" hasta F5.5; no recibe toques.
+ *  - Bluetooth: enciende o apaga el enlace con Flex Phone (watch_phone,
+ *    F5.5); debajo, el teléfono conectado o el estado real del enlace.
  *
  * Gestos (ui_gesture.c): arrastrar hacia abajo desde la franja superior de
  * la esfera abre; arrastrar hacia arriba en el panel o tocar el asa inferior
@@ -74,6 +75,8 @@ static struct {
     lv_obj_t *batt_tile_state;
     lv_obj_t *wifi_tile;
     lv_obj_t *wifi_sub;
+    lv_obj_t *bt_tile;
+    lv_obj_t *bt_sub;
     lv_timer_t *timer;
     ui_drag_t drag;
     ui_page_create_t after_close; /* página que se abre al terminar de cerrar */
@@ -138,6 +141,21 @@ static void update(void)
                 lv_obj_add_state(s_qp.wifi_tile, LV_STATE_CHECKED);
             } else {
                 lv_obj_remove_state(s_qp.wifi_tile, LV_STATE_CHECKED);
+            }
+        }
+    }
+    if (s_qp.bt_tile) {
+        watch_phone_status_t ps;
+        watch_phone_get(&ps);
+        const char *sub = ps.link == FLP_LS_READY && ps.peer_name[0] ? ps.peer_name : ui_phone_chip(&ps, NULL);
+        if (strcmp(lv_label_get_text(s_qp.bt_sub), sub) != 0) {
+            lv_label_set_text(s_qp.bt_sub, sub);
+        }
+        if (ps.enabled != lv_obj_has_state(s_qp.bt_tile, LV_STATE_CHECKED)) {
+            if (ps.enabled) {
+                lv_obj_add_state(s_qp.bt_tile, LV_STATE_CHECKED);
+            } else {
+                lv_obj_remove_state(s_qp.bt_tile, LV_STATE_CHECKED);
             }
         }
     }
@@ -231,13 +249,20 @@ static void wifi_cb(lv_event_t *e)
     }
 }
 
-static void tile_pending(lv_obj_t *t)
+/* Bluetooth: tocar el mosaico enciende o apaga el enlace con Flex Phone. */
+static void bt_cb(lv_event_t *e)
 {
-    lv_obj_add_state(t, LV_STATE_DISABLED);
-    flex_icon_set_color(lv_obj_get_child(t, 0), FLEX_C_MUTE);
-    lv_obj_set_style_text_color(lv_obj_get_child(t, 1), flex_color(FLEX_C_MUTE), 0);
-    lv_label_set_text(lv_obj_get_child(t, 2), "Pendiente");
-    lv_obj_set_style_text_color(lv_obj_get_child(t, 2), flex_color(FLEX_C_MUTE), 0);
+    (void)e;
+    watch_phone_status_t ps;
+    watch_phone_get(&ps);
+    watch_phone_set_enabled(!ps.enabled);
+    if (ps.enabled) {
+        lv_obj_remove_state(s_qp.bt_tile, LV_STATE_CHECKED);
+        lv_label_set_text(s_qp.bt_sub, "Apagado");
+    } else {
+        lv_obj_add_state(s_qp.bt_tile, LV_STATE_CHECKED);
+        lv_label_set_text(s_qp.bt_sub, "Buscando");
+    }
 }
 
 /* ---- Animación de la cortina ---- */
@@ -250,6 +275,8 @@ static void destroy(void)
     }
     s_qp.wifi_tile = NULL;
     s_qp.wifi_sub = NULL;
+    s_qp.bt_tile = NULL;
+    s_qp.bt_sub = NULL;
     if (s_qp.root) {
         lv_obj_delete_async(s_qp.root);
         s_qp.root = NULL;
@@ -364,9 +391,9 @@ static void build(void)
     /* Mosaicos */
     s_qp.wifi_tile = tile(root, TILE_X0, TILE_Y0, FLEX_ICON_WIFI, FLEX_C_CAT_NET, "Wi-Fi", "", &s_qp.wifi_sub);
     lv_obj_add_event_cb(s_qp.wifi_tile, wifi_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *bt = tile(root, TILE_X0 + TILE_W + TILE_GAP, TILE_Y0, FLEX_ICON_BLUETOOTH, FLEX_C_CAT_NET,
-                        "Bluetooth", "", NULL);
-    tile_pending(bt);
+    s_qp.bt_tile = tile(root, TILE_X0 + TILE_W + TILE_GAP, TILE_Y0, FLEX_ICON_BLUETOOTH, FLEX_C_CAT_NET,
+                        "Bluetooth", "", &s_qp.bt_sub);
+    lv_obj_add_event_cb(s_qp.bt_tile, bt_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *batt = tile(root, TILE_X0, TILE_Y1, FLEX_ICON_BOLT, FLEX_C_CAT_GREEN, "--", "",
                           &s_qp.batt_tile_state);
     s_qp.batt_tile_pct = lv_obj_get_child(batt, 1);

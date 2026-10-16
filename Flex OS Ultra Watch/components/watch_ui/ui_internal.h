@@ -10,6 +10,7 @@
 #include "watch_power.h"
 #include "ui_clock_logic.h"
 #include "watch_ui.h"
+#include "watch_phone.h"
 
 /* ---- ui_system: sondeo único del servicio de batería y capas globales ---- */
 
@@ -39,6 +40,8 @@ lv_obj_t *ui_charge_anim_obj(void);
 
 /** Muestra el aviso de batería baja o crítica (o lo actualiza si ya se ve). */
 void ui_banner_show_battery(batt_alert_t alert, int percent);
+/** Aviso de una notificación del teléfono; tocarlo abre su detalle. */
+void ui_banner_show_notif(const char *app, const char *text, uint32_t notif_id);
 bool ui_banner_active(void);
 
 /* ---- Navegación (ui_nav) ----
@@ -110,6 +113,22 @@ lv_obj_t *ui_compass_create(lv_obj_t *parent);  /**< app Flex Compass (F9.4) */
 lv_obj_t *ui_devcare_create(lv_obj_t *parent);  /**< app Device Care (F9.5) */
 lv_obj_t *ui_wifi_create(lv_obj_t *parent);     /**< Ajustes > Wi-Fi (F5.1) */
 lv_obj_t *ui_wifi_password_create(lv_obj_t *parent);
+/* Flex Phone (F5.2/F5.3/F9.9/F9.10) */
+lv_obj_t *ui_flexphone_create(lv_obj_t *parent);    /**< app Flex Phone: estado, emparejamiento, secciones */
+lv_obj_t *ui_phone_conn_create(lv_obj_t *parent);   /**< Flex Phone > Conexión */
+lv_obj_t *ui_phone_state_create(lv_obj_t *parent);  /**< Flex Phone > Estado del teléfono */
+lv_obj_t *ui_notifs_create(lv_obj_t *parent);       /**< notificaciones del teléfono */
+lv_obj_t *ui_notif_detail_create(lv_obj_t *parent); /**< la elegida con ui_notif_open() */
+lv_obj_t *ui_notif_reply_create(lv_obj_t *parent);
+lv_obj_t *ui_music_create(lv_obj_t *parent);        /**< app Música: lo que suena en el teléfono */
+void ui_notif_open(uint32_t id);                    /**< abre el detalle de una notificación */
+void ui_notif_watch_tick(bool screen_on);           /**< cada 100 ms (ui_system): aviso al llegar una */
+/** Texto del teléfono preparado para la fuente (sin huecos por glifos que no existen). */
+void ui_phone_text(const char *in, char *out, size_t n, const lv_font_t *font);
+/** "Ahora", "Hace 5 min", "12:41" o "14 oct" a partir de segundos UTC del teléfono. */
+void ui_phone_when(uint32_t when_s, char *b, size_t n);
+/** Estado corto del enlace ("Conectado", "Buscando"...) y su color. */
+const char *ui_phone_chip(const watch_phone_status_t *s, uint32_t *rgb);
 void ui_apps_attach(lv_obj_t *face_page); /**< deslizar la esfera a la izquierda abre las apps */
 lv_obj_t *ui_stopwatch_create(lv_obj_t *parent);
 lv_obj_t *ui_timer_create(lv_obj_t *parent);

@@ -12,6 +12,7 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | T67-T73 | [F3-IDENTIDAD-ORIGINAL.md](F3-IDENTIDAD-ORIGINAL.md) (iconos, lanzador, Reloj y fondos) |
 | T74-T77 | [F9-APPS.md](F9-APPS.md) (Calculadora, Calendario, Flex Compass, Device Care) |
 | T78-T83 | [F5-CONECTIVIDAD.md](F5-CONECTIVIDAD.md) (Wi-Fi) |
+| T84-T93 | [F5-CONECTIVIDAD.md](F5-CONECTIVIDAD.md) §3.6 (Flex Phone por Bluetooth; T86-T93 necesitan la app Android con el servidor v2, [FLEX-PHONE-ANDROID.md](FLEX-PHONE-ANDROID.md)) |
 | Flash de 32 MB | [FLASH-32MB.md](FLASH-32MB.md) |
 
 **Verificado en el reloj hasta ahora** (fotos y vídeo del 2026-10-15): pantalla, táctil, LVGL y la sonda de 32 MB (T10). Lo demás no. Compilar y pasar las pruebas de PC no prueba el reloj: cada resultado que me envíes es lo que convierte una tarea del 50 % al 100 %.
@@ -113,6 +114,13 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | Pruebas | Qué mirar |
 |---|---|
 | T78-T83 | Encender y listar redes, conectar con contraseña (y que reconecte tras reiniciar), contraseña mal, hora por Internet, señal perdida y reconexión, mosaico del panel. Copiar las líneas `watch_net` del registro |
+
+## 10. Flex Phone por Bluetooth (`F5-CONECTIVIDAD.md` §3.6)
+
+| Pruebas | Qué mirar |
+|---|---|
+| T84-T85 | Con la app de hoy: el reloj encuentra el teléfono, empareja por BLE, abre el canal (MTU 247) y explica que el teléfono no contesta al saludo v2. Copiar las líneas `ble_link` y `watch_phone` (incluida la RAM interna del BLE) |
+| T86-T93 | Solo con la app Android actualizada: emparejar con código, código equivocado, aviso con la pantalla apagada, responder, descartar, reconexión sola, sin Wi-Fi, Música |
 
 ## Qué enviarme
 
