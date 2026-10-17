@@ -1,7 +1,7 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 43,9 %   [████████░░░░░░░░░░░░]   56,1 % pendiente   (verificado en el reloj: 8,6 %)
+PROGRESO GLOBAL: 44,7 %   [████████░░░░░░░░░░░░]   55,3 % pendiente   (verificado en el reloj: 8,6 %)
 ```
 
 El 2026-10-16 el alcance creció con el prompt maestro de migración (iconos y fondos originales, todas las apps del
@@ -37,7 +37,7 @@ el porcentaje baja porque ahora mide más trabajo. Detalle en el historial del f
   - La calibración de umbrales (❓ D4).
   - Prueba de extremo a extremo de Flex Phone: necesita la app Android con el servidor BLE v2
     (`docs/FLEX-PHONE-ANDROID.md`).
-  - Clima, el navegador, OTA, la seguridad y las pruebas finales.
+  - El navegador, OTA, la seguridad y las pruebas finales.
 - **Siguiente:** pruebas físicas de F2-F4 (`docs/PRUEBAS-RELOJ.md`); después F5 (Wi-Fi y Flex Phone).
 
 ## Cómo se calcula
@@ -138,7 +138,7 @@ Limitación conocida: sin servidor de renderizado o sin el móvil, no hay web. N
 | F8.4 Consumo medido y optimización (pantalla, radio, sondeos) | 2 | ⬜ |
 | F8.5 Pruebas finales: 24 h de estabilidad, memoria y regresión completa en el reloj | 3 | ⬜ |
 
-### F9 · Apps de Flex OS Ultra (inventario: `docs/INVENTARIO-APPS.md`) — 6,5 / 15
+### F9 · Apps de Flex OS Ultra (inventario: `docs/INVENTARIO-APPS.md`) — 7,5 / 15
 | Tarea | Peso | Estado |
 |---|---|---|
 | F9.1 Reloj (agrupa Alarmas, Cronómetro y Temporizador con el icono original) | 1 | 🟡 falta T69 |
@@ -148,7 +148,7 @@ Limitación conocida: sin servidor de renderizado o sin el móvil, no hay web. N
 | F9.5 Device Care (estado real, memoria, almacenamiento, pruebas) | 2 | 🟡 falta T77 |
 | F9.6 Almacenamiento: explorador de LittleFS (`docs/F9-APPS.md`) | 1 | 🟡 faltan T96-T97 |
 | F9.7 Notas (lista, editor con autoguardado y teclado en español sobre LittleFS) | 2 | 🟡 faltan T94-T95 |
-| F9.8 Clima (Open-Meteo por Wi-Fi, estado sin conexión) | 2 | ⬜ |
+| F9.8 Clima (Open-Meteo por Wi-Fi, estado sin conexión) (`docs/F9-APPS.md`) | 2 | 🟡 faltan T100-T103 |
 | F9.9 Flex Phone (estado del enlace, emparejar, notificaciones) (`docs/F5-CONECTIVIDAD.md` §3.4) | 1,5 | 🟡 faltan T86-T90 |
 | F9.10 Música (control de la música del teléfono) | 1 | 🟡 falta T93 |
 | F9.11 Paint (lienzo reducido, formato FXP1 compatible) | 1 | 🟡 faltan T98-T99 |
@@ -234,3 +234,4 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-16 | **42,2 %** | +5,9 | Flex Phone por BLE: núcleo Flex Link v2 portado de la referencia (`components/flexlink`, 228 comprobaciones con vectores dorados y apretón de manos contra un teléfono simulado), servicio `watch_phone` con central NimBLE, app Flex Phone, notificaciones con aviso y respuestas, Música y mosaico Bluetooth. Compilan y pasan las pruebas de PC y de la vista previa: F5.2 (50 % de 4), F5.3 (50 % de 3), F5.4 (50 % de 2, D10 resuelta), F5.5 (50 % de 3), F9.9 (50 % de 1,5) y F9.10 (50 % de 1). Sin prueba de extremo a extremo hasta que la app Android sirva v2 por BLE. Puntos 51,5 / 122 |
 | 2026-10-16 | **43,4 %** | +1,2 | F9.6 explorador de archivos (50 % de 1) y F9.7 Notas (50 % de 2): capa `watch_files` con la semántica de `FlexOS_FS` (66 comprobaciones sobre una carpeta real), teclado compartido en español, suite "notas" de la vista previa. Puntos 53 / 122 |
 | 2026-10-16 | **43,9 %** | +0,5 | F9.11 Paint (50 % de 1): formato FXP1 de la referencia byte a byte (`watch_files/fxp.c`, 23 comprobaciones), lienzo con trazos guardados al levantar el dedo, deshacer real y galería con miniaturas reproducidas del archivo. Puntos 53,5 / 122 |
+| 2026-10-17 | **44,7 %** | +1 | F9.8 Clima (50 % de 2): motor de `FlexOS_Weather` portado a C puro (`watch_weather`: parser, cadencia, ubicaciones; 225 comprobaciones con las respuestas reales de Open-Meteo de la referencia), servicio con `esp_http_client` sobre TLS verificado (paquete de CA, mbedTLS en PSRAM), NVS `flexwx` y app Clima con iconos procedurales; suite "clima" de la vista previa. Puntos 54,5 / 122 |

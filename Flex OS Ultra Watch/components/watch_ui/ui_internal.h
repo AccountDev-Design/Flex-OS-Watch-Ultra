@@ -146,6 +146,10 @@ lv_obj_t *ui_notifs_create(lv_obj_t *parent);       /**< notificaciones del tel�
 lv_obj_t *ui_notif_detail_create(lv_obj_t *parent); /**< la elegida con ui_notif_open() */
 lv_obj_t *ui_notif_reply_create(lv_obj_t *parent);
 lv_obj_t *ui_music_create(lv_obj_t *parent);        /**< app Música: lo que suena en el teléfono */
+/* Clima (F9.8; ui_weather.c) */
+lv_obj_t *ui_weather_create(lv_obj_t *parent);      /**< app Clima: Open-Meteo por Wi-Fi */
+lv_obj_t *ui_wx_locs_create(lv_obj_t *parent);      /**< Clima > Mis ubicaciones */
+lv_obj_t *ui_wx_search_create(lv_obj_t *parent);    /**< Clima > Buscar ciudad */
 void ui_notif_open(uint32_t id);                    /**< abre el detalle de una notificación */
 void ui_notif_watch_tick(bool screen_on);           /**< cada 100 ms (ui_system): aviso al llegar una */
 /** Texto del teléfono preparado para la fuente (sin huecos por glifos que no existen). */

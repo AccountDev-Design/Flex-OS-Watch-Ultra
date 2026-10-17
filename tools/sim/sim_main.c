@@ -463,6 +463,7 @@ int main(int argc, char **argv)
         {"esfera", sim_suite_face},      {"nav", sim_suite_nav},       {"panel", sim_suite_qp},
         {"ajustes", sim_suite_settings}, {"hora", sim_suite_datetime}, {"apps", sim_suite_apps},
         {"pantalla", sim_suite_screen},  {"wifi", sim_suite_wifi},       {"telefono", sim_suite_phone}, {"notas", sim_suite_notes},
+        {"clima", sim_suite_weather},
         {"mono", sim_suite_monkey},      {"visual", sim_suite_visual}, {"banco", sim_suite_bench},
     };
     for (size_t i = 0; i < sizeof(suites) / sizeof(suites[0]); i++) {

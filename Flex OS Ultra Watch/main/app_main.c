@@ -28,6 +28,7 @@
 #include "watch_imu.h"
 #include "watch_net.h"
 #include "watch_phone.h"
+#include "watch_weather.h"
 #include "watch_power.h"
 #include "watch_settings.h"
 #include "watch_storage.h"
@@ -135,6 +136,11 @@ void app_main(void)
     err = watch_phone_start();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Flex Phone no disponible: %s", esp_err_to_name(err));
+    }
+    /* Clima (F9.8): lee NVS y espera a que haya Wi-Fi; no enciende la radio. */
+    err = watch_weather_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Clima no disponible: %s", esp_err_to_name(err));
     }
 
     ESP_ERROR_CHECK(bsp_i2c_init());

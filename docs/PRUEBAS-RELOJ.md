@@ -109,6 +109,7 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 |---|---|
 | T74-T77 | Calculadora (25 + 10, 5 / 0), Calendario (hoy y cambio de mes), Flex Compass (Pitch/Roll al inclinar, sin rumbo), Device Care (puntuación y semáforos) |
 | T94-T99 | Con el almacenamiento montado: Notas (crear, escribir con ñ y tildes, reiniciar y que siga), tirones al autoguardar, papelera/restaurar/renombrar, explorador, Paint (trazos, deshacer, dibujo de Flex OS Ultra) |
+| T100-T103 | Clima con Wi-Fi: buscar y añadir Madrid (comparar con open-meteo.com), "Actualizado hace N min" a los 30 min, sin Wi-Fi y tras reiniciar (caché marcada), clima y BLE a la vez. Copiar las líneas `watch_weather` |
 
 ## 9. Wi-Fi (`F5-CONECTIVIDAD.md`)
 

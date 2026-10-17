@@ -55,6 +55,7 @@ static const app_entry_t kApps[] = {
     {FLEX_APP_PAINT, ui_paint_create},
     {FLEX_APP_CALENDARIO, ui_calendar_create},
     {FLEX_APP_CALCULADORA, ui_calc_create},
+    {FLEX_APP_CLIMA, ui_weather_create},
     {FLEX_APP_FLEX_COMPASS, ui_compass_create},
     {FLEX_APP_DEVICE_CARE, ui_devcare_create},
     {FLEX_APP_SENSORES, ui_sensors_create},

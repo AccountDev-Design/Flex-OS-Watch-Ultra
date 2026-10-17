@@ -71,6 +71,11 @@ CONFIG_LITTLEFS_MALLOC_STRATEGY_INTERNAL=y
 # interna la necesitan los búferes DMA de la pantalla y, después, el BLE.
 # ---------------------------------------------------------------------------
 CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+# HTTPS (Clima F9.8; después OTA): mbedTLS reserva en PSRAM (un saludo TLS
+# pide unos 40 KB) y verifica con el paquete de CA de ESP-IDF.
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
 
 # ---------------------------------------------------------------------------
 # Bluetooth LE (F5.5): NimBLE como CENTRAL hacia el GattServer de la app Flex

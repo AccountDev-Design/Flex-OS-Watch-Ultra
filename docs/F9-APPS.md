@@ -153,6 +153,59 @@ Flex OS Ultra se abre en el reloj y al revés.
 |---|---|
 | ![](img/f9_paint.png) | ![](img/f9_paint_galeria.png) |
 
+## Clima (F9.8)
+
+`ui_weather.c` (icono `IC_CLIMA`) sobre el componente `watch_weather`, port de `FlexOS_Weather.h/.cpp` y de la app
+`FlexOS_Ultra_AppWeather.h` de la referencia. Misma fuente (Open-Meteo, sin clave), mismas reglas, sin un solo dato
+inventado.
+
+- **`wx_logic.c` (C puro):** el escáner JSON propio (busca la clave entrecomillada: `current` no casa con
+  `current_units`), el parseo del pronóstico de 48 h y 7 días y del geocoding, las URL, los conversores de
+  `weather_code` a estado visual y nombre, los textos de error y la frase del tiempo. Un `null` de la API queda como
+  "no disponible" (`WXF_*`, `WX_NOVAL_*`), nunca como 0; los tiempos unix se leen en doble precisión; una respuesta
+  vacía, cortada o con el JSON de error de la API se rechaza; la tira de horas se alinea a la hora en curso.
+- **`wx_core.c` (C puro):** el motor. Estados `WXS_*`, refresco cada 25 min, reintento a los 2 min y a los 15 min
+  tras 3 fallos, primer intento a los 4 s, ningún intento sin red, refresco manual que no descarga si lo último es
+  de hace menos de 5 min, hasta 5 ubicaciones sin duplicados y búsqueda que no se come un refresco pendiente.
+- **`watch_weather.c` (ESP-IDF):** una tarea propia (`watch_wx`, pila de 8 KB) hace toda la red con
+  `esp_http_client` sobre **TLS verificado** con el paquete de CA de ESP-IDF; nunca sin verificar. La interfaz solo
+  copia instantáneas bajo un cerrojo. Solo usa el Wi-Fi si ya está conectado: no lo enciende, y perder Internet no
+  toca el BLE. Ubicaciones y última descarga en NVS (espacio `flexwx`, como la referencia).
+- **Interfaz (410 × 502):** portada (ciudad, temperatura con las cifras de la esfera, icono, condición, máxima y
+  mínima, sensación térmica y la frase), 48 horas en una tira horizontal con gráfica y probabilidad de lluvia,
+  7 días con la barra sobre la escala de la semana, arco del sol, 7 tarjetas de detalle y pie con la antigüedad
+  real y "Datos meteorológicos: Open-Meteo". Iconos procedurales como `wxDrawIcon` (sol, luna, nubes, gotas, copos,
+  rayo), dibujados con LVGL sin imágenes. Estado vacío de la referencia ("Añadir ubicación" / "Reintentar"),
+  "Mis ubicaciones" y buscador con el teclado del sistema.
+- **Memoria (medida con `sizeof`):** motor 2328 B y pronóstico en preparación 1260 B en PSRAM; respuesta HTTP de
+  16 KB (6 KB la búsqueda) en PSRAM solo durante cada descarga; mbedTLS reserva en PSRAM
+  (`CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC`). En RAM interna queda la pila de la tarea. La página copia el pronóstico
+  (1260 B) y pinta la tira de 48 horas, los días y el sol con tres objetos dibujados, no con cientos de etiquetas.
+- **Firmware medido (`idf.py size`):** la imagen pasa a 0x26B050 B (2,42 MB de la partición de 6 MB; +0,23 MB por
+  mbedTLS, `esp_http_client`, esp-tls y el paquete de CA) y la DIRAM estática a 165,6 kB (+2,3 kB; quedan 176,1 kB).
+
+Cambios del reloj, marcados `RELOJ:` en el código:
+
+- TLS con el paquete de CA de ESP-IDF en vez de las dos raíces ISRG fijadas: verifica igual y el OTA y el navegador
+  lo necesitan de todos modos. Si Open-Meteo cambia de emisor a otra CA pública, sigue funcionando.
+- Solo en español (como el resto del reloj); "°C" en la frase, porque la fuente del reloj tiene el signo.
+- Una descarga que termina cuando ya se eligió otra ciudad se descarta en vez de publicarse; borrar una ubicación
+  deja elegida la misma ciudad.
+- Un array que falta o llega más corto que `time` deja sus huecos como "no disponible", no como 0.
+- La caché solo se carga si es de la ciudad elegida. La tira y los días empiezan en la hora y el día en curso
+  aunque los datos sean de la caché. Con un fallo, el pie dice cuál ("El servidor tardó demasiado"), no solo
+  "Sin conexión". Más de 90 min se dice en horas o días.
+- Botón "Actualizar ahora" en vez de deslizar para actualizar; días abreviados ("Mié") para que la barra conserve
+  casi el largo de la referencia.
+
+| Portada | 48 horas y días | Sol y detalle |
+|---|---|---|
+| ![](img/f9_clima.png) | ![](img/f9_clima_dias.png) | ![](img/f9_clima_detalle.png) |
+
+| Sin ubicación | Buscar | Mis ubicaciones |
+|---|---|---|
+| ![](img/f9_clima_vacio.png) | ![](img/f9_clima_buscar.png) | ![](img/f9_clima_ubicaciones.png) |
+
 ## Pruebas
 
 ### En el PC
@@ -166,6 +219,15 @@ Flex OS Ultra se abre en el reloj y al revés.
 - `test_files.c` (FXP1): los bytes exactos de la cabecera y de un trazo, reproducción escalada, deshacer exacto,
   limpiar, archivo cortado y archivo que no es un dibujo. Vista previa: dibujo nuevo, dos trazos con el dedo
   simulado (guardados al levantarlo), cambio de color, deshacer, confirmación de limpiar y miniatura en la galería.
+- `tests/host/test_weather.c`: las comprobaciones de `test_weather.cpp` de la referencia con sus mismas respuestas
+  reales de Open-Meteo (pronóstico exacto, `null` ≠ 0, respuestas rotas, alineado y desbordes, geocoding con
+  `\u00fa`, caché tras reinicio y corrupta, ubicaciones, frase, estados) y las del reloj: cadencia y reintentos,
+  refresco manual, ciudad cambiada a mitad de descarga, búsqueda, UTF-8 recortado sin partir letras, URL dentro del
+  búfer de envío y la política de TLS (paquete de CA, nada sin verificar).
+- Vista previa (`SIM_ONLY=clima`, motor y parser reales con la red simulada): estado vacío sin tocar la red, buscar
+  con el teclado, elegir, carga y pronóstico, antigüedad real, reabrir sin descargar, "Actualizar ahora" con un
+  fallo (datos intactos y aviso), dos ubicaciones, elegir, quitar con confirmación y caché tras un reinicio sin
+  Wi-Fi. Sin fugas ni temporizadores sobrantes.
 
 - `tests/host`: 1062 comprobaciones, entre ellas la calculadora, el calendario y la fórmula y los umbrales de Device
   Care (ASan + UBSan).
@@ -190,3 +252,7 @@ Flex OS Ultra se abre en el reloj y al revés.
 | T97 | Almacenamiento > Explorar archivos | Carpetas con su número de elementos; la papelera dice de dónde vino cada cosa |
 | T98 | Paint: dibujar varios trazos rápidos, cambiar color y grosor, deshacer | El trazo sigue al dedo sin cortes; deshacer quita el último; tras reiniciar el dibujo sigue igual |
 | T99 | Copiar un .fxp de Flex OS Ultra a /Paint del reloj (cuando haya forma de pasar archivos) | Se ve igual, encajado |
+| T100 | Con Wi-Fi: Clima > Añadir ubicación, buscar "Madrid", elegir | Resultados con región y país; el pronóstico llega en segundos y coincide con open-meteo.com |
+| T101 | Dejar la app abierta y volver a los 30 min | "Actualizado hace N min" coherente; en el registro, una descarga cada ~25 min y la memoria libre estable |
+| T102 | Apagar el Wi-Fi y pulsar "Actualizar ahora"; reiniciar sin Wi-Fi | Los datos siguen con "Sin conexión"; tras reiniciar se ve la caché con su antigüedad real |
+| T103 | Con Wi-Fi y Flex Phone conectado, descargar el clima | El BLE no se corta; anotar las líneas `watch_weather` del registro (errores TLS, si los hay) |
