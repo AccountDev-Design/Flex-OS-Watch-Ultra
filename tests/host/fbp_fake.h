@@ -30,6 +30,8 @@ typedef struct {
     bool no_frames;         /* navega pero no manda imágenes */
     bool bands;             /* manda la página en 2 bandas (como el PC) */
     uint32_t chunk;         /* entrega lo pendiente en trozos de N B por read (0 = todo) */
+    uint32_t push_ms;       /* como el relay de Flex Phone: un FRAME nuevo cada N ms sin que
+                               nadie lo pida, tras la primera navegación (0 = solo al pedirlo) */
     fbp_fake_img_cb img;
     void *img_user;
     /** Reloj externo (la vista previa: lv_tick). NULL = reloj virtual. */
@@ -47,6 +49,10 @@ typedef struct {
     int scroll_y;
     char last_token[96];
     char ua[128];
+    char last_host[64];     /* adónde se conectó el reloj */
+    uint16_t last_port;
+    bool last_tls;
+    int pushes;             /* FRAME mandados por iniciativa del servicio */
 } fbp_fake_log_t;
 
 fbp_fake_t *fbp_fake_new(const fbp_fake_cfg_t *cfg);

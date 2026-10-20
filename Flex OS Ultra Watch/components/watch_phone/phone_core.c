@@ -27,6 +27,11 @@ bool phone_core_can(const phone_core_t *c, uint16_t cap)
     return ready(c) && c->M->caps.valid && (c->M->caps.granted & cap);
 }
 
+bool phone_core_relay_can(const phone_core_t *c)
+{
+    return ready(c) && (!c->M->caps.valid || (c->M->caps.supported & FLP_CAP_RELAY));
+}
+
 static void send(phone_core_t *c, uint8_t type, const uint8_t *p, int n, bool ack)
 {
     if (n >= 0 && ready(c)) {
@@ -99,6 +104,23 @@ void phone_core_handle(phone_core_t *c, const phone_msg_t *m, uint32_t now)
     case PM_MEDIA:
         send(c, FLNK_T_MEDIA_CMD, b, flexPhoneEncMediaCmd(b, sizeof(b), m->arg), false);
         break;
+    case PM_RELAY:
+        if (!phone_core_relay_can(c)) {
+            break;
+        }
+        send(c, m->arg ? FLNK_T_RELAY_START : FLNK_T_RELAY_STOP, NULL, 0, true);
+        if (m->arg) {
+            /* Hasta que conteste se enseña "pidiendo"; si ya estaba arriba,
+             * el teléfono repite su dirección (reannounceRelay) y no cambia nada. */
+            if (M->relay.state != FLP_RELAY_UP) {
+                memset(&M->relay, 0, sizeof(M->relay));
+                M->relay.state = FLP_RELAY_STARTING;
+            }
+            c->relay_asked = now ? now : 1;
+        } else {
+            c->relay_asked = 0;
+        }
+        break;
     default:
         break;
     }
@@ -146,6 +168,21 @@ void phone_core_snapshot(phone_core_t *c, uint32_t now)
     s->put_seq = M->putSeq;
     s->replies_ok = st->repliesOk;
     s->replies_fail = st->repliesFail;
+    if (c->relay_asked) {
+        if (M->relay.state != FLP_RELAY_STARTING) {
+            c->relay_asked = 0; /* contestó (arriba, error, suspendido o parado) */
+        } else if (!ready(c)) {
+            /* sin sesión la petición murió con ella: se vuelve a pedir al reconectar */
+            c->relay_asked = 0;
+            M->relay.state = FLP_RELAY_OFF;
+        } else if (now - c->relay_asked >= PHONE_RELAY_TIMEOUT_MS) {
+            c->relay_asked = 0;
+            M->relay.state = FLP_RELAY_ERROR;
+            snprintf(M->relay.err, sizeof(M->relay.err), "%s", "el teléfono no contestó a la petición");
+        }
+    }
+    s->relay = M->relay;
+    s->relay_supported = M->caps.valid && (M->caps.supported & FLP_CAP_RELAY);
 }
 
 void phone_core_tick(phone_core_t *c, uint32_t now, int rounds, bool (*rx_pending)(void))

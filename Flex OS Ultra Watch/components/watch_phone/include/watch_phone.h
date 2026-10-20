@@ -11,9 +11,11 @@
  *
  * Lo que este servicio NO hace y la interfaz debe decir:
  *  - El Wi-Fi no interviene: perder Internet no corta el enlace.
- *  - La app Android de hoy anuncia el servidor GATT pero no implementa el
- *    apretón de manos v2 (GattServer.kt:43-45); hasta que lo haga, el reloj
+ *  - Flex Phone (FlexPhone/ en este repositorio) sirve v2 por BLE
+ *    (GattServer.kt + PhoneLinkPeer.kt). Con una app antigua sin v2, el reloj
  *    conecta por BLE y explica que el teléfono no contesta al saludo.
+ *  - El Browser Relay del teléfono se pide por aquí (watch_phone_relay) pero
+ *    sus imágenes van por el Wi-Fi (watch_browser, br_backend).
  *  - La carga viaja cifrada por el emparejamiento BLE (las características
  *    del teléfono exigen cifrado) y autenticada por v2; no hay más capas.
  */
@@ -54,6 +56,8 @@ typedef struct {
     uint32_t put_id;                   /**< última notificación que entró o cambió */
     uint32_t put_seq;                  /**< cuántas han entrado o cambiado (para el aviso) */
     uint32_t replies_ok, replies_fail; /**< resultados REALES de las respuestas */
+    FlexPhoneRelay relay;              /**< Browser Relay del teléfono (state FLP_RELAY_*) */
+    bool relay_supported;              /**< el teléfono declara el servidor del navegador */
 } watch_phone_status_t;
 
 /** Arranca el servicio. Enciende el enlace si el usuario lo dejó encendido. */
@@ -93,6 +97,19 @@ bool watch_phone_action(uint32_t id, uint8_t idx);
 bool watch_phone_find(bool start);
 /** Orden multimedia FLP_MCMD_*. false si no hay sesión o no se concede. */
 bool watch_phone_media(uint8_t cmd);
+
+/**
+ * Pide al teléfono que levante (start) o pare su Browser Relay
+ * (FLNK_T_RELAY_START/STOP con ACK). La respuesta real llega en
+ * status.relay (FLNK_T_RELAY_INFO). false si no hay sesión o el teléfono no
+ * lo ofrece.
+ */
+bool watch_phone_relay(bool start);
+/**
+ * Credencial del relay derivada del vínculo (32 hex). No viaja por el aire:
+ * el teléfono deriva la misma. false (y out vacío) sin vínculo. outN >= 33.
+ */
+bool watch_phone_relay_token(char *out, size_t outN);
 
 /** Estado del enlace en palabras para la interfaz ("Conectado", "Buscando el teléfono"...). */
 const char *watch_phone_state_text(const watch_phone_status_t *s);

@@ -92,6 +92,9 @@ static void tap_cb(lv_event_t *e)
         const bool ota = s_b.open_ota;
         lv_anim_delete(s_b.card, y_in_cb);
         start_out(0);
+        if ((id || ota) && ui_qp_active()) {
+            ui_qp_close(); /* la página que se abre no puede quedar debajo del panel rápido */
+        }
         if (id) {
             ui_notif_open(id);
         } else if (ota) {

@@ -63,6 +63,7 @@ APP_SRC := $(wildcard sim_*.c) \
            $(FW)/components/watch_browser/br_logic.c \
            $(FW)/components/watch_browser/br_net.c \
            $(FW)/components/watch_browser/br_lists.c \
+           $(FW)/components/watch_browser/br_backend.c \
            ../../tests/host/fbp_fake.c \
            $(FW)/components/watch_ota/ota_core.c \
            $(FW)/components/watch_ota/ota_sig.c \

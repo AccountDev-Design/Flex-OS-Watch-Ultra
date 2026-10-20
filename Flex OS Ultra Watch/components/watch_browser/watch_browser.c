@@ -8,6 +8,8 @@
  */
 #include "watch_browser.h"
 
+#include "br_phone_view.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -38,6 +40,8 @@ static const char *TAG = "watch_browser";
 #define PERSIST_MS   20000
 #define MIN_INTERNAL (20 * 1024)
 #define MIN_PSRAM    (160 * 1024)
+#define BACKEND_MS   500   /* cada cuánto se mira si cambió la fuente (relay del teléfono) */
+#define RELAY_ASK_MS 15000 /* como mucho una petición de RELAY_START cada 15 s */
 
 typedef struct {
     esp_transport_handle_t t;
@@ -56,7 +60,11 @@ static BrSettings s_set;
 static bool s_set_loaded;
 static char s_device[32];
 static volatile int s_probe_state; /* 0 nada, 1 en curso, 2 hecho */
-static char s_probe_msg[64];
+static SemaphoreHandle_t s_cfg_mx;  /* s_set y s_be: la interfaz escribe, la tarea lee */
+static br_backend_t s_be;           /* la fuente aplicada a la sesión */
+static watch_phone_status_t s_ps;   /* espacio de trabajo (con s_cfg_mx) */
+static uint32_t s_be_ms, s_relay_ask_ms;
+static char s_probe_msg[96];
 
 /* ======================= transporte ======================= */
 
@@ -208,6 +216,7 @@ static void save_settings(const BrSettings *st)
     nvs_set_str(h, "brsrv", st->server);
     nvs_set_str(h, "brtok", st->token);
     nvs_set_str(h, "brtpl", st->searchCustom);
+    nvs_set_str(h, "brcloud", st->cloudServer);
     nvs_set_i32(h, "breng", st->searchEngine);
     nvs_set_i32(h, "brprof", st->profile);
     nvs_set_i32(h, "brqual", st->quality);
@@ -236,8 +245,8 @@ uint32_t watch_browser_caps(void)
         load_settings();
     }
     uint32_t c = FLEXBR_CAP_TILES | FLEXBR_CAP_TABS | FLEXBR_CAP_TLS | FLEXBR_CAP_PSRAM;
-    if (s_set.server[0]) {
-        c |= FLEXBR_CAP_REMOTE; /* la fuente del reloj es el servidor de Ajustes */
+    if (s_be.src != BRSRC_NONE && s_be.url[0]) {
+        c |= FLEXBR_CAP_REMOTE; /* hay servicio: el teléfono, la nube o el PC */
     }
     if (ffs_ready()) {
         c |= FLEXBR_CAP_FS;
@@ -245,17 +254,71 @@ uint32_t watch_browser_caps(void)
     return c;
 }
 
+static void cfg_lock(void)
+{
+    if (!s_cfg_mx) {
+        s_cfg_mx = xSemaphoreCreateMutex();
+    }
+    xSemaphoreTake(s_cfg_mx, portMAX_DELAY);
+}
+
+static void cfg_unlock(void)
+{
+    xSemaphoreGive(s_cfg_mx);
+}
+
+/*
+ * Elige la fuente con el estado REAL del teléfono (br_backend) y, si cambió
+ * algo, rehace la sesión. Si el teléfono puede servir y su relay está
+ * parado y ask (navegador abierto), se lo pide por BLE con límite de ritmo:
+ * con la app cerrada no se levanta nada en el teléfono. force: aplicar
+ * aunque no cambie (ajustes nuevos).
+ */
+static void refresh_backend(bool force, bool ask)
+{
+    br_phone_view_t v;
+    br_backend_t be;
+    BrSettings set;
+    cfg_lock();
+    br_phone_view_get(&v, &s_ps);
+    set = s_set;
+    br_backend_resolve(&set, &v, &be);
+    const bool changed = force || br_backend_differs(&be, &s_be);
+    if (changed) {
+        if (be.src != s_be.src) {
+            ESP_LOGI(TAG, "fuente del navegador: %s%s%s", flexBrSourceName(be.src), be.why[0] ? " — " : "",
+                     be.why);
+        }
+        s_be = be;
+    }
+    cfg_unlock();
+    memset(&v, 0, sizeof(v)); /* la credencial no se queda en la pila */
+    if (changed && s_net) {
+        set.allowInsecure |= be.insecure_ok;
+        br_net_configure(s_net, be.url, be.token, &set, s_device, watch_browser_caps());
+        br_net_set_source(s_net, be.src, be.why);
+    }
+    const uint32_t now = io_now(NULL);
+    if (ask && be.want_relay && (!s_relay_ask_ms || now - s_relay_ask_ms >= RELAY_ASK_MS)) {
+        s_relay_ask_ms = now;
+        if (watch_phone_relay(true)) {
+            ESP_LOGI(TAG, "pidiendo a Flex Phone su servidor del navegador");
+        }
+    }
+    memset(&be, 0, sizeof(be));
+}
+
 static void reconfigure(void)
 {
-    if (s_net) {
-        br_net_configure(s_net, s_set.server, s_set.token, &s_set, s_device, watch_browser_caps());
-    }
+    refresh_backend(true, s_task != NULL);
 }
 
 void watch_browser_set_settings(const BrSettings *st)
 {
+    cfg_lock();
     s_set = *st;
     s_set_loaded = true;
+    cfg_unlock();
     save_settings(st);
     reconfigure();
 }
@@ -355,6 +418,11 @@ static void task(void *arg)
 {
     (void)arg;
     while (!s_stop) {
+        const uint32_t now = io_now(NULL);
+        if (now - s_be_ms >= BACKEND_MS) {
+            s_be_ms = now;
+            refresh_backend(false, true); /* el relay del teléfono va y viene solo */
+        }
         br_net_set_online(s_net, watch_browser_online());
         uint32_t w = br_net_step(s_net);
         if (w > 100) {
@@ -394,6 +462,7 @@ esp_err_t watch_browser_open(void)
                      .close = io_close, .now = io_now, .rand = io_rand, .mem_ok = io_mem_ok,
                      .lock = io_lock, .unlock = io_unlock};
     br_net_init(s_net, &s_io, s_rx, RX_CAP);
+    s_relay_ask_ms = 0; /* al abrir, si hace falta, se pide el relay enseguida */
     reconfigure();
     s_stop = false;
     if (xTaskCreate(task, "watch_br", FLEXBR_NET_STACK, NULL, TASK_PRIO, &s_task) != pdPASS) {
@@ -423,6 +492,25 @@ void watch_browser_close(void)
     s_rx = NULL;
 }
 
+void watch_browser_source(watch_browser_source_t *out)
+{
+    if (!s_set_loaded) {
+        load_settings();
+    }
+    if (!s_task) {
+        refresh_backend(false, false); /* sin la tarea nadie la refresca */
+    }
+    cfg_lock();
+    out->src = s_be.src;
+    out->pref = s_set.source;
+    snprintf(out->why, sizeof(out->why), "%s", s_be.why);
+    out->relay_state = s_ps.relay.state;
+    memcpy(out->relay_ip, s_ps.relay.ip, 4);
+    out->relay_port = s_ps.relay.port;
+    out->phone_possible = s_ps.bonded && (s_set.source == BRSRC_AUTO || s_set.source == BRSRC_PHONE);
+    cfg_unlock();
+}
+
 br_net_t *watch_browser_net(void)
 {
     return s_task ? s_net : NULL;
@@ -436,8 +524,13 @@ static void probe_task(void *arg)
     bool tls;
     char host[FLEXBR_HOST_MAX], path[128], url[300];
     uint16_t port;
-    if (!flexBrParseWsUrl(s_set.server, &tls, host, sizeof(host), &port, path, sizeof(path))) {
-        snprintf(s_probe_msg, sizeof(s_probe_msg), "Configura antes la dirección del servidor");
+    char srv[FLEXBR_SERVER_MAX], why[96];
+    cfg_lock();
+    snprintf(srv, sizeof(srv), "%s", s_be.url); /* la fuente EN USO: teléfono, nube o PC */
+    snprintf(why, sizeof(why), "%s", s_be.why);
+    cfg_unlock();
+    if (!flexBrParseWsUrl(srv, &tls, host, sizeof(host), &port, path, sizeof(path))) {
+        snprintf(s_probe_msg, sizeof(s_probe_msg), "%s", why[0] ? why : "Configura antes la dirección del servidor");
     } else if (!watch_browser_online()) {
         snprintf(s_probe_msg, sizeof(s_probe_msg), "Sin Wi-Fi");
     } else {
@@ -472,6 +565,12 @@ void watch_browser_probe_start(void)
 {
     if (s_probe_state == 1) {
         return;
+    }
+    if (!s_set_loaded) {
+        load_settings();
+    }
+    if (!s_task) {
+        refresh_backend(false, false); /* sin la app abierta, la fuente se calcula ahora */
     }
     s_probe_state = 1;
     if (xTaskCreate(probe_task, "watch_br_probe", 7168, NULL, 2, NULL) != pdPASS) {

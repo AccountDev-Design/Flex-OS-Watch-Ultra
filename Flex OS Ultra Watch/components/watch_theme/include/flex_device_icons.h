@@ -1,5 +1,5 @@
 /* GENERADO por tools/devicons/gen_devicons.py: no editar. */
-/* Iconos de dispositivos Flex desde design/devices/*.svg (mismo dibujo que en Flex Phone). */
+/* Iconos de dispositivos Flex desde design/devices/<modelo>.svg (mismo dibujo que en Flex Phone). */
 #pragma once
 #include "lvgl.h"
 

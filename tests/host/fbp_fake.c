@@ -21,6 +21,8 @@ struct fbp_fake {
     size_t out_n, out_off, out_cap;
     uint16_t seq;
     uint32_t frame_id;
+    uint32_t push_at;
+    uint8_t push_ch;
 };
 
 static void grow(uint8_t **b, size_t *cap, size_t need)
@@ -200,6 +202,7 @@ static void on_fbp(fbp_fake_t *f, const uint8_t *m, size_t n)
     }
     case FBP_C_NAVIGATE: {
         L->navigates++;
+        f->push_ch = h.channel;
         uint32_t o = 0;
         get_str(p, h.len, &o, L->last_url, sizeof(L->last_url));
         L->scroll_y = 0;
@@ -353,11 +356,14 @@ static void consume(fbp_fake_t *f)
 
 /* ---- br_io_t ---- */
 
+static uint32_t io_now(void *ctx);
+
 static int io_connect(void *ctx, const char *host, uint16_t port, bool tls)
 {
     fbp_fake_t *f = ctx;
-    (void)host;
-    (void)port;
+    snprintf(f->log.last_host, sizeof(f->log.last_host), "%s", host ? host : "");
+    f->log.last_port = port;
+    f->log.last_tls = tls;
     f->log.connects++;
     f->clock += 30;
     if (f->cfg.refuse_connect) {
@@ -368,6 +374,7 @@ static int io_connect(void *ctx, const char *host, uint16_t port, bool tls)
     }
     f->open = true;
     f->upgraded = f->closing = f->welcomed = false;
+    f->push_ch = 0;
     f->in_n = f->out_n = f->out_off = 0;
     return BR_IO_OK;
 }
@@ -392,7 +399,18 @@ static int io_read(void *ctx, uint8_t *b, size_t n, uint32_t to_ms)
     if (!f->open) {
         return -1;
     }
-    const size_t av = f->out_n - f->out_off;
+    size_t av = f->out_n - f->out_off;
+    if (av == 0 && !f->closing && f->welcomed && f->push_ch && f->cfg.push_ms && !f->cfg.no_frames) {
+        /* Empuje continuo: solo con lo anterior ya leído, como un servicio
+         * que no encola más de lo que el cliente se lleva. */
+        const uint32_t t = io_now(f);
+        if ((int32_t)(t - f->push_at) >= 0) {
+            f->push_at = t + f->cfg.push_ms;
+            send_frame(f, f->push_ch);
+            f->log.pushes++;
+            av = f->out_n - f->out_off;
+        }
+    }
     if (av == 0) {
         if (f->closing) {
             return -1;

@@ -137,6 +137,21 @@ static void overlays_during_nav(const char *out)
     sim_run(400);
     EXPECT(!ui_qp_active(), "superposiciones: el panel no se cerro tras el aviso");
 
+    /* Un aviso que ABRE algo (OTA) tocado con el panel abierto: el panel se
+     * cierra y la página queda arriba, no debajo del panel (lo encontró el
+     * mono en la ejecución completa, paso 412). */
+    ui_qp_open();
+    sim_run(300);
+    ui_banner_show_ota("Actualización disponible", "Toca para ver las novedades", FLEX_C_TXT, true);
+    sim_run(800);
+    EXPECT(ui_qp_is_open() && ui_banner_active(), "superposiciones: falta el panel o el aviso OTA");
+    sim_tap(205, 58);
+    sim_run(900);
+    EXPECT(!ui_qp_active() && ui_nav_depth() == 2, "superposiciones: aviso OTA con el panel: panel %d, profundidad %d",
+           ui_qp_active(), ui_nav_depth());
+    ui_nav_home();
+    sim_run(400);
+
     /* Animación de carga encima de Ajustes > Batería */
     ui_nav_push(ui_settings_create);
     sim_run(300);
@@ -230,7 +245,7 @@ void sim_suite_monkey(const char *out)
                     ui_notes_create,    ui_note_edit_create,    ui_files_create,        ui_file_opts_create,
                     ui_file_rename_create, ui_paint_create,     ui_paint_canvas_create,
                     ui_weather_create,  ui_wx_locs_create,      ui_wx_search_create,    ui_browser_create,
-                    ui_ota_create,      ui_ota_install_create,
+                    ui_ota_create,      ui_ota_install_create,  ui_phone_relay_create,
                 };
                 ui_nav_push(pages[rnd(sizeof(pages) / sizeof(pages[0]))]);
             }
@@ -245,6 +260,10 @@ void sim_suite_monkey(const char *out)
         }
         /* A veces la siguiente acción llega en mitad de la animación. */
         sim_run(rnd(4) == 0 ? rnd(120) : 150 + rnd(400));
+        if (getenv("SIM_TRACE")) { /* depurar un fallo: acción y estado tras cada paso */
+            printf("  paso %d: accion %u profundidad %d panel %d/%d aviso %d\n", step, (unsigned)a, ui_nav_depth(),
+                   ui_qp_active(), ui_qp_is_open(), ui_banner_active());
+        }
 
         if (step % 10 == 0) {
             sim_release();

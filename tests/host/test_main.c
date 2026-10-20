@@ -581,6 +581,7 @@ int main(void)
     test_ota_all();
     test_browser_all();
     test_br_net_all();
+    test_br_backend_all();
     printf("%d comprobaciones, %d fallos\n", g_checks, g_fail);
     return g_fail ? 1 : 0;
 }

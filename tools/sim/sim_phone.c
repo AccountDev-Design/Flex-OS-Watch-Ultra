@@ -16,6 +16,9 @@
  *  - sim_phone_mute(true): la app de hoy (GattServer sin v2): no contesta.
  *  - sim_phone_drop(): se pierde la conexión y vuelve al segundo.
  *  - sim_phone_push(): llega una notificación nueva.
+ *  - Browser Relay (BrowserRelayService.kt): a RELAY_START contesta ACK y
+ *    RELAY_INFO con 192.168.1.34:8765; sim_phone_relay_mode() lo hace fallar
+ *    o callar, y sim_phone_relay_user_stop() lo para "desde el teléfono".
  */
 #include <stdio.h>
 #include <string.h>
@@ -144,6 +147,9 @@ static struct {
     uint32_t type_at, burst_at;
     uint8_t media_status;
     uint32_t next_id;
+    bool relay_up;
+    int relay_mode; /* SIM_RELAY_* */
+    uint32_t relay_at; /* el servidor "arranca" en 600 ms */
 } P;
 
 static FlexPhoneLink s_L;
@@ -233,20 +239,43 @@ static void ph_media(void)
     ph_send(FLNK_T_MEDIA_STATE, P.session, b, w.at);
 }
 
-static void ph_after_session(void)
+/* RELAY_INFO: ip[4] · u16 puerto · u8 ver · u8 flags · u16 caps · str error */
+static void ph_relay_info(bool up, uint8_t flags, const char *err)
+{
+    uint8_t b[96];
+    FlexLinkWr w;
+    flexLinkWrInit(&w, b, sizeof(b));
+    const uint8_t ip[4] = {192, 168, 1, 34}, none[4] = {0, 0, 0, 0};
+    flexLinkWrBytes(&w, up ? ip : none, 4);
+    flexLinkWrU16(&w, up ? 8765 : 0);
+    flexLinkWrU8(&w, 1);
+    flexLinkWrU8(&w, flags);
+    flexLinkWrU16(&w, up ? 0x0F : 0);
+    flexLinkWrStr(&w, err, 63);
+    ph_send(FLNK_T_RELAY_INFO, P.session, b, w.at);
+}
+
+static void ph_caps(void)
 {
     FlexPhoneCaps c;
     memset(&c, 0, sizeof(c));
     c.supported = FLP_CAP_NOTIF | FLP_CAP_REPLY | FLP_CAP_MEDIA | FLP_CAP_RELAY | FLP_CAP_FIND | FLP_CAP_STATE |
                   FLP_CAP_TIME | FLP_CAP_BLE;
-    c.granted = FLP_CAP_NOTIF | FLP_CAP_REPLY | FLP_CAP_MEDIA | FLP_CAP_FIND | FLP_CAP_STATE | FLP_CAP_TIME;
+    c.granted = FLP_CAP_NOTIF | FLP_CAP_REPLY | FLP_CAP_MEDIA | FLP_CAP_FIND | FLP_CAP_STATE | FLP_CAP_TIME |
+                (P.relay_up ? FLP_CAP_RELAY : 0);
     c.protoVer = 2;
     snprintf(c.model, sizeof(c.model), "Pixel 8");
     snprintf(c.vendor, sizeof(c.vendor), "Google");
     snprintf(c.osver, sizeof(c.osver), "Android 15");
     uint8_t b[160];
-    int k = flexPhoneEncCaps(b, sizeof(b), &c);
+    const int k = flexPhoneEncCaps(b, sizeof(b), &c);
     ph_send(FLNK_T_CAPS, P.session, b, (size_t)k);
+}
+
+static void ph_after_session(void)
+{
+    ph_caps();
+    uint8_t b[160];
     FlexLinkWr w;
     flexLinkWrInit(&w, b, sizeof(b));
     flexLinkWrStr(&w, P.name, 31);
@@ -260,7 +289,11 @@ static void ph_after_session(void)
     flexLinkWrU8(&w, 0);
     ph_send(FLNK_T_PHONE_STATE, P.session, b, w.at);
     P.burst_at = s_now + 300;
+    if (P.relay_up) {
+        ph_relay_info(true, 0, ""); /* reannounceRelay(): sigue arriba tras reconectar */
+    }
 }
+
 
 static void ph_handle(const FlexLinkHeader *h, const uint8_t *m, size_t n)
 {
@@ -321,6 +354,24 @@ static void ph_handle(const FlexLinkHeader *h, const uint8_t *m, size_t n)
     case FLNK_T_PING:
         ph_send(FLNK_T_PONG, h->session, NULL, 0);
         break;
+    case FLNK_T_RELAY_START:
+    case FLNK_T_RELAY_STOP: {
+        const uint8_t ack[2] = {(uint8_t)(h->packet & 0xFF), (uint8_t)(h->packet >> 8)};
+        ph_send(FLNK_T_ACK, h->session, ack, 2);
+        if (h->type == FLNK_T_RELAY_STOP) {
+            P.relay_up = false;
+            P.relay_at = 0;
+            ph_relay_info(false, 0x02, "detenido por el usuario");
+            ph_caps();
+        } else if (P.relay_up) {
+            ph_relay_info(true, 0, ""); /* ya estaba: repite su dirección */
+        } else if (P.relay_mode == SIM_RELAY_FAIL) {
+            ph_relay_info(false, 0, "sin Wi-Fi en el teléfono");
+        } else if (P.relay_mode == SIM_RELAY_OK) {
+            P.relay_at = s_now + 600; /* BrowserRelayService arrancando */
+        } /* SIM_RELAY_MUTE: la app no contesta (la de antes del relay) */
+        break;
+    }
     case FLNK_T_REPLY_REQ:
     case FLNK_T_ACTION_REQ:
     case FLNK_T_FIND_START:
@@ -410,6 +461,12 @@ static void step(void)
         P.type_at = 0;
         sim_phone_type(flexPhoneLinkCode(&s_L));
     }
+    if (P.relay_at && s_now >= P.relay_at && P.authed) {
+        P.relay_at = 0;
+        P.relay_up = true;
+        ph_relay_info(true, 0, "");
+        ph_caps();
+    }
     if (P.burst_at && s_now >= P.burst_at && P.authed) {
         P.burst_at = 0;
         ph_notif("com.google.android.gm", "Gmail", "Laura Martín", "Te paso el informe del viernes revisado.",
@@ -481,6 +538,48 @@ void sim_phone_mute(bool on)
 bool sim_phone_finding(void)
 {
     return P.finding;
+}
+
+void sim_phone_relay_mode(int mode)
+{
+    P.relay_mode = mode;
+}
+
+bool sim_phone_relay_up(void)
+{
+    return P.relay_up;
+}
+
+void sim_phone_relay_user_stop(void)
+{
+    advance();
+    P.relay_up = false;
+    P.relay_at = 0;
+    if (P.authed) {
+        ph_relay_info(false, 0x02, "detenido por el usuario");
+        ph_caps();
+    }
+}
+
+bool sim_phone_relay_token(char *out, size_t n)
+{
+    /* Lo que deriva el teléfono (FlexAuth.relayToken), con SU copia de la
+     * clave: si coincide con la del reloj es porque los dos la calculan igual. */
+    static const char TAG[] = "flexphone-relay-v2", *D = "0123456789abcdef";
+    if (n < 33 || !P.bonded) {
+        if (n) {
+            out[0] = 0;
+        }
+        return false;
+    }
+    uint8_t mac[FLXA_SHA256_SIZE];
+    flexHmacSha256(P.key, FLXA_KEY_SIZE, TAG, sizeof(TAG) - 1, mac);
+    for (int i = 0; i < 16; i++) {
+        out[2 * i] = D[mac[i] >> 4];
+        out[2 * i + 1] = D[mac[i] & 0xF];
+    }
+    out[32] = 0;
+    return true;
 }
 
 void sim_phone_drop(void)
@@ -610,6 +709,21 @@ bool watch_phone_find(bool start)
     }
     order(PM_FIND, 0, start ? 1 : 0);
     return true;
+}
+
+bool watch_phone_relay(bool start)
+{
+    advance();
+    if (!phone_core_relay_can(&s_core)) {
+        return false;
+    }
+    order(PM_RELAY, 0, start ? 1 : 0);
+    return true;
+}
+
+bool watch_phone_relay_token(char *out, size_t outN)
+{
+    return flexPhoneLinkRelayToken(&s_L, out, outN);
 }
 
 bool watch_phone_media(uint8_t cmd)

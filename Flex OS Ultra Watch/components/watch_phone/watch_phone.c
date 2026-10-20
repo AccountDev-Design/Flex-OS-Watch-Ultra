@@ -394,3 +394,31 @@ bool watch_phone_media(uint8_t cmd)
     post_simple(PM_MEDIA, 0, cmd);
     return true;
 }
+
+bool watch_phone_relay(bool start)
+{
+    if (!s_lock) {
+        return false;
+    }
+    lock();
+    const bool ok = phone_core_relay_can(&s_core);
+    unlock();
+    if (ok) {
+        post_simple(PM_RELAY, 0, start ? 1 : 0);
+    }
+    return ok;
+}
+
+bool watch_phone_relay_token(char *out, size_t outN)
+{
+    if (!s_lock) {
+        if (out && outN) {
+            out[0] = 0;
+        }
+        return false;
+    }
+    lock();
+    const bool ok = flexPhoneLinkRelayToken(s_L, out, outN);
+    unlock();
+    return ok;
+}

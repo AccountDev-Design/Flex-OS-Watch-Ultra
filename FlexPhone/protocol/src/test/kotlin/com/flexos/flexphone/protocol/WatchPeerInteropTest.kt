@@ -177,6 +177,29 @@ class WatchPeerInteropTest {
         exchange(w, p, peer)
         assertEquals(1, p.msgs.count { it.first == FlexLink.T_REPLY_REQ }, "el reloj reenvio una orden acusada")
 
+        // Reloj -> telefono: RELAY_START con acuse (lo que pide el navegador del
+        // reloj al abrirse). Llega UNA vez aunque pase el tiempo, y la respuesta
+        // RELAY_INFO con otra direccion cambia lo que el reloj usara.
+        w.cmd("send 60 1 ")
+        exchange(w, p, peer)
+        assertEquals(1, p.msgs.count { it.first == FlexLink.T_RELAY_START }, "RELAY_START no llego una vez")
+        w.cmd("tick 6000"); p.t += 6000
+        exchange(w, p, peer)
+        assertEquals(1, p.msgs.count { it.first == FlexLink.T_RELAY_START }, "el reloj repitio RELAY_START")
+        assertTrue(peer.send(FlexLink.T_RELAY_INFO, RelayInfo(
+            ip = byteArrayOf(10, 0, 0, 7), port = 8765, protoVer = 1, tls = false, caps = 3,
+        ).encode()))
+        exchange(w, p, peer)
+        val st2 = w.state()
+        assertEquals("2", st2["relay"]); assertEquals("10.0.0.7", st2["ip"]); assertEquals("8765", st2["port"])
+        // Parado por el usuario en el telefono: el reloj lo sabe (no es un error).
+        assertTrue(peer.send(FlexLink.T_RELAY_INFO, RelayInfo(
+            ip = byteArrayOf(0, 0, 0, 0), port = 0, protoVer = 1, tls = false, caps = 0,
+            error = "detenido por el usuario", stoppedByUser = true,
+        ).encode()))
+        exchange(w, p, peer)
+        assertEquals("0", w.state()["relay"], "parado por el usuario no se lee como OFF")
+
         // Latido: 2 minutos de enlace con PING/PONG sin que nadie se caiga.
         repeat(30) { w.cmd("tick 4000"); p.t += 4000; exchange(w, p, peer); assertEquals(null, peer.tick()) }
         assertTrue(peer.pings > 0, "el reloj no late")

@@ -9,7 +9,11 @@
  *    (PSRAM); arrastrar = SCROLL agrupado cada 50 ms con el signo invertido,
  *    tocar sin arrastrar = POINTER TAP en coordenadas de la página;
  *  - sin imagen: el panel de estado de la sesión (estado, frase de la etapa,
- *    servidor -nunca la credencial-, contadores y pista);
+ *    fuente y servidor -nunca la credencial-, contadores y pista);
+ *  - origen de la web (flex://settings): Automático, Flex Phone, Nube o PC.
+ *    Con el teléfono, el reloj le pide su Browser Relay por BLE y la sesión
+ *    se rehace sola cuando aparece, cambia de dirección o se va; las
+ *    imágenes que el relay empuja se pintan según llegan, sin tocar nada;
  *  - omnibox con el teclado del sistema y la resolución de la referencia
  *    (flexBrResolveInput: páginas internas, URL, búsqueda o bloqueo);
  *  - páginas internas flex://newtab, history, bookmarks, settings,
@@ -53,7 +57,7 @@
 #define C_WARN    0xF0B45A
 #define C_ERR     0xEB5050
 
-enum { ED_NONE = 0, ED_OMNI, ED_SERVER, ED_TOKEN, ED_TPL, ED_PAGEKEY };
+enum { ED_NONE = 0, ED_OMNI, ED_SERVER, ED_TOKEN, ED_TPL, ED_CLOUD, ED_PAGEKEY };
 enum { V_TAB = 0, V_TABS }; /* lo que se ve en la zona de página */
 
 typedef struct {
@@ -88,6 +92,8 @@ typedef struct {
     int32_t acc_dx, acc_dy;
     uint32_t last_scroll, err_until, lists_gen;
     bool probing;
+    watch_browser_source_t src; /* de dónde sale la web ahora */
+    uint32_t src_ms;
 } ub_t;
 
 static ub_t *U;
@@ -171,7 +177,9 @@ static void set_hidden(lv_obj_t *o, bool h)
 /* Con servidor configurado, la sesión abierta (se puede configurar con la app abierta) */
 static void ensure_session(void)
 {
-    if ((U->caps & FLEXBR_CAP_REMOTE) && !watch_browser_net()) {
+    /* Con el teléfono vinculado la sesión se abre aunque su relay aún no esté:
+     * es la tarea de la sesión la que se lo pide y se conecta cuando aparece. */
+    if (((U->caps & FLEXBR_CAP_REMOTE) || U->src.phone_possible) && !watch_browser_net()) {
         if (watch_browser_open() != ESP_OK) {
             show_err("Sin memoria para el navegador");
         }
@@ -212,7 +220,7 @@ static void navigate(const char *url)
         open_internal(pg);
         return;
     }
-    if (!(U->caps & FLEXBR_CAP_REMOTE)) {
+    if (!(U->caps & FLEXBR_CAP_REMOTE) && !U->src.phone_possible) {
         show_err("Sin sesión remota: revisa Ajustes");
         open_internal(BRP_OFFLINE);
         return;
@@ -376,6 +384,19 @@ static void edit_ok(void *ud)
             watch_browser_set_settings(&U->set);
             show_err(text[0] ? "Servidor guardado" : "Servidor borrado");
         }
+    } else if (ed == ED_CLOUD) {
+        bool tls;
+        char host[FLEXBR_HOST_MAX], path[128];
+        uint16_t port;
+        if (strlen(text) >= FLEXBR_SERVER_MAX) {
+            show_err("La dirección del servidor es demasiado larga");
+        } else if (text[0] && (!flexBrParseWsUrl(text, &tls, host, sizeof(host), &port, path, sizeof(path)) || !tls)) {
+            show_err("La nube debe ser wss://host:puerto/ruta");
+        } else {
+            memcpy(U->set.cloudServer, text, strlen(text) + 1);
+            watch_browser_set_settings(&U->set);
+            show_err(text[0] ? "Servidor en la nube guardado" : "Servidor en la nube borrado");
+        }
     } else if (ed == ED_TOKEN) {
         if (strlen(text) >= FLEXBR_TOKEN_MAX) {
             show_err("La credencial es demasiado larga");
@@ -397,6 +418,7 @@ static void edit_ok(void *ud)
             watch_browser_set_settings(&U->set);
         }
     }
+    watch_browser_source(&U->src);
     U->caps = watch_browser_caps();
     ensure_session();
     build_inner(V_TAB);
@@ -460,7 +482,8 @@ static void open_edit(int ed)
     lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
     lv_obj_add_flag(o, LV_OBJ_FLAG_CLICKABLE);
     static const char *const kLabel[] = {"", "Dirección o búsqueda", "Servidor (wss://...)",
-                                         "Credencial del dispositivo", "Plantilla del buscador (%s)"};
+                                         "Credencial del dispositivo", "Plantilla del buscador (%s)",
+                                         "Servidor en la nube (wss://...)"};
     watch_theme_header(o, kLabel[ed], edit_cancel_cb, NULL);
     U->edit_ta = lv_textarea_create(o);
     lv_textarea_set_one_line(U->edit_ta, true);
@@ -475,6 +498,8 @@ static void open_edit(int ed)
         lv_textarea_set_text(U->edit_ta, U->set.server);
     } else if (ed == ED_TPL) {
         lv_textarea_set_text(U->edit_ta, U->set.searchCustom);
+    } else if (ed == ED_CLOUD) {
+        lv_textarea_set_text(U->edit_ta, U->set.cloudServer);
     }
     U->edit_kb = ui_keyboard_create(o, U->edit_ta, ed == ED_OMNI ? UI_KB_TEXT : UI_KB_ASCII, edit_ok, NULL);
     lv_obj_set_size(U->edit_kb, FLEX_SCREEN_W - 32, 452 - KB_TOP);
@@ -595,7 +620,7 @@ static void open_menu(void)
 
 typedef enum {
     A_NONE = 0, A_URL, A_TAB, A_TABCLOSE, A_NEWTAB, A_SERVER, A_TOKEN, A_PROBE, A_ENGINE, A_TPL, A_PROFILE,
-    A_QUALITY, A_SCALE, A_HIST, A_TEL, A_LOCAL, A_INSEC, A_CLR_H, A_CLR_B, A_CLR_ALL
+    A_QUALITY, A_SCALE, A_HIST, A_TEL, A_LOCAL, A_INSEC, A_CLR_H, A_CLR_B, A_CLR_ALL, A_SOURCE, A_CLOUD
 } act_t;
 
 static void inner_cb(lv_event_t *e)
@@ -621,14 +646,12 @@ static void inner_cb(lv_event_t *e)
     case A_SERVER: open_edit(ED_SERVER); return;
     case A_TOKEN: open_edit(ED_TOKEN); return;
     case A_TPL: open_edit(ED_TPL); return;
-    case A_PROBE:
-        if (!s->server[0]) {
-            show_err("Configura antes la dirección del servidor");
-        } else {
-            watch_browser_probe_start();
-            U->probing = true;
-        }
+    case A_PROBE: /* la fuente en uso; sin ninguna, el motivo llega como resultado */
+        watch_browser_probe_start();
+        U->probing = true;
         return;
+    case A_CLOUD: open_edit(ED_CLOUD); return;
+    case A_SOURCE: s->source = (uint8_t)((s->source + 1) % BRSRC_N); break;
     case A_ENGINE: s->searchEngine = (uint8_t)((s->searchEngine + 1) % 4); break;
     case A_PROFILE: {
         s->profile = (uint8_t)((s->profile + 1) % BRQ_N);
@@ -678,6 +701,7 @@ static void inner_cb(lv_event_t *e)
     } else {
         watch_browser_persist(true);
     }
+    watch_browser_source(&U->src);
     U->caps = watch_browser_caps();
     build_inner(V_TAB);
 }
@@ -728,8 +752,8 @@ static lv_obj_t *text(lv_obj_t *list, const lv_font_t *f, uint32_t rgb, const ch
 
 static const char *cap_reason(uint32_t cap)
 {
-    if (cap == FLEXBR_CAP_REMOTE && !U->set.server[0]) {
-        return "Falta configurar el servidor en Ajustes";
+    if (cap == FLEXBR_CAP_REMOTE) {
+        return U->src.why[0] ? U->src.why : "Falta configurar el servidor en Ajustes";
     }
     if (cap == FLEXBR_CAP_FS) {
         return "Sin sistema de archivos montado";
@@ -744,11 +768,22 @@ static void build_settings(lv_obj_t *L)
 {
     const BrSettings *s = &U->set;
     s_row_wrap = true;
-    char v[64];
-    row(L, "Servidor de navegación", s->server[0] ? s->server : "sin configurar", A_SERVER, NULL, FLEX_C_TXT);
-    row(L, "Credencial del dispositivo", s->token[0] ? "configurada" : "sin configurar", A_TOKEN, NULL, FLEX_C_TXT);
-    row(L, "Probar el servidor", U->probing ? "Comprobando..." : "Comprueba /v1/health por HTTPS", A_PROBE, NULL,
+    char v[160];
+    if (U->src.src != BRSRC_NONE) {
+        snprintf(v, sizeof(v), "%s · en uso: %s", flexBrSourceName(s->source), flexBrSourceName(U->src.src));
+    } else {
+        snprintf(v, sizeof(v), "%s · %s", flexBrSourceName(s->source), U->src.why);
+    }
+    row(L, "Origen de la web", v, A_SOURCE, NULL, FLEX_C_TXT);
+    text(L, FLEX_FONT_SMALL, FLEX_C_MUTE,
+         "Automático: Flex Phone si está conectado (el reloj le pide su servidor por Bluetooth y navega por el "
+         "Wi-Fi de casa), si no la nube y por último el PC.");
+    row(L, "Servidor del PC/Ubuntu", s->server[0] ? s->server : "sin configurar", A_SERVER, NULL, FLEX_C_TXT);
+    row(L, "Servidor en la nube", s->cloudServer[0] ? s->cloudServer : "sin configurar", A_CLOUD, NULL, FLEX_C_TXT);
+    row(L, "Credencial del PC y la nube", s->token[0] ? "configurada" : "sin configurar", A_TOKEN, NULL,
         FLEX_C_TXT);
+    row(L, "Probar el servidor", U->probing ? "Comprobando..." : "Comprueba /v1/health del origen en uso", A_PROBE,
+        NULL, FLEX_C_TXT);
     static const char *const kEng[4] = {"DuckDuckGo", "Google", "Bing", "Personalizado"};
     row(L, "Buscador", kEng[s->searchEngine & 3], A_ENGINE, NULL, FLEX_C_TXT);
     row(L, "Plantilla personalizada", s->searchCustom[0] ? s->searchCustom : "usar %s", A_TPL, NULL, FLEX_C_TXT);
@@ -797,6 +832,8 @@ static void build_about(lv_obj_t *L)
     } else if (U->stats.relayKind == BRRELAY_OTHER) {
         text(L, FLEX_FONT_SMALL, FLEX_C_TXT2, "Servicio: Ubuntu/PC");
     }
+    snprintf(b, sizeof(b), "Origen: %s", U->src.src != BRSRC_NONE ? flexBrSourceName(U->src.src) : U->src.why);
+    text(L, FLEX_FONT_SMALL, FLEX_C_TXT2, b);
     watch_theme_section(L, "Capacidades");
     static const struct {
         uint32_t cap;
@@ -973,14 +1010,28 @@ static void update_status(void)
     char t[160];
     ui_phone_text(U->info, t, sizeof(t), FLEX_FONT_SMALL);
     lv_label_set_text(U->st_info, t);
-    ui_phone_text(U->set.server, t, sizeof(t), FLEX_FONT_SMALL); /* nunca la credencial */
+    char srv[FLEXBR_SERVER_MAX + 32];
+    const watch_browser_source_t *src = &U->src;
+    if (src->src == BRSRC_PHONE) {
+        snprintf(srv, sizeof(srv), "Flex Phone · %u.%u.%u.%u:%u", src->relay_ip[0], src->relay_ip[1],
+                 src->relay_ip[2], src->relay_ip[3], (unsigned)src->relay_port);
+    } else if (src->src == BRSRC_CLOUD) {
+        snprintf(srv, sizeof(srv), "Nube · %s", U->set.cloudServer);
+    } else if (src->src == BRSRC_MANUAL) {
+        snprintf(srv, sizeof(srv), "PC · %s", U->set.server);
+    } else {
+        snprintf(srv, sizeof(srv), "Sin origen");
+    }
+    ui_phone_text(srv, t, sizeof(t), FLEX_FONT_SMALL); /* nunca la credencial */
     lv_label_set_text(U->st_srv, t);
     snprintf(t, sizeof(t), "mensajes %u  ·  imágenes %u  ·  err %u  ·  %u KB", (unsigned)U->msgs,
              (unsigned)U->stats.framesOk, (unsigned)U->stats.errCount, (unsigned)(U->stats.bytesIn / 1024));
     lv_label_set_text(U->st_cnt, t);
     const char *hint = "";
-    if (!U->set.server[0]) {
-        hint = "Configura el servicio en flex://settings";
+    if (src->src == BRSRC_NONE) {
+        /* el motivo ya está en la línea de la etapa: aquí, qué hacer */
+        hint = src->phone_possible ? "Enciéndelo en Flex Phone > Web del teléfono o cambia el origen en flex://settings"
+                                   : "Configura el servicio en flex://settings";
     } else if (st == BRN_NOWIFI) {
         hint = "Conecta el Wi-Fi desde Ajustes del sistema";
     } else if (strncmp(U->info, "Sin imágenes", 13) == 0) {
@@ -1249,6 +1300,41 @@ static void tick_cb(lv_timer_t *tm)
     }
     br_lists_t *ls = watch_browser_lists();
     watch_browser_persist(false);
+    if (lv_tick_get() - U->src_ms >= 500) { /* el relay del teléfono va y viene solo */
+        U->src_ms = lv_tick_get();
+        watch_browser_source_t ns;
+        watch_browser_source(&ns);
+        if (ns.src != U->src.src || strcmp(ns.why, U->src.why) != 0 || ns.relay_port != U->src.relay_port ||
+            memcmp(ns.relay_ip, U->src.relay_ip, 4) != 0 || ns.phone_possible != U->src.phone_possible) {
+            const bool moved = ns.src != U->src.src || ns.relay_port != U->src.relay_port ||
+                               memcmp(ns.relay_ip, U->src.relay_ip, 4) != 0;
+            U->src = ns;
+            U->caps = watch_browser_caps();
+            ensure_session();
+            ub_tab_t *ct = T();
+            br_net_t *sn = net();
+            if (moved && ns.src != BRSRC_NONE && sn && ct->page == BRP_NONE && ct->url[0]) {
+                /* Otro servicio: la página que se veía no existe allí. Se pide
+                 * de nuevo (queda en cola hasta que la sesión nueva esté lista). */
+                clear_canvas();
+                ct->flags = FBP_ST_LOADING;
+                ct->progress = 1;
+                br_net_navigate(sn, ch_of(U->act), ct->url);
+                refresh_chrome();
+                show_view();
+            } else if (moved && ns.src == BRSRC_NONE && ct->page == BRP_NONE && U->has_frame) {
+                /* Sin servicio: una imagen vieja no es la página; se enseña el motivo */
+                clear_canvas();
+                show_view();
+                update_status();
+            }
+            if (U->view == V_TAB && (ct->page == BRP_NEWTAB || ct->page == BRP_SETTINGS) && !U->edit) {
+                build_inner(V_TAB);
+            } else if (U->view == V_TAB && ct->page == BRP_NONE && !U->has_frame) {
+                update_status();
+            }
+        }
+    }
     br_net_t *n = net();
     if (!n) {
         return;
@@ -1375,6 +1461,8 @@ lv_obj_t *ui_browser_create(lv_obj_t *parent)
     U = lv_malloc_zeroed(sizeof(*U));
     LV_ASSERT_MALLOC(U);
     watch_browser_get_settings(&U->set);
+    watch_browser_source(&U->src);
+    U->src_ms = lv_tick_get();
     U->caps = watch_browser_caps();
     U->net_state = -1;
     lv_obj_t *page = ui_page_new(parent);

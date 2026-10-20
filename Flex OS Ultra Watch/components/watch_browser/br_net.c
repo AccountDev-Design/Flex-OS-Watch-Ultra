@@ -80,6 +80,7 @@ void br_net_init(br_net_t *s, const br_io_t *io, uint8_t *rx, size_t rx_cap)
     s->seq = 1;
     s->active_ch = 1;
     s->stats.relayBuild = -1;
+    s->src = BRSRC_MANUAL; /* sin br_net_set_source: el servidor de Ajustes, como siempre */
     flexBrSettingsDefaults(&s->set);
 }
 
@@ -114,6 +115,17 @@ void br_net_configure(br_net_t *s, const char *url, const char *token, const BrS
     } else if (changed) {
         s->wait_until = 0;
         s->backoff = BACKOFF_MIN;
+    }
+    br_net_unlock(s);
+}
+
+void br_net_set_source(br_net_t *s, int src, const char *why_none)
+{
+    br_net_lock(s);
+    s->src = src;
+    snprintf(s->none_why, sizeof(s->none_why), "%s", why_none ? why_none : "");
+    if (!s->url[0] && s->state == BRN_OFF) {
+        s->wait_until = 0; /* el motivo nuevo se enseña ya, no al siguiente segundo */
     }
     br_net_unlock(s);
 }
@@ -732,7 +744,7 @@ static uint32_t connect_phase(br_net_t *s)
     }
     if (!s->url[0]) {
         s->state = BRN_OFF;
-        set_info(s, "Sin servidor configurado (flex://settings)");
+        set_info(s, "%s", s->none_why[0] ? s->none_why : "Sin servidor configurado (flex://settings)");
         br_net_unlock(s);
         return wait_ms(s, 1000);
     }

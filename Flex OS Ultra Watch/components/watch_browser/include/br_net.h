@@ -99,6 +99,8 @@ typedef struct {
     char device[48];
     uint32_t caps;
     bool online, stop;
+    int src;                    /**< BRSRC_* en uso (br_net_set_source); BRSRC_NONE sin fuente */
+    char none_why[96];          /**< por qué no hay servidor ("" = el texto de siempre) */
 
     /* geometría */
     uint16_t vp_want_w, vp_want_h, vp_sent_w, vp_sent_h;
@@ -146,6 +148,8 @@ void br_net_init(br_net_t *s, const br_io_t *io, uint8_t *rx, size_t rx_cap);
 void br_net_configure(br_net_t *s, const char *url, const char *token, const BrSettings *st, const char *device,
                       uint32_t caps);
 void br_net_set_online(br_net_t *s, bool online);
+/** De dónde sale el servidor configurado (BRSRC_*) y, sin ninguno, por qué. */
+void br_net_set_source(br_net_t *s, int src, const char *why_none);
 /** Tamaño de la zona de página y pestaña activa (canal). */
 void br_net_set_viewport(br_net_t *s, uint16_t w, uint16_t h, uint8_t active_ch);
 /** Una vuelta del bucle. Devuelve los ms que conviene esperar antes de la siguiente. */

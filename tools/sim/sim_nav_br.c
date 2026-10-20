@@ -124,6 +124,7 @@ void sim_suite_browser(const char *out)
     lv_screen_load(ui_nav_screen());
     ui_nav_home();
     sim_run(400);
+    sim_phone_reset(); /* sin teléfono vinculado: el origen es solo el servidor de Ajustes */
     sim_br_reset();
     fbp_fake_t *fk = sim_br_fake();
     fbp_fake_log_t *L = fbp_fake_log(fk);
@@ -133,7 +134,7 @@ void sim_suite_browser(const char *out)
     /* 1) sin servidor: lo dice y lleva a Ajustes; no se abre ninguna sesión */
     ui_nav_push(ui_browser_create);
     sim_run(600);
-    EXPECT(has("Navegador de Flex OS Ultra") && has("Falta configurar el servidor en Ajustes"),
+    EXPECT(has("Navegador de Flex OS Ultra") && has("Empareja Flex Phone o configura un servidor en Ajustes"),
            "navegador: no explica que falta el servidor");
     EXPECT(watch_browser_net() == NULL && L->connects == 0, "navegador: sesión sin servidor");
     sim_lint("navegador sin servidor");
@@ -142,19 +143,19 @@ void sim_suite_browser(const char *out)
     /* 2) servidor y credencial desde flex://settings (la credencial nunca se ve) */
     click(tap_of("Ajustes del navegador"));
     sim_run(400);
-    EXPECT(has("Servidor de navegación") && has("sin configurar"), "ajustes del navegador");
-    click(tap_of("Servidor de navegación"));
+    EXPECT(has("Servidor del PC/Ubuntu") && has("sin configurar") && has("Origen de la web"), "ajustes del navegador");
+    click(tap_of("Servidor del PC/Ubuntu"));
     sim_run(300);
     EXPECT(has("Servidor (wss://...)"), "editar servidor");
     enter_text("https://mal.example.com/");
     sim_run(300);
     EXPECT(has("Debe ser wss://host:puerto/ruta"), "servidor no válido aceptado");
-    click(tap_of("Servidor de navegación"));
+    click(tap_of("Servidor del PC/Ubuntu"));
     sim_run(300);
     enter_text("wss://nav.example.com/v1/session");
     sim_run(300);
     EXPECT(has("wss://nav.example.com/v1/session"), "servidor no guardado");
-    click(tap_of("Credencial del dispositivo"));
+    click(tap_of("Credencial del PC y la nube"));
     sim_run(300);
     enter_text("credencial-de-prueba-1234567890");
     sim_run(300);

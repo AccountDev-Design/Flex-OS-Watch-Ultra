@@ -6,8 +6,11 @@
  * tres datos (Batería, Red, Latencia), tarjeta del código de emparejamiento
  * ("Teclea este código en el teléfono", "Confirmar aquí", "Cancelar"),
  * acción principal ("Activar el enlace" / "Emparejar teléfono"), aviso con
- * el motivo REAL de un fallo y las secciones. Del navegador y su servidor
- * (secciones Servidor/Navegador) se encarga F6.
+ * el motivo REAL de un fallo y las secciones. El icono del teléfono sale del
+ * mismo SVG que pinta Flex Phone en Android (design/devices/phone.svg,
+ * prerasterizado a RGB565A8 en flex_device_icons.c). "Navegador del
+ * teléfono" enseña y gobierna su Browser Relay: el reloj se lo pide por BLE y
+ * el navegador navega por él (watch_browser, br_backend).
  *
  * Todo sale de la instantánea de watch_phone: la página no inventa estados
  * ("Conectado" solo con sesión autenticada, "--" si no hay dato).
@@ -16,6 +19,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "flex_device_icons.h"
+#include "watch_browser.h"
 #include "watch_phone.h"
 #include "watch_theme.h"
 
@@ -225,8 +230,12 @@ static void build(fp_page_t *p, const watch_phone_status_t *s)
     lv_obj_remove_style_all(top);
     lv_obj_set_size(top, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_remove_flag(top, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t *ic = lv_image_create(top);
+    lv_image_set_src(ic, &flex_devicon_phone);
+    lv_obj_align(ic, LV_ALIGN_LEFT_MID, -4, 0);
     p->name = watch_theme_label(top, FLEX_FONT_TITLE, FLEX_C_TXT, "");
-    lv_obj_set_width(p->name, LV_PCT(62));
+    lv_obj_set_width(p->name, LV_PCT(48));
+    lv_obj_align(p->name, LV_ALIGN_LEFT_MID, 60, 0);
     lv_label_set_long_mode(p->name, LV_LABEL_LONG_MODE_DOTS);
     p->chip = watch_theme_label(top, FLEX_FONT_SMALL, FLEX_C_MUTE, "");
     lv_obj_align(p->chip, LV_ALIGN_RIGHT_MID, 0, 0);
@@ -277,6 +286,8 @@ static void build(fp_page_t *p, const watch_phone_status_t *s)
     lv_obj_add_event_cb(r, open_cb, LV_EVENT_CLICKED, (void *)ui_music_create);
     r = watch_theme_list_row(p->dyn, FLEX_ICON_INFO, FLEX_C_CAT_GREEN, "Estado del teléfono", NULL, true);
     lv_obj_add_event_cb(r, open_cb, LV_EVENT_CLICKED, (void *)ui_phone_state_create);
+    r = watch_theme_list_row(p->dyn, FLEX_ICON_GLOBE, FLEX_C_CAT_BLUE, "Navegador del teléfono", NULL, true);
+    lv_obj_add_event_cb(r, open_cb, LV_EVENT_CLICKED, (void *)ui_phone_relay_create);
     r = watch_theme_list_row(p->dyn, FLEX_ICON_BLUETOOTH, FLEX_C_CAT_NET, "Conexión", NULL, true);
     lv_obj_add_event_cb(r, open_cb, LV_EVENT_CLICKED, (void *)ui_phone_conn_create);
 }
@@ -526,8 +537,8 @@ static void st_build(st_page_t *p, const watch_phone_status_t *s)
         para(p->dyn, FLEX_FONT_SMALL, FLEX_C_MUTE, "El teléfono aún no las ha informado");
         return;
     }
-    static const uint16_t kCaps[] = {FLP_CAP_NOTIF, FLP_CAP_REPLY, FLP_CAP_MEDIA,
-                                     FLP_CAP_FIND,  FLP_CAP_STATE, FLP_CAP_TIME};
+    static const uint16_t kCaps[] = {FLP_CAP_NOTIF, FLP_CAP_REPLY, FLP_CAP_MEDIA, FLP_CAP_FIND,
+                                     FLP_CAP_STATE, FLP_CAP_TIME,  FLP_CAP_RELAY};
     for (size_t i = 0; i < sizeof(kCaps) / sizeof(kCaps[0]); i++) {
         const char *why = flexPhoneCapWhyNot(s->caps.supported, s->caps.granted, kCaps[i]);
         lv_obj_t *c = card_col(p->dyn, 2);
@@ -577,5 +588,139 @@ lv_obj_t *ui_phone_state_create(lv_obj_t *parent)
     st_refresh(p);
     lv_obj_add_event_cb(page, free_cb, LV_EVENT_DELETE, p);
     ui_page_timer(page, st_tick_cb, 1000, p);
+    return page;
+}
+
+/* ======================= Navegador del teléfono ======================= */
+
+typedef struct {
+    lv_obj_t *state, *addr, *src, *why_card, *why, *toggle, *open;
+    uint8_t shown; /* FLP_RELAY_* pintado en el botón (0xFF = nada) */
+} relay_page_t;
+
+static const char *relay_state_text(const watch_phone_status_t *s, uint32_t *rgb)
+{
+    uint32_t c = FLEX_C_MUTE;
+    const char *t = "Parado";
+    if (s->link != FLP_LS_READY) {
+        t = "Sin teléfono conectado";
+    } else {
+        switch (s->relay.state) {
+        case FLP_RELAY_STARTING:
+            t = "Arrancando en el teléfono…";
+            c = FLEX_C_WARN;
+            break;
+        case FLP_RELAY_UP:
+            t = "En marcha";
+            c = FLEX_C_OK;
+            break;
+        case FLP_RELAY_ERROR:
+            t = "Error";
+            c = FLEX_C_ERR;
+            break;
+        case FLP_RELAY_SUSPENDED:
+            t = "Suspendido por Android";
+            c = FLEX_C_WARN;
+            break;
+        default:
+            t = s->relay.byUser ? "Detenido por el usuario" : "Parado";
+            break;
+        }
+    }
+    if (rgb) {
+        *rgb = c;
+    }
+    return t;
+}
+
+static void relay_toggle_cb(lv_event_t *e)
+{
+    relay_page_t *p = lv_event_get_user_data(e);
+    watch_phone_status_t s;
+    watch_phone_get(&s);
+    const bool up = s.relay.state == FLP_RELAY_UP || s.relay.state == FLP_RELAY_STARTING;
+    if (!watch_phone_relay(!up)) {
+        lv_obj_remove_flag(p->why_card, LV_OBJ_FLAG_HIDDEN);
+        set_text(p->why, s.link == FLP_LS_READY ? "La app Flex Phone no ofrece el navegador" : "Conecta antes el teléfono");
+    }
+}
+
+static void relay_refresh(relay_page_t *p)
+{
+    watch_phone_status_t s;
+    watch_phone_get(&s);
+    char b[128];
+    uint32_t rgb;
+    watch_theme_info_set(p->state, relay_state_text(&s, &rgb));
+    if (s.relay.state == FLP_RELAY_UP) {
+        snprintf(b, sizeof(b), "%u.%u.%u.%u:%u%s", s.relay.ip[0], s.relay.ip[1], s.relay.ip[2], s.relay.ip[3],
+                 (unsigned)s.relay.port, s.relay.tls ? " (TLS)" : "");
+    } else {
+        snprintf(b, sizeof(b), "--");
+    }
+    watch_theme_info_set(p->addr, b);
+    watch_browser_source_t src;
+    watch_browser_source(&src);
+    watch_theme_info_set(p->src, src.src != BRSRC_NONE ? flexBrSourceName(src.src) : "Ninguno");
+    const char *why = s.relay.err[0] && s.relay.state != FLP_RELAY_UP ? s.relay.err : src.src == BRSRC_NONE ? src.why : "";
+    if (why[0]) {
+        lv_obj_remove_flag(p->why_card, LV_OBJ_FLAG_HIDDEN);
+        set_text(p->why, why);
+    } else {
+        lv_obj_add_flag(p->why_card, LV_OBJ_FLAG_HIDDEN);
+    }
+    const bool up = s.relay.state == FLP_RELAY_UP || s.relay.state == FLP_RELAY_STARTING;
+    const uint8_t key = s.link != FLP_LS_READY ? 0xFE : up ? 1 : 0;
+    if (key != p->shown) {
+        p->shown = key;
+        watch_theme_button_set(p->toggle, up ? "Parar el servidor del teléfono" : "Encender el servidor del teléfono",
+                               up ? FLEX_C_SURF2 : FLEX_C_PRIMARY);
+        if (s.link == FLP_LS_READY) {
+            lv_obj_remove_state(p->toggle, LV_STATE_DISABLED);
+        } else {
+            lv_obj_add_state(p->toggle, LV_STATE_DISABLED);
+        }
+    }
+}
+
+static void relay_tick_cb(lv_timer_t *t)
+{
+    relay_refresh(lv_timer_get_user_data(t));
+}
+
+lv_obj_t *ui_phone_relay_create(lv_obj_t *parent)
+{
+    relay_page_t *p = lv_malloc_zeroed(sizeof(*p));
+    LV_ASSERT_MALLOC(p);
+    p->shown = 0xFF;
+    lv_obj_t *page = ui_page_new(parent);
+    watch_theme_page(page);
+    watch_theme_header(page, "Web del teléfono", back_cb, NULL);
+    lv_obj_t *list = watch_theme_list(page);
+
+    lv_obj_t *hero = card_col(list, 4);
+    lv_obj_set_flex_align(hero, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_t *ic = lv_image_create(hero);
+    lv_image_set_src(ic, &flex_devicon_phone);
+    lv_obj_t *cap = para(hero, FLEX_FONT_SMALL, FLEX_C_TXT2,
+                         "El teléfono abre la web y el reloj recibe las imágenes por el Wi-Fi");
+    lv_obj_set_style_text_align(cap, LV_TEXT_ALIGN_CENTER, 0);
+
+    p->state = watch_theme_info_row(list, "Servidor", "");
+    p->addr = watch_theme_info_row(list, "Dirección", "");
+    p->src = watch_theme_info_row(list, "Origen del navegador", "");
+    p->why_card = notice(list, "Motivo", FLEX_C_WARN, "", &p->why);
+    p->toggle = full_button(list, "", FLEX_C_PRIMARY, relay_toggle_cb, p);
+    p->open = full_button(list, "Abrir el navegador", FLEX_C_SURF2, open_cb, (void *)ui_browser_create);
+
+    notice(list, "Cómo funciona", FLEX_C_TXT,
+           "Al abrir el navegador con el origen en Automático o Flex Phone, el reloj pide al teléfono por "
+           "Bluetooth que encienda su servidor y se conecta a él por el Wi-Fi: los dos tienen que estar en la "
+           "misma red. La credencial sale del emparejamiento y no viaja nunca. La página se actualiza sola, sin "
+           "tocar la pantalla.",
+           NULL);
+    relay_refresh(p);
+    lv_obj_add_event_cb(page, free_cb, LV_EVENT_DELETE, p);
+    ui_page_timer(page, relay_tick_cb, FP_TICK_MS, p);
     return page;
 }

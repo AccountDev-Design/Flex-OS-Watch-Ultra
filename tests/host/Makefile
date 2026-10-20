@@ -37,6 +37,7 @@ SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test
        test_files.c $(FW)/components/watch_files/files_logic.c $(FW)/components/watch_files/flexfs.c $(FW)/components/watch_files/fxp.c \
        test_browser.c $(FW)/components/watch_browser/br_logic.c \
        test_br_net.c fbp_fake.c $(FW)/components/watch_browser/br_net.c $(FW)/components/watch_browser/br_lists.c \
+       test_br_backend.c $(FW)/components/watch_browser/br_backend.c \
        test_ota.c ota_fake.c $(FW)/components/watch_ota/ota_core.c $(FW)/components/watch_ota/ota_sig.c \
        test_weather.c $(FW)/components/watch_weather/wx_logic.c $(FW)/components/watch_weather/wx_core.c \
        $(FW)/components/watch_power/battery_model.c \

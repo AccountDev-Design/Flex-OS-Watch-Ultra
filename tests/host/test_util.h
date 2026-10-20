@@ -28,4 +28,5 @@ void test_files_all(void);
 void test_weather_all(void);
 void test_browser_all(void);
 void test_br_net_all(void);
+void test_br_backend_all(void);
 void test_ota_all(void);

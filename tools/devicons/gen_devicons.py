@@ -137,7 +137,7 @@ def main():
             chunks.append((n, size, rgb565a8(png, size)))
             print('reloj: %s %dx%d' % (n, size, size))
 
-    c = ['/* GENERADO por tools/devicons/gen_devicons.py desde design/devices/*.svg: no editar. */',
+    c = ['/* GENERADO por tools/devicons/gen_devicons.py desde design/devices/<modelo>.svg: no editar. */',
          '#include "flex_device_icons.h"', '']
     for n, size, data in chunks:
         c.append('/* %s: %dx%d RGB565A8 (%d B), alineado a 4 para el Xtensa */' % (n, size, size, len(data)))
@@ -154,7 +154,7 @@ def main():
     with open(WATCH_C, 'w') as f:
         f.write('\n'.join(c))
     h = ['/* GENERADO por tools/devicons/gen_devicons.py: no editar. */',
-         '/* Iconos de dispositivos Flex desde design/devices/*.svg (mismo dibujo que en Flex Phone). */',
+         '/* Iconos de dispositivos Flex desde design/devices/<modelo>.svg (mismo dibujo que en Flex Phone). */',
          '#pragma once', '#include "lvgl.h"', '']
     for n, size, _ in chunks:
         h.append('extern const lv_image_dsc_t flex_devicon_%s; /* %dx%d */' % (n, size, size))

@@ -4,6 +4,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include "lvgl.h"
 #include "flex_tokens.h"
@@ -32,6 +33,14 @@ extern watch_power_snapshot_t sim_power;
 
 /* Salida del splash: 200 ms como mucho, más un cuadro de margen. */
 #define SIM_SPLASH_OUT_MAX_MS (FLEX_ANIM_BOOT_FADE_MS / 3 + 40)
+
+/* Flex Phone simulado: qué hace su Browser Relay al pedírselo (sim_phone.c) */
+enum { SIM_RELAY_OK = 0, SIM_RELAY_FAIL, SIM_RELAY_MUTE };
+void sim_phone_reset(void);
+void sim_phone_relay_mode(int mode);
+bool sim_phone_relay_up(void);
+void sim_phone_relay_user_stop(void);
+bool sim_phone_relay_token(char *out, size_t n);
 
 /** Avanza el reloj simulado ms milisegundos, ejecutando LVGL cada 5 ms. */
 void sim_run(uint32_t ms);
@@ -109,6 +118,7 @@ size_t sim_mem_used(void);
 uint32_t sim_mem_blocks(void);
 
 /* Baterías de pruebas */
+void sim_suite_relay(const char *out);
 void sim_suite_boot(const char *out);
 void sim_suite_power(const char *out);
 void sim_suite_nav(const char *out);

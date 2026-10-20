@@ -1,4 +1,4 @@
-/* GENERADO por tools/devicons/gen_devicons.py desde design/devices/*.svg: no editar. */
+/* GENERADO por tools/devicons/gen_devicons.py desde design/devices/<modelo>.svg: no editar. */
 #include "flex_device_icons.h"
 
 /* phone: 56x56 RGB565A8 (9408 B), alineado a 4 para el Xtensa */

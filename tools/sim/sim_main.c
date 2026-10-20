@@ -465,6 +465,7 @@ int main(int argc, char **argv)
         {"pantalla", sim_suite_screen},  {"wifi", sim_suite_wifi},       {"telefono", sim_suite_phone}, {"notas", sim_suite_notes},
         {"clima", sim_suite_weather},
         {"navegador", sim_suite_browser},
+        {"relay", sim_suite_relay},
         {"ota", sim_suite_ota},
         {"mono", sim_suite_monkey},      {"visual", sim_suite_visual}, {"banco", sim_suite_bench},
     };

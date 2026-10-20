@@ -20,7 +20,7 @@ extern "C" {
 
 typedef enum {
     PM_ENABLE, PM_DISABLE, PM_PAIR, PM_CONFIRM, PM_CANCEL, PM_FORGET,
-    PM_DISMISS, PM_CLEAR, PM_REPLY, PM_ACTION, PM_FIND, PM_MEDIA,
+    PM_DISMISS, PM_CLEAR, PM_REPLY, PM_ACTION, PM_FIND, PM_MEDIA, PM_RELAY,
 } phone_msg_type_t;
 
 typedef struct {
@@ -40,7 +40,11 @@ typedef struct {
     /** Borra los emparejamientos del transporte al olvidar (opcional). */
     void (*forget_transport)(void);
     uint32_t sig, local;
+    uint32_t relay_asked; /**< cuándo se pidió RELAY_START (0 = no hay petición viva) */
 } phone_core_t;
+
+/** Sin RELAY_INFO en este plazo tras RELAY_START, se dice que el teléfono no contestó. */
+#define PHONE_RELAY_TIMEOUT_MS 15000
 
 /** Prepara el núcleo sobre L y M ya iniciados (identidad, vínculo, transporte). */
 void phone_core_init(phone_core_t *c, FlexPhoneLink *L, FlexPhoneModel *M, FlexAuthRandFn rnd, bool enabled);
@@ -54,6 +58,8 @@ void phone_core_snapshot(phone_core_t *c, uint32_t now_ms);
 int phone_core_notifs(const phone_core_t *c, FlexPhoneNotif *out, int max);
 /** Lo que haría falta para responder: FLNK_E_NONE = se puede. */
 uint8_t phone_core_reply_check(const phone_core_t *c, uint32_t id, const char *text);
+/** ¿Se puede pedir el relay? (sesión y el teléfono lo declara, o aún no dijo sus capacidades) */
+bool phone_core_relay_can(const phone_core_t *c);
 /** ¿Hay sesión y el teléfono concede esa capacidad? */
 bool phone_core_can(const phone_core_t *c, uint16_t cap);
 

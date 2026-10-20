@@ -143,6 +143,7 @@ lv_obj_t *ui_fs_notice(lv_obj_t *list, const char *app, const char *why);
 /* Flex Phone (F5.2/F5.3/F9.9/F9.10) */
 lv_obj_t *ui_flexphone_create(lv_obj_t *parent);    /**< app Flex Phone: estado, emparejamiento, secciones */
 lv_obj_t *ui_phone_conn_create(lv_obj_t *parent);   /**< Flex Phone > Conexión */
+lv_obj_t *ui_phone_relay_create(lv_obj_t *parent);  /**< Flex Phone > Navegador del teléfono (Browser Relay) */
 lv_obj_t *ui_phone_state_create(lv_obj_t *parent);  /**< Flex Phone > Estado del teléfono */
 lv_obj_t *ui_notifs_create(lv_obj_t *parent);       /**< notificaciones del teléfono */
 lv_obj_t *ui_notif_detail_create(lv_obj_t *parent); /**< la elegida con ui_notif_open() */
