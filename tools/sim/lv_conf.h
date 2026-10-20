@@ -21,4 +21,7 @@
  * bucle infinito) para que el fallo se vea enseguida. */
 #define LV_ASSERT_HANDLER_INCLUDE <stdlib.h>
 #define LV_ASSERT_HANDLER abort();
+/* JPEG baseline del navegador (F6): el TJpgDec que trae LVGL, como en el reloj */
+#define LV_USE_TJPGD 1
+
 #endif

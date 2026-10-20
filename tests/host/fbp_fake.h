@@ -32,6 +32,8 @@ typedef struct {
     uint32_t chunk;         /* entrega lo pendiente en trozos de N B por read (0 = todo) */
     fbp_fake_img_cb img;
     void *img_user;
+    /** Reloj externo (la vista previa: lv_tick). NULL = reloj virtual. */
+    uint32_t (*clock)(void);
 } fbp_fake_cfg_t;
 
 typedef struct {

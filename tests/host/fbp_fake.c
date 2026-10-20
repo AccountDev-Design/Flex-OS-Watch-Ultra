@@ -397,7 +397,9 @@ static int io_read(void *ctx, uint8_t *b, size_t n, uint32_t to_ms)
         if (f->closing) {
             return -1;
         }
-        f->clock += to_ms; /* plazo sin datos: corre el reloj virtual */
+        if (!f->cfg.clock) {
+            f->clock += to_ms; /* plazo sin datos: corre el reloj virtual */
+        }
         return 0;
     }
     size_t c = av < n ? av : n;
@@ -421,7 +423,8 @@ static void io_close(void *ctx)
 
 static uint32_t io_now(void *ctx)
 {
-    return ((fbp_fake_t *)ctx)->clock;
+    fbp_fake_t *f = ctx;
+    return f->cfg.clock ? f->cfg.clock() : f->clock;
 }
 
 static uint32_t io_rand(void *ctx)

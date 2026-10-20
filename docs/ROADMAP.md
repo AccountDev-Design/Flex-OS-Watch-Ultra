@@ -1,7 +1,7 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 44,7 %   [████████░░░░░░░░░░░░]   55,3 % pendiente   (verificado en el reloj: 8,6 %)
+PROGRESO GLOBAL: 48,0 %   [█████████░░░░░░░░░░░]   52,0 % pendiente   (verificado en el reloj: 8,6 %)
 ```
 
 El 2026-10-16 el alcance creció con el prompt maestro de migración (iconos y fondos originales, todas las apps del
@@ -37,7 +37,7 @@ el porcentaje baja porque ahora mide más trabajo. Detalle en el historial del f
   - La calibración de umbrales (❓ D4).
   - Prueba de extremo a extremo de Flex Phone: necesita la app Android con el servidor BLE v2
     (`docs/FLEX-PHONE-ANDROID.md`).
-  - El navegador, OTA, la seguridad y las pruebas finales.
+  - OTA, la seguridad y las pruebas finales; el navegador, probarlo en el reloj con el servicio.
 - **Siguiente:** pruebas físicas de F2-F4 (`docs/PRUEBAS-RELOJ.md`); después F5 (Wi-Fi y Flex Phone).
 
 ## Cómo se calcula
@@ -113,12 +113,12 @@ Detalle y pruebas en `docs/F4-SERVICIOS.md`.
 | F5.5 **Transporte BLE** con Flex Phone (canal principal): central NimBLE contra el `GattServer.kt` de la app (servicio `f1580001-…`), vínculo cifrado, reconexión, BLE independiente del Wi-Fi | 3 | 🟡 faltan T84-T85, T91-T92 |
 | F5.6 Seguridad del enlace (v3 con ECDH + cifrado autenticado; requiere cambios en Flex Phone, en su repositorio) | 2 | ❓ D7, D8 |
 
-### F6 · Navegador (renderizado remoto) — 0 / 8
+### F6 · Navegador (renderizado remoto) (`docs/F6-NAVEGADOR.md`) — 4 / 8
 | Tarea | Peso | Estado |
 |---|---|---|
-| F6.1 Cliente FBP/1: WebSocket + JPEG (`esp_jpeg`) | 4 | ⬜ |
-| F6.2 Interfaz del navegador para 410×502 (barra, teclado, pestañas) | 3 | ⬜ |
-| F6.3 TLS con validación de certificado | 1 | ⬜ |
+| F6.1 Cliente FBP/1: WebSocket + JPEG (TJpgDec de LVGL; el S3 no tiene decodificador por hardware) | 4 | 🟡 falta T104-T105 |
+| F6.2 Interfaz del navegador para 410×502 (barra, teclado, pestañas) | 3 | 🟡 faltan T105, T108 |
+| F6.3 TLS con validación de certificado (paquete de CA de ESP-IDF) | 1 | 🟡 faltan T104, T106 |
 
 Limitación conocida: sin servidor de renderizado o sin el móvil, no hay web. Nunca será un motor HTML local.
 
@@ -235,3 +235,4 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-16 | **43,4 %** | +1,2 | F9.6 explorador de archivos (50 % de 1) y F9.7 Notas (50 % de 2): capa `watch_files` con la semántica de `FlexOS_FS` (66 comprobaciones sobre una carpeta real), teclado compartido en español, suite "notas" de la vista previa. Puntos 53 / 122 |
 | 2026-10-16 | **43,9 %** | +0,5 | F9.11 Paint (50 % de 1): formato FXP1 de la referencia byte a byte (`watch_files/fxp.c`, 23 comprobaciones), lienzo con trazos guardados al levantar el dedo, deshacer real y galería con miniaturas reproducidas del archivo. Puntos 53,5 / 122 |
 | 2026-10-17 | **44,7 %** | +1 | F9.8 Clima (50 % de 2): motor de `FlexOS_Weather` portado a C puro (`watch_weather`: parser, cadencia, ubicaciones; 225 comprobaciones con las respuestas reales de Open-Meteo de la referencia), servicio con `esp_http_client` sobre TLS verificado (paquete de CA, mbedTLS en PSRAM), NVS `flexwx` y app Clima con iconos procedurales; suite "clima" de la vista previa. Puntos 54,5 / 122 |
+| 2026-10-20 | **48,0 %** | +4 | F6 Navegador (50 % de 8): núcleo de `FlexOS_Browser` pasado a C con el perfil S3 (las comprobaciones de `test_browser.cpp` sin tocar un vector + vectores dorados), sesión FBP/1 con WebSocket propio probada contra un servicio a nivel de bytes, TLS verificado con el paquete de CA (la referencia no verificaba), JPEG con el TJpgDec de LVGL, app con omnibox anti-SSRF, páginas `flex://`, pestañas, historial, favoritos y teclado de página; suite "navegador". Puntos 58,5 / 122 |

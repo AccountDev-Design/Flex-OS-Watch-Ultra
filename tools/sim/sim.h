@@ -125,6 +125,7 @@ void sim_suite_wifi(const char *out);
 void sim_suite_phone(const char *out);
 void sim_suite_notes(const char *out);
 void sim_suite_weather(const char *out);
+void sim_suite_browser(const char *out);
 /* Clima simulado (sim_wx.c): motor y parser reales, red falsa */
 void sim_wx_reset(void);
 void sim_wx_online(bool on);

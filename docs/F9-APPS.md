@@ -147,6 +147,8 @@ Flex OS Ultra se abre en el reloj y al revés.
   con escritura atómica) y "Limpiar" (con segundo toque, `RELOJ:`; en la referencia era inmediato).
 - Reducido al reloj: lienzo de 378 × 250 px (un dibujo de otro tamaño se encaja centrado y los trazos nuevos se
   guardan en sus coordenadas, radio incluido) y sin gesto de volver desde el borde, para poder dibujar hasta él.
+- Lo que empieza por `.` es del sistema y el explorador no lo enseña (p. ej. `/.sistema`, donde el
+  navegador guarda su historial y sus favoritos).
 - Memoria: el lienzo (189 KB) y las miniaturas (un bloque de 196 KB) van en PSRAM y se liberan al salir.
 
 | Lienzo | Galería |

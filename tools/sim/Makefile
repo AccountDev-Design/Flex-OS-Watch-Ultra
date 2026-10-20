@@ -33,7 +33,9 @@ CFLAGS := -std=gnu11 -O1 -g -Wall $(SANFLAGS) -DLV_CONF_INCLUDE_SIMPLE -DLV_LVGL
           -I$(FW)/components/flexlink/include \
           -I$(FW)/components/watch_phone/include \
           -I$(FW)/components/watch_files/include \
-          -I$(FW)/components/watch_weather/include
+          -I$(FW)/components/watch_weather/include \
+          -I$(FW)/components/watch_browser/include \
+          -I../../tests/host
 
 LVGL_SRC := $(shell find $(LVGL_DIR)/src -name '*.c')
 APP_SRC := $(wildcard sim_*.c) \
@@ -57,6 +59,10 @@ APP_SRC := $(wildcard sim_*.c) \
            $(FW)/components/watch_files/fxp.c \
            $(FW)/components/watch_weather/wx_logic.c \
            $(FW)/components/watch_weather/wx_core.c \
+           $(FW)/components/watch_browser/br_logic.c \
+           $(FW)/components/watch_browser/br_net.c \
+           $(FW)/components/watch_browser/br_lists.c \
+           ../../tests/host/fbp_fake.c \
            $(FW)/components/watch_diag/flash_probe_logic.c
 
 LVGL_OBJ := $(patsubst $(LVGL_DIR)/%.c,$(BUILD)/lvgl/%.o,$(LVGL_SRC))
@@ -66,6 +72,10 @@ LVGL_OBJ := $(patsubst $(LVGL_DIR)/%.c,$(BUILD)/lvgl/%.o,$(LVGL_SRC))
 ICONS := reloj calend calc clima musica notas flexphone nav brujula devcare almacen paint flexstore ajustes sensores
 ICON_BINS := $(foreach n,$(ICONS),$(FW)/assets/icons/app_$(n).bin)
 ICON_ASM := $(BUILD)/flex_app_icons_data.S
+
+# Páginas JPEG de prueba del navegador (gen_br_pages.py)
+BR_JPGS := $(wildcard fixtures/br_*.jpg)
+BR_ASM := $(BUILD)/br_pages_data.S
 
 .PHONY: all clean
 all: $(BUILD)/sim
@@ -91,9 +101,17 @@ $(ICON_ASM): $(ICON_BINS) Makefile
 	      $$n $$n "$(abspath $(FW))/assets/icons/app_$$n.bin"; \
 	  done; echo '.section .note.GNU-stack,"",@progbits'; } > $@
 
-$(BUILD)/sim: $(APP_SRC) $(APP_HDR) $(LVGL_OBJ) $(ICON_ASM)
+$(BR_ASM): $(BR_JPGS) Makefile
+	@mkdir -p $(dir $@)
+	@{ echo '.section .rodata.br_pages, "a"'; \
+	  for f in $(BR_JPGS); do n=$$(basename $$f .jpg); \
+	    printf '.balign 4\n.global _binary_%s_jpg_start\n_binary_%s_jpg_start:\n.incbin "%s"\n.global _binary_%s_jpg_end\n_binary_%s_jpg_end:\n' \
+	      $$n $$n "$(abspath $$f)" $$n $$n; \
+	  done; echo '.section .note.GNU-stack,"",@progbits'; } > $@
+
+$(BUILD)/sim: $(APP_SRC) $(APP_HDR) $(LVGL_OBJ) $(ICON_ASM) $(BR_ASM)
 	@echo "LD $@"
-	@$(CC) $(CFLAGS) -Werror $(APP_SRC) $(ICON_ASM) $(LVGL_OBJ) -lm -o $@
+	@$(CC) $(CFLAGS) -Werror $(APP_SRC) $(ICON_ASM) $(BR_ASM) $(LVGL_OBJ) -lm -o $@
 
 clean:
 	rm -rf build build-san out

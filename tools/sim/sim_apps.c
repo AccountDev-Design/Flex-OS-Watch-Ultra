@@ -118,7 +118,7 @@ void sim_suite_apps(const char *out)
     EXPECT(ui_nav_depth() == 2 && sim_find_label(ui_nav_top(), "Aplicaciones"), "deslizar no abrio las apps");
     /* Cada app del lanzador muestra su icono original (imagen RGB565A8 de
      * 104 px) y su nombre. */
-    static const char *const names[] = {"Reloj",    "Calendario", "Calculadora",    "Clima",   "Flex Compass",
+    static const char *const names[] = {"Reloj",    "Calendario", "Calculadora",    "Clima",   "Navegador", "Flex Compass",
                                         "Device Care", "Sensores", "Almacenamiento", "Ajustes"};
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         lv_obj_t *c = clickable_of(sim_find_label(ui_nav_top(), names[i]));
@@ -128,7 +128,7 @@ void sim_suite_apps(const char *out)
                    ((uintptr_t)d->data & 3) == 0,
                "lanzador: %s sin icono original alineado", names[i]);
     }
-    EXPECT(sim_find_label(ui_nav_top(), "Navegador") == NULL && sim_find_label(ui_nav_top(), "Flex Store") == NULL,
+    EXPECT(sim_find_label(ui_nav_top(), "Flex Store") == NULL,
            "lanzador: aparece una app sin funcion");
     lv_obj_t *reloj_cell = clickable_of(sim_find_label(ui_nav_top(), "Reloj"));
     lv_obj_t *reloj_badge = reloj_cell ? lv_obj_get_child(reloj_cell, 2) : NULL;

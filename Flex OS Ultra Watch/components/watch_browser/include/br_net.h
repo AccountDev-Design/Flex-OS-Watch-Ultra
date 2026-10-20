@@ -165,7 +165,9 @@ void br_net_lock(br_net_t *s);
 void br_net_unlock(br_net_t *s);
 /** Hay un FRAME por pintar: copia sus datos (la imagen sigue en rx hasta _done). */
 bool br_net_frame_peek(br_net_t *s, FbpFrame *f, uint8_t *ch, uint16_t *seq);
-void br_net_frame_done(br_net_t *s, bool drawn);
+enum { BR_FR_DRAWN = 0, BR_FR_SKIPPED, BR_FR_BAD };
+/** Libera la ranura: dibujado, no visible (se descarta) o ilegible. */
+void br_net_frame_done(br_net_t *s, int result);
 
 /** Nombre del estado para la interfaz ("Sesión activa"...). */
 const char *br_net_state_name(int state);

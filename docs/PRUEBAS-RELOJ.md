@@ -124,6 +124,12 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | T84-T85 | Con la app de hoy: el reloj encuentra el teléfono, empareja por BLE, abre el canal (MTU 247) y explica que el teléfono no contesta al saludo v2. Copiar las líneas `ble_link` y `watch_phone` (incluida la RAM interna del BLE) |
 | T86-T93 | Solo con la app Android actualizada: emparejar con código, código equivocado, aviso con la pantalla apagada, responder, descartar, reconexión sola, sin Wi-Fi, Música |
 
+## 11. Navegador (`F6-NAVEGADOR.md`)
+
+| Pruebas | Qué mirar |
+|---|---|
+| T104-T108 | Con el servicio `server/` de Flex OS Ultra: sesión `wss://` con certificado público y credencial, desplazar y tocar (anotar la latencia), escribir en la página, certificado autofirmado rechazado, Wi-Fi que se va y vuelve sin cortar el BLE, abrir y cerrar 10 veces sin perder memoria. Copiar las líneas `watch_browser` |
+
 ## Qué enviarme
 
 - El registro serie completo de la sesión.

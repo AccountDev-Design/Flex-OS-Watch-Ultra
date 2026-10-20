@@ -150,6 +150,10 @@ lv_obj_t *ui_music_create(lv_obj_t *parent);        /**< app Música: lo que sue
 lv_obj_t *ui_weather_create(lv_obj_t *parent);      /**< app Clima: Open-Meteo por Wi-Fi */
 lv_obj_t *ui_wx_locs_create(lv_obj_t *parent);      /**< Clima > Mis ubicaciones */
 lv_obj_t *ui_wx_search_create(lv_obj_t *parent);    /**< Clima > Buscar ciudad */
+/* Navegador (F6; ui_browser.c, ui_jpeg.c) */
+lv_obj_t *ui_browser_create(lv_obj_t *parent);      /**< app Navegador: web renderizada por el servicio FBP/1 */
+/** JPEG baseline a un lienzo RGB565 cw x ch en (dx,dy) con tamaño dw x dh (vecino más próximo). 0 = bien. */
+int ui_jpeg_draw(const uint8_t *jpg, uint32_t n, uint16_t *canvas, int cw, int ch, int dx, int dy, int dw, int dh);
 void ui_notif_open(uint32_t id);                    /**< abre el detalle de una notificación */
 void ui_notif_watch_tick(bool screen_on);           /**< cada 100 ms (ui_system): aviso al llegar una */
 /** Texto del teléfono preparado para la fuente (sin huecos por glifos que no existen). */

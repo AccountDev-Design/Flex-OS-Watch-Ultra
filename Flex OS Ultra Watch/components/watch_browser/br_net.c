@@ -948,12 +948,14 @@ bool br_net_frame_peek(br_net_t *s, FbpFrame *f, uint8_t *ch, uint16_t *seq)
     return ok;
 }
 
-void br_net_frame_done(br_net_t *s, bool drawn)
+void br_net_frame_done(br_net_t *s, int result)
 {
     br_net_lock(s);
     if (s->fr_ready) {
-        if (drawn) {
+        if (result == BR_FR_DRAWN) {
             s->stats.framesOk++;
+        } else if (result == BR_FR_SKIPPED) {
+            s->stats.framesDropped++;
         } else {
             s->stats.framesBad++;
         }

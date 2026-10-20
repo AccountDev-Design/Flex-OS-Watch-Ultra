@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "br_lists.h"
 #include "br_net.h"
 #include "fbp_fake.h"
 #include "test_util.h"
@@ -65,7 +66,7 @@ static bool take_frame(fbp_fake_t *f, FbpFrame *out)
         uint8_t ch;
         uint16_t seq;
         if (br_net_frame_peek(&S, out, &ch, &seq)) {
-            br_net_frame_done(&S, true);
+            br_net_frame_done(&S, BR_FR_DRAWN);
             return true;
         }
         const uint32_t w = br_net_step(&S);
@@ -327,8 +328,53 @@ static void t_session_events(void)
     fbp_fake_free(f);
 }
 
+static void t_lists(void)
+{
+    static br_lists_t L, M;
+    br_lists_init(&L);
+    br_hist_add(&L, "https://a.es/", "A", 10);
+    br_hist_add(&L, "https://b.es/", "B", 20);
+    br_hist_add(&L, "https://a.es/", "", 30); /* repetida: sube con su título */
+    br_hist_add(&L, "flex://history", "Historial", 40);
+    CHECK(L.hn == 2 && strcmp(L.h[0].url, "https://a.es/") == 0 && L.h[0].visits == 2);
+    CHECK(strcmp(L.h[0].title, "A") == 0 && L.h[0].lastMs == 30);
+    const uint32_t g = L.gen;
+    br_hist_title(&L, "https://b.es/", "Be");
+    CHECK(strcmp(L.h[1].title, "Be") == 0 && L.h[1].visits == 1 && L.gen == g + 1);
+    br_hist_title(&L, "https://b.es/", "Be");
+    CHECK_EQ(L.gen, g + 1);
+    for (int i = 0; i < 100; i++) {
+        char u[40];
+        snprintf(u, sizeof(u), "https://s%d.es/", i);
+        br_hist_add(&L, u, "t\nx", (uint32_t)i);
+    }
+    CHECK_EQ(L.hn, FLEXBR_HIST_MAX);
+    CHECK(strcmp(L.h[0].url, "https://s99.es/") == 0 && strcmp(L.h[0].title, "t x") == 0);
+    bool added;
+    CHECK(br_bm_toggle(&L, "https://a.es/", "A", &added) && added && L.bn == 1);
+    CHECK(br_bm_toggle(&L, "https://a.es/", "A", &added) && !added && L.bn == 0);
+    CHECK(!br_bm_toggle(&L, "flex://about", "x", &added));
+    br_bm_toggle(&L, "https://c.es/", "", &added);
+    CHECK(strcmp(L.b[0].title, "https://c.es/") == 0);
+    char path[256];
+    snprintf(path, sizeof(path), "%s/br_hist_test.bin", getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp");
+    CHECK(br_lists_save(&L, true, path));
+    br_lists_init(&M);
+    CHECK(br_lists_load(&M, true, path));
+    CHECK(M.hn == L.hn && memcmp(M.h, L.h, sizeof(BrHistEntry) * (size_t)L.hn) == 0);
+    CHECK(br_lists_save(&L, false, path) && br_lists_load(&M, false, path) && M.bn == 1);
+    FILE *f = fopen(path, "r+b"); /* un byte roto en la cuenta: se rechaza entero */
+    fseek(f, 6, SEEK_SET);
+    fputc(99, f);
+    fclose(f);
+    CHECK(!br_lists_load(&M, false, path) && M.bn == 0);
+    CHECK(!br_lists_load(&M, true, "/no/existe"));
+    remove(path);
+}
+
 void test_br_net_all(void)
 {
+    t_lists();
     s_rx = malloc(RX_CAP);
     t_happy();
     t_chunks_and_backpressure();

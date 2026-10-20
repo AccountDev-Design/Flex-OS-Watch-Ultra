@@ -97,7 +97,7 @@ int ffs_count(const char *dir)
     int n = 0;
     struct dirent *e;
     while ((e = readdir(d)) != NULL) {
-        if (strcmp(e->d_name, ".") && strcmp(e->d_name, "..")) {
+        if (e->d_name[0] != '.') { /* ni . ni .. ni lo del sistema */
             n++;
         }
     }
@@ -140,9 +140,10 @@ int ffs_list(const char *dir, ffs_entry_t *out, int max)
     struct dirent *e;
     while ((e = readdir(d)) != NULL && n < max) {
         const size_t nl = strlen(e->d_name);
-        if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..") || nl >= FL_NAME_MAX ||
-            (nl > 4 && !strcmp(e->d_name + nl - 4, ".tmp"))) {
-            continue; /* los .tmp son de una escritura atómica a medias */
+        if (e->d_name[0] == '.' || nl >= FL_NAME_MAX || (nl > 4 && !strcmp(e->d_name + nl - 4, ".tmp"))) {
+            /* los .tmp son de una escritura atómica a medias; lo que empieza
+             * por '.' es del sistema (p. ej. /.sistema del navegador) */
+            continue;
         }
         char p[REAL_MAX];
         struct stat st;
