@@ -115,13 +115,20 @@ fun HomeScreen(nav: NavController, store: SettingsStore, settings: Settings) {
                 }
             }
 
+            // ---- Los dispositivos: uno por aparato, con su dibujo ----
+            DevicesSection(nav)
+
             // ---- La accion que toca AHORA ----
             when {
+                !onWifi && link == LinkState.OFF -> Button(
+                    onClick = { FlexLinkService.start(ctx) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Activar el enlace") }
                 !onWifi -> Notice(
                     "Sin Wi-Fi",
-                    "Flex OS y este telefono tienen que estar en la misma red local. " +
-                        "El enlace no funciona por datos moviles.",
-                    MaterialTheme.colorScheme.error,
+                    "Flex OS Ultra necesita estar en la misma red Wi-Fi que este telefono. " +
+                        "Flex OS Watch Ultra sigue conectado por Bluetooth; su navegador necesita la Wi-Fi.",
+                    MaterialTheme.colorScheme.tertiary,
                 )
                 !notifAccess -> {
                     Notice(

@@ -65,8 +65,8 @@ class WifiLinkServer(
     private val ctx: Context,
     private val phoneId: String,
     private val phoneName: String,
-    /** Clave del vinculo guardada, o null si todavia no hay ninguno. */
-    private val bondKey: () -> ByteArray?,
+    /** Clave del vinculo con ESE Flex OS (por su id), o null si no esta vinculado. */
+    private val bondKey: (flexosId: String) -> ByteArray?,
     /** Se llama cuando un emparejamiento se cierra con exito. */
     private val onPaired: (key: ByteArray, flexosId: String) -> Unit,
     private val onEvent: (Event) -> Unit,
@@ -122,6 +122,12 @@ class WifiLinkServer(
         data class PairingFailed(val why: String, val kind: PairFailure) : Event()
         /** La lista de relojes que han contestado a una busqueda. */
         data class WatchesFound(val watches: List<Watch>) : Event()
+        /** Un Flex OS se presento por el canal [conn] (para la lista de dispositivos). */
+        data class Presented(val conn: Long, val address: String, val hello: com.flexos.flexphone.protocol.HelloInfo) : Event()
+        /** El canal [conn] tiene sesion autenticada con [flexosId]. */
+        data class ChannelSession(val conn: Long, val flexosId: String) : Event()
+        /** El canal [conn] se cerro. */
+        data class ChannelGone(val conn: Long) : Event()
     }
 
     /**
@@ -338,6 +344,8 @@ class WifiLinkServer(
         var txPacket = 1
         /** Latidos recibidos por esta conexion (solo para el diagnostico). */
         var pings = 0
+        /** Ya se aviso de su cierre (closeSession puede llegar por dos hilos). */
+        @Volatile var goneSent = false
 
         /**
          * COLA DE SALIDA. Nadie escribe en el socket salvo el hilo `flex-link-tx-N`
@@ -1017,6 +1025,10 @@ class WifiLinkServer(
         val rd = PayloadReader(body)
         val ver = rd.u8()
         c.flexosId = rd.str()
+        // Nombre y modelo opcionales detras (Flex OS Watch Ultra); el P4 no los manda.
+        com.flexos.flexphone.protocol.HelloInfo.decode(body)?.let {
+            emit(Event.Presented(c.id, c.socket.inetAddress?.hostAddress ?: "", it))
+        }
         if (ver < FlexLink.VERSION_MIN) {
             sendRaw(c, FlexLink.T_ERR, byteArrayOf(FlexLink.E_VERSION.toByte()), 0)
             emit(Event.Error("Flex OS habla una version anterior del protocolo"))
@@ -1175,7 +1187,7 @@ class WifiLinkServer(
         val n = rd.bytes(FlexAuth.NONCE_SIZE)
         val sess = rd.u16()
         if (!rd.ok) return
-        val key = bondKey()
+        val key = bondKey(c.flexosId)
         if (key == null) {
             // Flex OS cree que estamos vinculados y aqui no hay clave:
             // el usuario borro los datos de la app. Se dice, en vez de
@@ -1197,7 +1209,7 @@ class WifiLinkServer(
      * quedarse con todas las notificaciones del usuario.
      */
     private fun onAuthOk(c: Conn, body: ByteArray, sess: Int) {
-        val key = c.sessionKey ?: bondKey() ?: return
+        val key = c.sessionKey ?: bondKey(c.flexosId) ?: return
         val n = c.nonce ?: return
         val rd = PayloadReader(body)
         val got = rd.bytes(FlexAuth.PROOF_SIZE)
@@ -1212,7 +1224,8 @@ class WifiLinkServer(
         // Emparejamiento nuevo: ahora SI se guarda la clave. No antes:
         // guardarla al derivarla dejaria un vinculo con quien resulto
         // no ser Flex OS.
-        if (bondKey() == null) {
+        val stored = bondKey(c.flexosId)
+        if (stored == null || !FlexAuth.equalsConstantTime(stored, key)) {
             // Guardar el vinculo puede fallar (Keystore). Si falla NO se abre sesion
             // con un vinculo que no existe: se dice y se cierra este canal.
             try { onPaired(key, c.flexosId) } catch (e: Exception) {
@@ -1234,6 +1247,7 @@ class WifiLinkServer(
         pairing = null
         releaseMulticast()          // con sesion abierta ya no hay que oir sondas
         emit(Event.SessionOpen(c.socket.inetAddress?.hostAddress ?: "?"))
+        emit(Event.ChannelSession(c.id, c.flexosId))
     }
 
     /**
@@ -1256,6 +1270,7 @@ class WifiLinkServer(
     private fun closeSession(c: Conn, why: String?) {
         val owner = conn.compareAndSet(c, null)
         val upMs = System.currentTimeMillis() - c.openedAt
+        if (!c.goneSent) { c.goneSent = true; emit(Event.ChannelGone(c.id)) }
         if (pairConn === c) pairConn = null
         runCatching { c.socket.close() }
         c.txQueue.offer(TX_POISON)         // despierta al hilo de salida para que termine

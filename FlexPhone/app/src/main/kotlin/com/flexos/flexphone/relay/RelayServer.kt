@@ -40,7 +40,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class RelayServer(
     private val ctx: Context,
-    private val sessionToken: String,
+    /**
+     * Credenciales que se aceptan en el HELLO: una por aparato emparejado (el
+     * P4 y el reloj derivan cada uno la suya de SU clave). Se consulta en cada
+     * conexion, asi que emparejar u olvidar un aparato vale al momento.
+     */
+    private val sessionTokens: () -> Set<String>,
     private val onEvent: (Event) -> Unit,
 ) {
     sealed class Event {
@@ -241,7 +246,7 @@ class RelayServer(
         output.write(head.toString().toByteArray(Charsets.US_ASCII))
         output.flush()
 
-        val s = RelaySession(sock, input, output, sessionToken, onEvent) { authed ->
+        val s = RelaySession(sock, input, output, sessionTokens(), onEvent) { authed ->
             // HELLO bueno: esta conexion pasa a ser LA sesion. La anterior la
             // cierra RelayEngine.attach (la mas nueva gana).
             session = authed

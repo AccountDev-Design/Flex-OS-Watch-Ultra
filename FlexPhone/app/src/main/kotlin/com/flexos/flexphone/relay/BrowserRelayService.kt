@@ -250,8 +250,8 @@ class BrowserRelayService : Service() {
         // Flex OS calcula exactamente lo mismo desde su lado (ver
         // flexPhoneRelayToken en FlexOS_FlexPhone_Bridge.h), asi que
         // el token nunca viaja por la red.
-        val bondKey = com.flexos.flexphone.storage.BondStore(this).key()
-        if (bondKey == null) {
+        val bonds = com.flexos.flexphone.storage.BondStore(this)
+        if (!bonds.isPaired()) {
             // Sin vinculo no hay token, y sin token el relay no podria
             // dejar entrar a nadie. Se dice y se para, en vez de abrir
             // un puerto al que no puede conectarse nadie.
@@ -259,12 +259,10 @@ class BrowserRelayService : Service() {
             state.setRelay(RelayState.ERROR)
             return
         }
-        val token = com.flexos.flexphone.protocol.FlexAuth
-            .hmacSha256(bondKey, "flexphone-relay-v2".toByteArray(Charsets.US_ASCII))
-            .joinToString("") { "%02x".format(it) }
-            .take(32)
+        // Una credencial por aparato (P4 y reloj): cada uno la deriva de SU clave.
+        val tokens = { bonds.relayTokens() }
 
-        val srv = RelayServer(this, token) { ev -> onServerEvent(ev) }
+        val srv = RelayServer(this, tokens) { ev -> onServerEvent(ev) }
         server = srv
         alive = true
         if (!srv.start(settings.relayPort)) {

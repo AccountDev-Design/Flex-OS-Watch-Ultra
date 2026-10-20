@@ -7,299 +7,370 @@ import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
 import android.content.Context
 import android.os.Build
-import android.util.Log
-import com.flexos.flexphone.domain.FlexPhoneState
-import com.flexos.flexphone.domain.LinkState
-import com.flexos.flexphone.protocol.AntiReplay
 import com.flexos.flexphone.protocol.FlexLink
-import com.flexos.flexphone.protocol.Reassembler
+import com.flexos.flexphone.protocol.LinkDiag
+import com.flexos.flexphone.protocol.PairSubmit
+import com.flexos.flexphone.protocol.PairingSlot
+import com.flexos.flexphone.protocol.PhoneLinkPeer
 import java.util.UUID
-import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * TRANSPORTE BLE -- ESCRITO Y PREPARADO, HOY NO SE USA.
+ * TRANSPORTE BLE DE FLEX LINK v2: el telefono es el PERIFERICO y Flex OS
+ * Watch Ultra (ESP32-S3, NimBLE) el central.
  *
- * ===========================================================
- *  LEE ESTO ANTES DE BORRARLO POR "CODIGO MUERTO"
- * ===========================================================
- * Flex OS Ultra corre sobre un ESP32-P4, que NO tiene radio
- * Bluetooth: `soc_caps.h` del SDK no define `SOC_BLE_SUPPORTED` para
- * ese chip. Mientras siga asi, el otro extremo de este servidor GATT
- * no existe, y anunciarse por BLE seria gastar bateria del telefono
- * para que no llame nadie. Por eso [FlexLinkService] arranca
- * [WifiLinkServer] y NO esto.
+ * Antes este fichero estaba escrito y apagado: el P4 no tiene radio
+ * Bluetooth. El reloj si, y su canal con el telefono es este (decision D5 del
+ * reloj). El P4 sigue por [WifiLinkServer]; los dos transportes corren a la
+ * vez y la lista de dispositivos los une.
  *
- * Se conserva a proposito, no por descuido: es el segundo transporte
- * de la arquitectura. El dia que el co-procesador C6 exponga HCI con
- * Bluetooth y el P4 tenga una pila NimBLE contra el, el unico cambio
- * es elegir este servidor en lugar del de Wi-Fi -- la logica del
- * enlace, el protocolo y el emparejamiento no se tocan, porque
- * ninguno de los tres sabe por donde viajan las tramas.
+ * QUE HACE CADA PIEZA
+ * -------------------
+ *   · Este fichero: anuncio, servicio GATT, una [Conn] por reloj conectado,
+ *     MTU, suscripcion (CCCD) y una cola de salida acotada que manda las
+ *     notificaciones DE UNA EN UNA (BLE no admite otra hasta que la anterior
+ *     sale; mandarlas de golpe hace que la pila las tire en silencio).
+ *   · [PhoneLinkPeer] (:protocol, probado en el PC y contra el motor C del
+ *     reloj): TODO el protocolo -- saludo, codigo, reto mutuo, latido, ACK,
+ *     reensamblado, anti-repeticion y plazos.
  *
- * Lo que le falta para volver a estar vivo:
- *   1. el firmware `esp-hosted` del C6 compilado CON Bluetooth,
- *   2. una pila de host BLE en el P4 contra ese controlador remoto,
- *   3. actualizar este servidor al apreton de manos de Flex Link v2
- *      (T_AUTH_*), que es lo que sustituyo al bonding como fuente de
- *      autenticacion.
+ * HILOS
+ * -----
+ * Las llamadas de Android llegan por hilos del binder. Todo lo que toca un
+ * par o una cola pasa por UN hilo propio (`exec`): ni cerrojos repartidos ni
+ * dos hilos escribiendo en la misma conexion. La interfaz (teclear el codigo)
+ * tambien entra por ahi.
  *
- * Ver `docs/FLEX-PHONE.md`, seccion del transporte BLE.
- *
- * ---------------------------------------------------------------
- * Servidor GATT: el telefono es el PERIFERICO y Flex OS el central.
- *
- * POR QUE ASI Y NO AL REVES
- * -------------------------
- * El P4 no tiene radio propia: su BLE, si lo hay, viene del C6. Que
- * el telefono anuncie y el reloj conecte reduce el trabajo del lado
- * del C6 al de un cliente GATT normal, que es lo que mejor soportan
- * las pilas de host sobre HCI remoto.
- *
- * SEGURIDAD
- *   · las caracteristicas se declaran con PERMISOS CIFRADOS
- *     (..._ENCRYPTED), asi que Android exige emparejamiento y cifra
- *     el enlace antes de entregar un solo byte;
- *   · sin bonding, un dispositivo cualquiera no puede escribir;
- *   · el contador anti-repeticion descarta lo repetido;
- *   · el anuncio NO lleva el nombre del telefono ni datos del
- *     usuario, solo el UUID del servicio.
+ * REGLAS DEL CANAL (las que el reloj exige, docs/F5-CONECTIVIDAD.md §3.2)
+ *   · una escritura en RX = una trama; una notificacion de TX = una trama;
+ *   · nada sale antes de que el reloj se suscriba a TX ni con MTU < 247
+ *     (tramas de 244 B): se espera, no se trocea distinto;
+ *   · caracteristicas con PERMISOS CIFRADOS: Android exige emparejar a nivel
+ *     BLE antes de entregar un byte. La autenticacion de verdad la pone v2.
+ *   · el anuncio lleva SOLO el UUID del servicio, sin nombre del telefono.
  */
 class GattServer(
     private val ctx: Context,
-    private val state: FlexPhoneState,
-    private val onMessage: (type: Int, payload: ByteArray) -> Unit,
+    private val host: PhoneLinkPeer.Host,
+    private val onEvent: (Event) -> Unit,
+    private val onMessage: (conn: String, peer: PhoneLinkPeer, type: Int, payload: ByteArray) -> Unit,
 ) {
     companion object {
         private const val TAG = "FlexPhone/Gatt"
 
         /** Servicio Flex Link. UUID propio, no uno estandar reutilizado. */
         val SERVICE: UUID = UUID.fromString("f1580001-4c65-4f53-8f6c-6578f1584c4b")
-        /** El P4 ESCRIBE aqui (telefono <- Flex OS). */
+        /** Flex OS ESCRIBE aqui (telefono <- Flex OS). */
         val RX: UUID = UUID.fromString("f1580002-4c65-4f53-8f6c-6578f1584c4b")
-        /** El P4 se SUSCRIBE aqui (telefono -> Flex OS). */
+        /** Flex OS se SUSCRIBE aqui (telefono -> Flex OS). */
         val TX: UUID = UUID.fromString("f1580003-4c65-4f53-8f6c-6578f1584c4b")
         private val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-        /** MTU al que se aspira; el real lo decide la negociacion. */
-        const val DESIRED_MTU = 247
+        /** MTU minimo: tramas de 244 B + 3 de cabecera ATT. */
+        const val NEEDED_MTU = FlexLink.MAX_FRAME + 3
+        /** Tramas pendientes por conexion (un mensaje de 2 KB son 10). */
+        private const val OUTBOX_MAX = 64
+        /** Relojes a la vez. Es un reloj por persona; el tope protege de un vecino pesado. */
+        private const val MAX_CONNS = 3
+        /** Una notificacion sin confirmar en este tiempo se da por perdida y se sigue. */
+        private const val NOTIFY_STUCK_MS = 2_000L
     }
 
-    private var manager: BluetoothManager? = null
-    private var server: BluetoothGattServer? = null
-    private var txChar: BluetoothGattCharacteristic? = null
-    private var peer: BluetoothDevice? = null
-    private var advertiser: android.bluetooth.le.BluetoothLeAdvertiser? = null
+    sealed class Event {
+        data class Advertising(val on: Boolean, val why: String? = null) : Event()
+        data class ChannelOpened(val conn: String, val address: String) : Event()
+        data class Peer(val conn: String, val address: String, val ev: PhoneLinkPeer.Event) : Event()
+        data class ChannelClosed(val conn: String, val authed: Boolean, val flexosId: String) : Event()
+    }
 
-    /** MTU NEGOCIADO. Arranca en el minimo garantizado, no en el deseado. */
-    @Volatile var mtu: Int = 23
+    /** Un reloj conectado. Solo se toca desde `exec`. */
+    private inner class Conn(val device: BluetoothDevice, val key: String) {
+        val address: String = runCatching { device.address }.getOrDefault("")
+        var mtu = 23
+        var subscribed = false
+        val outbox = ArrayDeque<ByteArray>()
+        var inFlightSince = 0L
+        val peer: PhoneLinkPeer = PhoneLinkPeer(host, pairing, { f -> enqueue(this, f) }, peerListener, key)
+        var dropped = 0
+    }
+
+    private val pairing = PairingSlot()
+    private val exec: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor { r ->
+        Thread(r, "flex-gatt").apply { isDaemon = true }
+    }
+    private val conns = java.util.concurrent.ConcurrentHashMap<String, Conn>()   // por direccion BLE; se escribe solo en exec
+    private val seq = AtomicLong(0)
+    @Volatile private var server: BluetoothGattServer? = null
+    @Volatile private var txChar: BluetoothGattCharacteristic? = null
+    @Volatile private var advertiser: android.bluetooth.le.BluetoothLeAdvertiser? = null
+    @Volatile var running = false
         private set
-    private val usablePayload: Int get() = (mtu - 3).coerceAtMost(FlexLink.MAX_FRAME)
+    @Volatile var lastError: String? = null
+        private set
 
-    private val reasm = Reassembler()
-    private val antiReplay = AntiReplay()
-    private val txCounter = AtomicLong(1)
-    private var session = 0
-    private var packetId = 0
+    private val peerListener = object : PhoneLinkPeer.Listener {
+        override fun onEvent(peer: PhoneLinkPeer, ev: PhoneLinkPeer.Event) {
+            val c = conns.values.firstOrNull { it.peer === peer } ?: return
+            safe { this@GattServer.onEvent(Event.Peer(c.key, c.address, ev)) }
+            if (ev is PhoneLinkPeer.Event.CloseRequested) disconnect(c)
+        }
+        override fun onMessage(peer: PhoneLinkPeer, type: Int, payload: ByteArray) {
+            val c = conns.values.firstOrNull { it.peer === peer } ?: return
+            safe { this@GattServer.onMessage(c.key, peer, type, payload) }
+        }
+    }
 
-    /** Cola de salida acotada: se descarta antes que crecer sin fin. */
-    private val outbox = ConcurrentLinkedQueue<ByteArray>()
-    private val OUTBOX_MAX = 64
-    @Volatile private var sending = false
-
+    // =========================================================
+    //  Arranque y parada
+    // =========================================================
+    /** Devuelve el motivo si no se puede (sin Bluetooth, apagado, permisos). null = arrancado. */
     @SuppressLint("MissingPermission")
-    fun start(): Boolean {
+    fun start(): String? {
+        if (running) return null
         val mgr = ctx.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-        if (mgr == null) {
-            state.setLink(LinkState.UNAVAILABLE, "este dispositivo no tiene Bluetooth")
-            return false
-        }
-        val adapter = mgr.adapter
-        if (adapter == null || !adapter.isEnabled) {
-            state.setLink(LinkState.UNAVAILABLE, "el Bluetooth esta apagado")
-            return false
-        }
-        if (!hasPermissions()) {
-            state.setLink(LinkState.UNAVAILABLE, "faltan permisos de Bluetooth")
-            return false
-        }
-        manager = mgr
-
+            ?: return fail("este telefono no tiene Bluetooth")
+        val adapter = mgr.adapter ?: return fail("este telefono no tiene Bluetooth")
+        if (!hasPermissions(ctx)) return fail("faltan los permisos de Bluetooth (dispositivos cercanos)")
+        if (!adapter.isEnabled) return fail("el Bluetooth esta apagado")
         return try {
-            server = mgr.openGattServer(ctx, callback) ?: run {
-                state.setLink(LinkState.ERROR, "Android no dejo abrir el servidor GATT")
-                return false
-            }
+            val srv = mgr.openGattServer(ctx, callback) ?: return fail("Android no dejo abrir el servidor GATT")
             val svc = BluetoothGattService(SERVICE, BluetoothGattService.SERVICE_TYPE_PRIMARY)
-
-            // PERMISOS CIFRADOS: Android exige bonding antes de
-            // entregar o aceptar datos. Es lo que impide que un
-            // dispositivo no emparejado escriba en RX.
             val rx = BluetoothGattCharacteristic(
                 RX,
-                BluetoothGattCharacteristic.PROPERTY_WRITE or
-                    BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE,
+                BluetoothGattCharacteristic.PROPERTY_WRITE or BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE,
                 BluetoothGattCharacteristic.PERMISSION_WRITE_ENCRYPTED,
             )
             val tx = BluetoothGattCharacteristic(
-                TX,
-                BluetoothGattCharacteristic.PROPERTY_NOTIFY,
-                BluetoothGattCharacteristic.PERMISSION_READ_ENCRYPTED,
+                TX, BluetoothGattCharacteristic.PROPERTY_NOTIFY, BluetoothGattCharacteristic.PERMISSION_READ_ENCRYPTED,
             ).apply {
-                addDescriptor(
-                    BluetoothGattDescriptor(
-                        CCCD,
-                        BluetoothGattDescriptor.PERMISSION_READ or
-                            BluetoothGattDescriptor.PERMISSION_WRITE_ENCRYPTED,
-                    )
-                )
+                addDescriptor(BluetoothGattDescriptor(
+                    CCCD, BluetoothGattDescriptor.PERMISSION_READ or BluetoothGattDescriptor.PERMISSION_WRITE_ENCRYPTED,
+                ))
             }
             svc.addCharacteristic(rx)
             svc.addCharacteristic(tx)
+            server = srv
             txChar = tx
-            server?.addService(svc)
+            srv.addService(svc)
             advertise(adapter)
-            state.setLink(LinkState.ADVERTISING)
-            true
+            running = true
+            lastError = null
+            exec.scheduleWithFixedDelay({ safe { tickAll() } }, 1, 1, TimeUnit.SECONDS)
+            LinkDiag.d(TAG, "servidor GATT arriba")
+            null
         } catch (e: SecurityException) {
-            state.setLink(LinkState.UNAVAILABLE, "faltan permisos de Bluetooth")
-            false
+            fail("faltan los permisos de Bluetooth (dispositivos cercanos)")
         } catch (e: Exception) {
-            state.setLink(LinkState.ERROR, "no se pudo iniciar el enlace")
-            false
+            fail("no se pudo iniciar el Bluetooth: ${e.javaClass.simpleName}")
         }
     }
 
+    private fun fail(why: String): String { lastError = why; return why }
+
     @SuppressLint("MissingPermission")
     private fun advertise(adapter: BluetoothAdapter) {
-        advertiser = adapter.bluetoothLeAdvertiser ?: return
+        val adv = adapter.bluetoothLeAdvertiser
+        if (adv == null) {
+            safe { onEvent(Event.Advertising(false, "este telefono no puede anunciarse por BLE")) }
+            return
+        }
+        advertiser = adv
         val settings = AdvertiseSettings.Builder()
             .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
             .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
             .setConnectable(true)
             .setTimeout(0)
             .build()
-        // El anuncio lleva SOLO el UUID del servicio. Sin nombre de
-        // dispositivo: un anuncio permanente con el nombre real es un
-        // identificador que cualquiera alrededor puede seguir.
         val data = AdvertiseData.Builder()
             .setIncludeDeviceName(false)
             .setIncludeTxPowerLevel(false)
             .addServiceUuid(android.os.ParcelUuid(SERVICE))
             .build()
-        runCatching { advertiser?.startAdvertising(settings, data, advCallback) }
+        runCatching { adv.startAdvertising(settings, data, advCallback) }
+            .onFailure { safe { onEvent(Event.Advertising(false, "Android rechazo el anuncio")) } }
     }
 
     private val advCallback = object : AdvertiseCallback() {
+        override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
+            safe { onEvent(Event.Advertising(true)) }
+        }
         override fun onStartFailure(errorCode: Int) {
             val why = when (errorCode) {
                 ADVERTISE_FAILED_DATA_TOO_LARGE -> "el anuncio no cabe"
-                ADVERTISE_FAILED_TOO_MANY_ADVERTISERS -> "hay demasiados anuncios activos"
-                ADVERTISE_FAILED_ALREADY_STARTED -> return          // ya estaba: no es un fallo
-                ADVERTISE_FAILED_FEATURE_UNSUPPORTED ->
-                    "este telefono no puede anunciarse por BLE"
+                ADVERTISE_FAILED_TOO_MANY_ADVERTISERS -> "hay demasiados anuncios activos en el telefono"
+                ADVERTISE_FAILED_ALREADY_STARTED -> return
+                ADVERTISE_FAILED_FEATURE_UNSUPPORTED -> "este telefono no puede anunciarse por BLE"
                 else -> "Android rechazo el anuncio"
             }
-            state.setLink(LinkState.ERROR, why)
+            safe { onEvent(Event.Advertising(false, why)) }
         }
     }
 
+    /** Despedida limpia de todas las sesiones y fuera. Bloquea como mucho 1 s. */
     @SuppressLint("MissingPermission")
     fun stop() {
-        // Despedida LIMPIA antes de cerrar, si habia sesion.
-        if (state.link.value == LinkState.READY) sendMessage(FlexLink.T_BYE, ByteArray(0))
+        if (!running) return
+        running = false
+        runCatching {
+            exec.submit {
+                for (c in conns.values.toList()) {
+                    c.peer.close("el telefono apago el enlace")   // manda BYE si hay sesion
+                    flush(c)
+                }
+            }.get(1, TimeUnit.SECONDS)
+        }
         runCatching { advertiser?.stopAdvertising(advCallback) }
-        runCatching { peer?.let { server?.cancelConnection(it) } }
+        runCatching { for (c in conns.values.toList()) server?.cancelConnection(c.device) }
         runCatching { server?.close() }
-        server = null; txChar = null; peer = null; advertiser = null
-        outbox.clear(); reasm.reset(); antiReplay.reset()
-        mtu = 23; session = 0
-        state.setLink(LinkState.OFF)
+        server = null; txChar = null; advertiser = null
+        exec.shutdownNow()
+        conns.clear()
+        pairing.clear()
     }
 
-    // ---------------------------------------------------------
-    //  Envio
-    // ---------------------------------------------------------
-    /**
-     * Envia un mensaje. Devuelve false si no hay con quien hablar o
-     * la cola esta llena -- NUNCA bloquea esperando sitio.
-     */
-    @SuppressLint("MissingPermission")
-    fun sendMessage(type: Int, payload: ByteArray): Boolean {
-        val d = peer ?: return false
-        val ch = txChar ?: return false
-        if (payload.size > FlexLink.MAX_MESSAGE) return false
-        if (outbox.size >= OUTBOX_MAX) { state.countDropped(); return false }
+    // =========================================================
+    //  Lo que pide el servicio
+    // =========================================================
+    /** Manda a TODOS los relojes con sesion. Cuantos lo aceptaron. */
+    fun sendAll(type: Int, payload: ByteArray): Int {
+        if (!running) return 0
+        return runCatching {
+            exec.submit<Int> { conns.values.count { it.peer.authed && it.peer.send(type, payload) } }
+                .get(500, TimeUnit.MILLISECONDS)
+        }.getOrDefault(0)
+    }
 
-        packetId = (packetId + 1) and 0xFFFF
-        val frames = try {
-            FlexLink.fragment(
-                type, session, packetId, payload,
-                counterStart = txCounter.getAndAdd(FlexLink.MAX_FRAGS.toLong()),
-                mtu = usablePayload,
-            )
-        } catch (e: IllegalArgumentException) {
-            return false
-        }
-        frames.forEach { outbox.add(it) }
-        pump(d, ch)
-        state.countSent()
+    /** Manda por una conexion concreta (la respuesta a una orden de ese reloj). */
+    fun sendTo(conn: String, type: Int, payload: ByteArray): Boolean {
+        if (!running) return false
+        return runCatching {
+            exec.submit<Boolean> { conns[conn]?.peer?.send(type, payload) == true }.get(500, TimeUnit.MILLISECONDS)
+        }.getOrDefault(false)
+    }
+
+    fun hasSession(): Boolean = conns.values.any { it.peer.authed }
+    fun sessionCount(): Int = conns.values.count { it.peer.authed }
+
+    fun isAwaitingCode(): Boolean = pairing.awaitingCode(host.now())
+    fun pairingRemainingMs(): Long = pairing.remainingMs(host.now())
+
+    /** El usuario tecleo el codigo que ensena el reloj. */
+    fun submitPairingCode(code: String): PairSubmit {
+        if (!running) return PairSubmit.LINK_DOWN
+        return runCatching {
+            exec.submit<PairSubmit> {
+                val p = pairing.peer ?: conns.values.firstOrNull { !it.peer.authed }?.peer
+                p?.submitCode(code) ?: if (pairing.session != null) PairSubmit.LINK_DOWN else PairSubmit.NO_SESSION
+            }.get(2, TimeUnit.SECONDS)
+        }.getOrDefault(PairSubmit.LINK_DOWN)
+    }
+
+    /** Cierra la sesion con ese Flex OS (olvidar el vinculo). */
+    fun dropSession(flexosId: String) {
+        if (!running) return
+        exec.execute { conns.values.filter { it.peer.flexosId == flexosId }.forEach { it.peer.close("vinculo olvidado"); disconnect(it) } }
+    }
+
+    // =========================================================
+    //  Salida: una notificacion cada vez
+    // =========================================================
+    private fun enqueue(c: Conn, frame: ByteArray): Boolean {
+        if (c.outbox.size >= OUTBOX_MAX) { c.dropped++; return false }
+        c.outbox.addLast(frame)
+        pump(c)
         return true
     }
 
-    /**
-     * Vacia la cola de a UNA notificacion: BLE no admite otra hasta
-     * que la anterior se confirma (`onNotificationSent`). Mandarlas
-     * todas de golpe hace que la pila las descarte en silencio.
-     */
     @SuppressLint("MissingPermission")
-    private fun pump(d: BluetoothDevice, ch: BluetoothGattCharacteristic) {
-        if (sending) return
-        val frame = outbox.poll() ?: return
-        sending = true
-        runCatching {
+    private fun pump(c: Conn) {
+        if (c.inFlightSince != 0L) return
+        if (!c.subscribed || c.mtu < NEEDED_MTU) return          // el reloj aun no esta listo
+        val frame = c.outbox.firstOrNull() ?: return
+        val srv = server ?: return
+        val ch = txChar ?: return
+        val ok = runCatching {
             if (Build.VERSION.SDK_INT >= 33) {
-                server?.notifyCharacteristicChanged(d, ch, false, frame)
+                srv.notifyCharacteristicChanged(c.device, ch, false, frame) == BluetoothStatusCodes.SUCCESS
             } else {
                 @Suppress("DEPRECATION")
                 ch.value = frame
                 @Suppress("DEPRECATION")
-                server?.notifyCharacteristicChanged(d, ch, false)
+                srv.notifyCharacteristicChanged(c.device, ch, false)
             }
-        }.onFailure { sending = false }
+        }.getOrDefault(false)
+        if (ok) {
+            c.outbox.removeFirst()
+            c.inFlightSince = System.currentTimeMillis()
+        }
+        // Si Android no la acepto ahora (cola llena del controlador), se reintenta
+        // en el proximo tick: la trama sigue la primera de la cola.
     }
 
-    // ---------------------------------------------------------
-    //  Callbacks
-    // ---------------------------------------------------------
+    /** Intenta vaciar lo pendiente antes de cerrar (la despedida). */
+    private fun flush(c: Conn) {
+        repeat(4) { c.inFlightSince = 0L; pump(c) }
+    }
+
+    private fun tickAll() {
+        val now = System.currentTimeMillis()
+        for (c in conns.values.toList()) {
+            if (c.inFlightSince != 0L && now - c.inFlightSince > NOTIFY_STUCK_MS) { c.inFlightSince = 0L }
+            pump(c)
+            c.peer.tick()?.let { disconnect(c) }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun disconnect(c: Conn) {
+        runCatching { server?.cancelConnection(c.device) }
+    }
+
+    // =========================================================
+    //  Llamadas de Android (hilos del binder -> exec)
+    // =========================================================
     private val callback = object : BluetoothGattServerCallback() {
 
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(device: BluetoothDevice?, status: Int, newState: Int) {
             if (device == null) return
-            if (newState == BluetoothProfile.STATE_CONNECTED) {
-                peer = device
-                session = (System.currentTimeMillis().toInt() or 1) and 0xFFFF
-                reasm.reset(); antiReplay.reset()
-                state.setLink(LinkState.CONNECTING)
-                Log.i(TAG, "conectado")            // sin la direccion MAC
-            } else {
-                peer = null
-                mtu = 23
-                outbox.clear(); sending = false
-                reasm.reset(); antiReplay.reset()
-                state.countReconnect()
-                // Se vuelve a ANUNCIAR, no a "error": el reloj puede
-                // haberse alejado un momento.
-                state.setLink(LinkState.ADVERTISING)
+            exec.execute {
+                val addr = runCatching { device.address }.getOrDefault("")
+                if (newState == BluetoothProfile.STATE_CONNECTED) {
+                    if (conns.containsKey(addr)) return@execute
+                    if (conns.size >= MAX_CONNS) {
+                        LinkDiag.w(TAG, "demasiados centrales conectados: se rechaza uno")
+                        runCatching { server?.cancelConnection(device) }
+                        return@execute
+                    }
+                    val c = Conn(device, "ble#" + seq.incrementAndGet())
+                    conns[addr] = c
+                    LinkDiag.d(TAG, "${c.key} conectado")     // sin la direccion MAC en el registro
+                    safe { onEvent(Event.ChannelOpened(c.key, addr)) }
+                } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                    val c = conns.remove(addr) ?: return@execute
+                    val authed = c.peer.authed
+                    c.peer.close("BLE desconectado", sayBye = false)
+                    c.outbox.clear()
+                    LinkDiag.d(TAG, "${c.key} desconectado (estado $status)")
+                    safe { onEvent(Event.ChannelClosed(c.key, authed, c.peer.flexosId)) }
+                }
             }
         }
 
-        override fun onMtuChanged(device: BluetoothDevice?, newMtu: Int) {
-            // Se acepta el MTU REAL que negocio la pila. No se asume
-            // el deseado: si el central solo da 23, se fragmenta mas.
-            mtu = newMtu.coerceIn(23, DESIRED_MTU)
-            Log.i(TAG, "MTU negociado: $mtu")
+        override fun onMtuChanged(device: BluetoothDevice?, mtu: Int) {
+            if (device == null) return
+            exec.execute {
+                val c = conns[runCatching { device.address }.getOrDefault("")] ?: return@execute
+                c.mtu = mtu
+                LinkDiag.d(TAG, "${c.key} MTU $mtu")
+                if (mtu < NEEDED_MTU) {
+                    LinkDiag.w(TAG, "${c.key}: MTU $mtu < $NEEDED_MTU, el reloj no puede recibir tramas de 244 B")
+                }
+                pump(c)
+            }
         }
 
         @SuppressLint("MissingPermission")
@@ -309,14 +380,19 @@ class GattServer(
             preparedWrite: Boolean, responseNeeded: Boolean,
             offset: Int, value: ByteArray?,
         ) {
+            val ok = characteristic?.uuid == RX && !preparedWrite && offset == 0 && value != null
             if (responseNeeded) {
                 runCatching {
-                    server?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
+                    server?.sendResponse(device, requestId,
+                        if (ok) BluetoothGatt.GATT_SUCCESS else BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED, offset, null)
                 }
             }
-            if (characteristic?.uuid != RX) return
-            val data = value ?: return
-            handleIncoming(data)
+            if (!ok || device == null) return
+            val frame = value!!.copyOf()
+            exec.execute {
+                val c = conns[runCatching { device.address }.getOrDefault("")] ?: return@execute
+                c.peer.onFrame(frame)
+            }
         }
 
         @SuppressLint("MissingPermission")
@@ -326,68 +402,38 @@ class GattServer(
             responseNeeded: Boolean, offset: Int, value: ByteArray?,
         ) {
             if (responseNeeded) {
-                runCatching {
-                    server?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
-                }
+                runCatching { server?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null) }
+            }
+            if (descriptor?.uuid != CCCD || device == null) return
+            val on = value != null && value.size >= 2 && (value[0].toInt() and 0x01) != 0
+            exec.execute {
+                val c = conns[runCatching { device.address }.getOrDefault("")] ?: return@execute
+                c.subscribed = on
+                LinkDiag.d(TAG, "${c.key} ${if (on) "suscrito" else "sin suscripcion"}")
+                pump(c)
             }
         }
 
-        @SuppressLint("MissingPermission")
         override fun onNotificationSent(device: BluetoothDevice?, status: Int) {
-            sending = false
-            val d = device ?: peer ?: return
-            val ch = txChar ?: return
-            pump(d, ch)                      // siguiente trama, si queda
-        }
-    }
-
-    /** Camino completo de una trama entrante. */
-    private fun handleIncoming(frame: ByteArray) {
-        when (val r = FlexLink.readFrame(frame)) {
-            is FlexLink.ReadResult.Err -> {
-                state.countBadFrame()
-                Log.w(TAG, "trama descartada: ${r.reason}")   // el motivo, no los bytes
-            }
-            // Version incompatible. Aqui SOLO se cuenta y se registra, a
-            // diferencia de WifiLinkServer, que ademas contesta E_VERSION
-            // y avisa al usuario. El motivo es que este transporte no
-            // esta conectado hoy (ver la cabecera del fichero): el
-            // ESP32-P4 no tiene radio Bluetooth, asi que no hay ningun
-            // extremo que pueda recibir esa respuesta. Cuando el C6
-            // habilite BLE, esta rama tiene que igualarse a la del
-            // servidor Wi-Fi.
-            is FlexLink.ReadResult.BadVersion -> {
-                state.countBadFrame()
-                Log.w(TAG, "trama de version no soportada: ${r.version}")
-            }
-            is FlexLink.ReadResult.Ok -> {
-                // Anti-repeticion ANTES del reensamblador: una trama
-                // repetida no puede alterar un mensaje a medias.
-                if (!antiReplay.check(r.header.counter)) { state.countDropped(); return }
-                state.countReceived()
-                when (reasm.feed(r.header, r.payload, System.currentTimeMillis())) {
-                    Reassembler.Result.DONE -> onMessage(r.header.type, reasm.message())
-                    Reassembler.Result.NEED_MORE -> Unit
-                    Reassembler.Result.DROP -> state.countDropped()
-                }
+            if (device == null) return
+            exec.execute {
+                val c = conns[runCatching { device.address }.getOrDefault("")] ?: return@execute
+                c.inFlightSince = 0L
+                pump(c)
             }
         }
     }
 
-    /** Caduca un parcial que nunca se completo. Lo llama el servicio. */
-    fun tick(nowMs: Long) {
-        if (reasm.expire(nowMs, 5_000)) state.countDropped()
+    private inline fun safe(block: () -> Unit) {
+        try { block() } catch (e: Exception) { LinkDiag.w(TAG, "oyente: ${e.javaClass.simpleName}") }
     }
+}
 
-    private fun hasPermissions(): Boolean {
-        val need = if (Build.VERSION.SDK_INT >= 31)
-            listOf(
-                android.Manifest.permission.BLUETOOTH_CONNECT,
-                android.Manifest.permission.BLUETOOTH_ADVERTISE,
-            )
-        else listOf(android.Manifest.permission.BLUETOOTH)
-        return need.all {
-            ctx.checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-    }
+/** Permisos de Bluetooth que el periferico necesita en ESTA version de Android. */
+fun bluetoothPermissions(): Array<String> = if (Build.VERSION.SDK_INT >= 31)
+    arrayOf(android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.BLUETOOTH_ADVERTISE)
+else arrayOf(android.Manifest.permission.BLUETOOTH, android.Manifest.permission.BLUETOOTH_ADMIN)
+
+fun hasPermissions(ctx: Context): Boolean = bluetoothPermissions().all {
+    ctx.checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED
 }

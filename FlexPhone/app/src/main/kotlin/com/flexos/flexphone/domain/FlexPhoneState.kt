@@ -224,6 +224,24 @@ class FlexPhoneState(
 
     fun setWatches(w: List<Watch>) { _watches.value = w }
 
+    // ---------------------------------------------------------
+    //  Dispositivos Flex (uno por aparato, ver DeviceRegistry)
+    // ---------------------------------------------------------
+    private val _devices = MutableStateFlow<List<com.flexos.flexphone.protocol.FlexDevice>>(emptyList())
+    val devices: StateFlow<List<com.flexos.flexphone.protocol.FlexDevice>> = _devices.asStateFlow()
+    fun setDevices(l: List<com.flexos.flexphone.protocol.FlexDevice>) { _devices.value = l }
+
+    /** El aparato elegido en la lista (su clave de fila): lo abre la pantalla del dispositivo. */
+    private val _selected = MutableStateFlow<String?>(null)
+    val selectedDevice: StateFlow<String?> = _selected.asStateFlow()
+    fun selectDevice(key: String?) { _selected.value = key }
+
+    /** Que transportes estan arriba y, si el BLE no, por que. */
+    data class Transports(val wifi: Boolean = false, val ble: Boolean = false, val bleWhy: String? = null)
+    private val _transports = MutableStateFlow(Transports())
+    val transports: StateFlow<Transports> = _transports.asStateFlow()
+    fun setTransports(t: Transports) { _transports.value = t }
+
     /** Contadores de diagnostico. NUNCA contenido de mensajes. */
     data class Diag(
         val sent: Long = 0, val received: Long = 0,

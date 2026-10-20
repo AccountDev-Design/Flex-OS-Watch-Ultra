@@ -25,7 +25,8 @@ class RelaySession(
     val socket: Socket,
     private val input: InputStream,
     private val output: OutputStream,
-    private val expectedToken: String,
+    /** Credenciales validas (una por aparato emparejado). Vacio = ninguna valida. */
+    private val expectedTokens: Set<String>,
     private val onEvent: (RelayServer.Event) -> Unit,
     /** HELLO valido: esta conexion pasa a ser LA sesion (ver RelayServer). */
     private val onAuthenticated: (RelaySession) -> Unit = {},
@@ -162,7 +163,9 @@ class RelaySession(
         }
         // TOKEN: el que se acordo por BLE. Sin el, esta conexion no
         // viene de un Flex OS emparejado.
-        if (expectedToken.isNotEmpty() && hello.token != expectedToken) {
+        // Sin ningun vinculo no hay credencial que valga: se rechaza (antes un
+        // token vacio dejaba pasar a cualquiera).
+        if (hello.token !in expectedTokens) {
             sendBinary(Fbp.error(nextSeq(), 0, 401, "dispositivo no emparejado"))
             close(1008, "token invalido")
             Log.w(TAG, "conexion rechazada: token invalido")

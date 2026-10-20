@@ -10,6 +10,10 @@ object R {
         const val ic_link: Int = 1
         const val ic_relay: Int = 2
         const val ic_stop: Int = 3
+        const val ic_dev_watch_ultra: Int = 4
+        const val ic_dev_ultra_p4: Int = 5
+        const val ic_dev_phone: Int = 6
+        const val ic_dev_unknown: Int = 7
     }
     object string {
         const val app_name: Int = 0

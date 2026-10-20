@@ -84,6 +84,32 @@ class FlexNotificationListener : NotificationListenerService() {
             val key = self.keyOf(id) ?: return
             runCatching { self.cancelNotification(key) }
         }
+
+        /**
+         * Las notificaciones PERMITIDAS que siguen activas, para un Flex OS que
+         * se acaba de conectar (el reloj por BLE no sabe lo que llego mientras
+         * estaba lejos). Las [max] mas recientes, con los mismos filtros que una
+         * notificacion nueva. Devuelve cuantas salieron.
+         */
+        fun replayActive(max: Int = 20, send: (NotifPayload) -> Boolean): Int {
+            val self = instance ?: return 0
+            val state = FlexPhoneState.instance ?: return 0
+            val list = runCatching { self.activeNotifications }.getOrNull() ?: return 0
+            var sent = 0
+            for (sbn in list.sortedBy { it.postTime }.takeLast(max)) {
+                if (sbn.packageName == self.packageName) continue
+                if (!state.settings.isPackageAllowed(sbn.packageName)) continue
+                val notif = sbn.notification ?: continue
+                if (notif.flags and Notification.FLAG_GROUP_SUMMARY != 0) continue
+                val p = self.build(sbn) ?: continue
+                synchronized(self.liveActions) {
+                    self.liveKeys[p.id] = sbn.key
+                    notif.actions?.let { if (it.isNotEmpty()) self.liveActions[p.id] = it }
+                }
+                if (send(p)) sent++
+            }
+            return sent
+        }
     }
 
     /**

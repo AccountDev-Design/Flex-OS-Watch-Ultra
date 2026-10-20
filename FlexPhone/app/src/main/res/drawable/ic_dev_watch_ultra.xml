@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- GENERADO por tools/devicons/gen_devicons.py desde design/devices/watch_ultra.svg: no editar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="96" android:viewportHeight="96">
+    <path android:pathData="M38,4H58A6,6 0 0 1 64,10V16A6,6 0 0 1 58,22H38A6,6 0 0 1 32,16V10A6,6 0 0 1 38,4Z"
+        android:fillColor="#28325A" />
+    <path android:pathData="M38,74H58A6,6 0 0 1 64,80V86A6,6 0 0 1 58,92H38A6,6 0 0 1 32,86V80A6,6 0 0 1 38,74Z"
+        android:fillColor="#28325A" />
+    <path android:pathData="M37,16H59A16,16 0 0 1 75,32V64A16,16 0 0 1 59,80H37A16,16 0 0 1 21,64V32A16,16 0 0 1 37,16Z"
+        android:fillColor="#303648"
+        android:strokeColor="#788CFF"
+        android:strokeWidth="3" />
+    <path android:pathData="M38,22H58A11,11 0 0 1 69,33V63A11,11 0 0 1 58,74H38A11,11 0 0 1 27,63V33A11,11 0 0 1 38,22Z"
+        android:fillColor="#0A0C12" />
+    <path android:pathData="M77.5,38H77.5A2.5,2.5 0 0 1 80,40.5V47.5A2.5,2.5 0 0 1 77.5,50H77.5A2.5,2.5 0 0 1 75,47.5V40.5A2.5,2.5 0 0 1 77.5,38Z"
+        android:fillColor="#788CFF" />
+    <path android:pathData="M48 32 A16 16 0 1 1 33.2 54"
+        android:strokeColor="#788CFF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round" />
+    <path android:pathData="M48 38 L48 48 L55 52"
+        android:strokeColor="#F0F2F8"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

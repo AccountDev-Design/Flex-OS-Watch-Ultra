@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- GENERADO por tools/devicons/gen_devicons.py desde design/devices/phone.svg: no editar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="96" android:viewportHeight="96">
+    <path android:pathData="M37,6H59A9,9 0 0 1 68,15V81A9,9 0 0 1 59,90H37A9,9 0 0 1 28,81V15A9,9 0 0 1 37,6Z"
+        android:fillColor="#303648"
+        android:strokeColor="#B4C4FF"
+        android:strokeWidth="3" />
+    <path android:pathData="M36,16H60A4,4 0 0 1 64,20V76A4,4 0 0 1 60,80H36A4,4 0 0 1 32,76V20A4,4 0 0 1 36,16Z"
+        android:fillColor="#0A0C12" />
+    <path android:pathData="M43.5,9.5H52.5A1.5,1.5 0 0 1 54,11V11A1.5,1.5 0 0 1 52.5,12.5H43.5A1.5,1.5 0 0 1 42,11V11A1.5,1.5 0 0 1 43.5,9.5Z"
+        android:fillColor="#0A0C12" />
+    <path android:pathData="M38 42 A14 14 0 0 1 58 42"
+        android:strokeColor="#788CFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round" />
+    <path android:pathData="M42 48 A8 8 0 0 1 54 48"
+        android:strokeColor="#788CFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round" />
+    <path android:pathData="M45,55A3,3 0 1 0 51,55A3,3 0 1 0 45,55Z"
+        android:fillColor="#F0F2F8" />
+</vector>

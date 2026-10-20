@@ -169,7 +169,7 @@ class DeviceAdapter(private val ctx: Context) {
      * `notifAccess` y `relayRunning` los sabe la app, no el
      * adaptador: son un permiso especial y un servicio, no hardware.
      */
-    fun caps(notifAccess: Boolean, relayRunning: Boolean, mediaActive: Boolean): CapsPayload {
+    fun caps(notifAccess: Boolean, relayRunning: Boolean, mediaActive: Boolean, bleActive: Boolean = false): CapsPayload {
         var supported = Caps.NOTIF or Caps.STATE or Caps.TIME or Caps.RELAY or Caps.FIND
         // Responder depende de que Android exponga RemoteInput, que es
         // por notificacion y no por telefono; se declara soportado y
@@ -184,9 +184,9 @@ class DeviceAdapter(private val ctx: Context) {
         if (notifAccess) granted = granted or Caps.NOTIF or Caps.REPLY or Caps.FIND
         if (notifAccess && mediaActive) granted = granted or Caps.MEDIA
         if (relayRunning) granted = granted or Caps.RELAY
-        // BLE NO se concede aunque el telefono lo tenga: hoy el enlace
-        // va por Wi-Fi y no hay transporte BLE al otro lado. Anunciarlo
-        // como concedido seria ofrecer algo que no existe.
+        // BLE se concede SOLO con el servidor GATT arriba (Flex OS Watch Ultra
+        // habla por ahi). Tenerlo en el hardware no basta.
+        if (bleActive) granted = granted or Caps.BLE
 
         return CapsPayload(
             supported = supported,

@@ -41,6 +41,8 @@ object Routes {
     const val SETTINGS = "settings"
     const val ABOUT = "about"
     const val CLOUD = "cloud"
+    /** La pantalla de UN dispositivo Flex (el elegido en FlexPhoneState.selectedDevice). */
+    const val FLEX_DEVICE = "flexdevice"
 }
 
 @Composable
@@ -95,6 +97,7 @@ fun FlexPhoneNav() {
         composable(Routes.SETTINGS) { SettingsScreen(nav, store, settings) }
         composable(Routes.ABOUT) { AboutScreen(nav) }
         composable(Routes.CLOUD) { FlexCloudScreen(nav) }
+        composable(Routes.FLEX_DEVICE) { FlexDeviceScreen(nav) }
     }
 }
 

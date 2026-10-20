@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <!-- Flex OS Watch Ultra: caja 410x502 (proporcion real), correas, corona y esfera -->
+  <rect x="32" y="4" width="32" height="18" rx="6" fill="#28325A"/>
+  <rect x="32" y="74" width="32" height="18" rx="6" fill="#28325A"/>
+  <rect x="21" y="16" width="54" height="64" rx="16" fill="#303648" stroke="#788CFF" stroke-width="3"/>
+  <rect x="27" y="22" width="42" height="52" rx="11" fill="#0A0C12"/>
+  <rect x="75" y="38" width="5" height="12" rx="2.5" fill="#788CFF"/>
+  <path d="M48 32 A16 16 0 1 1 33.2 54" fill="none" stroke="#788CFF" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M48 38 L48 48 L55 52" fill="none" stroke="#F0F2F8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

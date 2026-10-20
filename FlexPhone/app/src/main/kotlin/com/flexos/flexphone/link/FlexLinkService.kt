@@ -1,8 +1,11 @@
 package com.flexos.flexphone.link
 
 import android.app.*
+import android.bluetooth.BluetoothAdapter
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.net.LinkProperties
@@ -26,32 +29,31 @@ import com.flexos.flexphone.storage.BondStore
 import kotlinx.coroutines.*
 
 /**
- * SERVICIO DEL ENLACE.
+ * SERVICIO DEL ENLACE: el telefono con TODOS sus Flex OS a la vez.
  *
- * Mantiene vivo el servidor Wi-Fi al que se conecta Flex OS. Es un
- * servicio en primer plano porque eso es exactamente lo que Android
- * pide para trabajo de red persistente con la pantalla apagada: no
- * se intenta esquivar ninguna proteccion del sistema.
+ *   · Flex OS Ultra (ESP32-P4, sin radio Bluetooth) llega por Wi-Fi:
+ *     [WifiLinkServer], TCP 47820 y busqueda UDP 47821. Ese camino NO cambia.
+ *   · Flex OS Watch Ultra (ESP32-S3) llega por Bluetooth LE: [GattServer], con
+ *     el lado telefono de Flex Link v2 en [PhoneLinkPeer].
  *
- * POR QUE Wi-Fi Y NO BLE
- * ----------------------
- * El ESP32-P4 de Flex OS Ultra no tiene radio Bluetooth. Mientras
- * eso siga asi, anunciar por BLE seria gastar bateria del telefono
- * para que no llame nadie. [GattServer] sigue en el repositorio como
- * el transporte BLE preparado para el dia que el co-procesador C6 lo
- * ofrezca; hoy NO se arranca, y la app lo dice en pantalla en vez de
- * ensenar un interruptor que no hace nada.
+ * Los dos transportes corren a la vez y son independientes: perder la Wi-Fi
+ * no corta el BLE del reloj y apagar el Bluetooth no corta el P4.
  *
- * CUANDO CORRE Y CUANDO NO
- * ------------------------
- * Solo mientras el usuario ha activado el enlace. No arranca al
- * encender el telefono salvo que se marque la opcion, no se
- * "auto-revive" y se puede parar desde su propia notificacion.
+ * UNA LISTA, NO UNA POR CAMINO
+ * ----------------------------
+ * Cada canal (socket o conexion GATT) se anota en [DeviceRegistry] con lo que
+ * se sabe de el. La pantalla ve una fila por aparato aunque se le vea por
+ * varios caminos (vinculo + busqueda + sesion).
  *
- * LA NOTIFICACION PERSISTENTE DICE LA VERDAD: mientras no hay sesion
- * pone "Esperando a Flex OS", no "Conectado". Un servicio en primer
- * plano que miente sobre su estado es la razon por la que la gente
- * desinstala este tipo de apps.
+ * MENSAJES
+ * --------
+ *   · Lo que nace en el telefono (notificaciones, multimedia, relay, estado)
+ *     sale por TODAS las sesiones abiertas (`state.sender`).
+ *   · La respuesta a una orden sale por EL MISMO canal por el que llego.
+ *
+ * Es un servicio en primer plano porque eso es lo que Android pide para un
+ * enlace persistente con la pantalla apagada. La notificacion dice la verdad:
+ * cuantos Flex OS hay conectados, no "Conectado" a secas.
  */
 class FlexLinkService : Service() {
 
@@ -71,63 +73,35 @@ class FlexLinkService : Service() {
         fun stop(ctx: Context) {
             ctx.startService(Intent(ctx, FlexLinkService::class.java).setAction(ACTION_STOP))
         }
-        /** El servidor vivo, para que la interfaz pueda entregar el codigo. */
+        /** El servicio vivo, para que la interfaz pueda entregar el codigo. */
         @Volatile var current: FlexLinkService? = null
     }
 
     private var server: WifiLinkServer? = null
+    private var gatt: GattServer? = null
     private var media: MediaBridge? = null
     private lateinit var bonds: BondStore
     private lateinit var device: DeviceAdapter
-    // Un fallo dentro de una corrutina de este servicio NO puede tumbar la app: sin un
-    // CoroutineExceptionHandler, una excepcion en `loop()` (por ejemplo un
-    // SecurityException al preguntar por las sesiones multimedia) llega al manejador
-    // de excepciones del hilo y Android MATA EL PROCESO -- y con el, el enlace.
     private val scope = CoroutineScope(
         SupervisorJob() + Dispatchers.Default +
             CoroutineExceptionHandler { _, e -> LinkDiag.w(TAG, "corrutina del servicio fallo: ${e.javaClass.simpleName}") },
     )
     private lateinit var state: FlexPhoneState
 
-    // #########################################################
-    // ##  UNA SOLA MAQUINA DE ESTADOS
-    // ##  --------------------------------------------------
-    // ##  Antes cada evento del servidor escribia el estado de la
-    // ##  pantalla por su cuenta (`state.setLink(...)`), y un socket
-    // ##  que se caia durante el emparejamiento mandaba la pantalla a
-    // ##  "buscando" aunque el codigo siguiera vivo en el servidor.
-    // ##  Ahora todos pasan por LinkPhaseMachine (protocol/LinkPhase.kt,
-    // ##  probada en el PC) y la pantalla solo OBSERVA su resultado.
-    // ##  Los eventos llegan de varios hilos de conexion: se serializan
-    // ##  con `phaseLock`.
-    // #########################################################
+    // UNA SOLA MAQUINA DE FASES para la pantalla del enlace (LinkPhase.kt,
+    // probada en el PC). Con varios aparatos, un canal que se cierra solo
+    // cuenta como "enlace caido" si no queda NINGUNA otra sesion abierta.
     private lateinit var machine: LinkPhaseMachine
     private val phaseLock = Any()
+    private val registry = DeviceRegistry()
     private var netCb: ConnectivityManager.NetworkCallback? = null
     @Volatile private var lastWifiIp: String? = null
-
-    // #########################################################
-    // ##  AQUI YA NO VIVE NINGUN CODIGO
-    // ##  --------------------------------------------------
-    // ##  Habia un `typedCode` suelto en este servicio que
-    // ##  sobrevivia a los intentos fallidos. Cuando el usuario
-    // ##  pulsaba "Emparejar telefono" otra vez, Flex OS abria una
-    // ##  sesion NUEVA (codigo y sal nuevos) y esta app contestaba
-    // ##  sola con el codigo del intento anterior: Flex OS lo
-    // ##  rechazaba y el usuario leia "el codigo no coincide" sin
-    // ##  que le hubieran dejado teclear el nuevo.
-    // ##
-    // ##  El codigo pertenece ahora a la PairingSession que lleva
-    // ##  WifiLinkServer, atado a la sal para la que se tecleo.
-    // #########################################################
+    @Volatile private var started = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
-        // CICLO DE VIDA DEL SERVICIO. Si estas lineas salen justo antes
-        // de cada desconexion, el problema no esta en el socket sino en
-        // que Android esta recreando el servicio.
         LinkDiag.d(TAG, "SERVICE_CREATED")
         state = FlexPhoneState.instance ?: FlexPhoneState().also { FlexPhoneState.instance = it }
         bonds = BondStore(this)
@@ -135,178 +109,221 @@ class FlexLinkService : Service() {
         machine = LinkPhaseMachine(bonded = bonds.isPaired())
         createChannel()
         current = this
+        refreshDevices(bondsChanged = true)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        LinkDiag.d(TAG, "SERVICE_STARTED action=${intent?.action} server=${if (server == null) "nuevo" else "ya existia"}")
+        LinkDiag.d(TAG, "SERVICE_STARTED action=${intent?.action} ya=${started}")
         when (intent?.action) {
             ACTION_STOP -> { shutdown(); return START_NOT_STICKY }
         }
         startForegroundHonestly()
-
-        if (server == null) {
-            val s = WifiLinkServer(
-                ctx = this,
-                phoneId = bonds.selfId(),
-                phoneName = device.displayName,
-                bondKey = { bonds.key() },
-                onPaired = { key, flexosId ->
-                    // El vinculo se guarda AQUI, cuando Flex OS ya ha
-                    // demostrado que es quien dice ser. Guardarlo antes
-                    // dejaria un vinculo con cualquiera que escuchara.
-                    //
-                    // SE PERSISTE YA (commit, no apply) y la maquina lo
-                    // anota en el acto: nada de lo que pase despues -- un
-                    // socket que parpadea un segundo -- puede deshacer un
-                    // emparejamiento que ya se consiguio.
-                    bonds.save(key, flexosId, null)
-                    onLinkEvent(LinkEvent.PairingAccepted)
-                },
-                onEvent = { ev -> onServerEvent(ev) },
-                onMessage = { type, payload -> onMessage(type, payload) },
-                wifiAddress = { NetAddress.wifiIpv4(this) },
-                wifiInterface = { NetAddress.wifiInterface(this) },
-            )
-            server = s
-            if (!device.isOnWifi()) {
-                // Sin Wi-Fi no hay a donde conectarse. Se dice y se
-                // para: un servicio en primer plano esperando una red
-                // que no esta solo gasta bateria.
-                state.setLink(LinkState.UNAVAILABLE, getString(R.string.link_needs_wifi))
-                updateNotification()
-                server = null
-                stopSelf()
-                return START_NOT_STICKY
-            }
-            // La maquina arranca ANTES de abrir el puerto: el primer canal puede
-            // llegar en cuanto se escucha.
+        if (!started) {
+            started = true
             onLinkEvent(LinkEvent.Started)
-            if (!s.start()) {
+            val wifiOk = startWifi()
+            val bleWhy = startBle()
+            if (!wifiOk && bleWhy != null) {
+                // Ningun camino: se dice por que y se para (un servicio en primer
+                // plano sin nada que escuchar solo gasta bateria).
+                state.setLink(LinkState.UNAVAILABLE, "${getString(R.string.link_needs_wifi)} · Bluetooth: $bleWhy")
                 updateNotification()
-                server = null
+                started = false
                 stopSelf()
                 return START_NOT_STICKY
             }
-            state.sender = { type, payload -> s.send(type, payload) }
-            // El relay estaba encendido y Android lo cerro: vuelve ahora, que
-            // Flex Phone esta en primer plano y puede arrancarlo. Si la persona
-            // lo paro, se queda parado (ver BrowserRelayService.wanted).
+            state.sender = { type, payload -> sendAll(type, payload) }
             BrowserRelayService.restoreIfWanted(this)
             media = MediaBridge(this, state).also { it.start() }
             lastWifiIp = NetAddress.wifiIpv4(this)
             state.setAddress(lastWifiIp)
             watchNetwork()
+            watchBluetooth()
             loop()
         }
-        // NOT_STICKY a proposito: si Android mata el servicio, no se
-        // resucita a espaldas del usuario.
         return START_NOT_STICKY
     }
+
+    // =========================================================
+    //  Transportes
+    // =========================================================
+    /** El servidor Wi-Fi del P4. Solo con Wi-Fi: si llega despues, se arranca entonces. */
+    private fun startWifi(): Boolean {
+        if (server != null) return true
+        if (!device.isOnWifi()) return false
+        val s = WifiLinkServer(
+            ctx = this,
+            phoneId = bonds.selfId(),
+            phoneName = device.displayName,
+            bondKey = { id -> bonds.key(id) },
+            onPaired = { key, flexosId ->
+                // Se guarda AQUI, cuando Flex OS ya demostro quien es. commit():
+                // nada de lo que pase despues puede deshacerlo.
+                bonds.save(key, flexosId, null)
+                refreshDevices(bondsChanged = true)
+                onLinkEvent(LinkEvent.PairingAccepted)
+            },
+            onEvent = { ev -> onWifiEvent(ev) },
+            onMessage = { type, payload -> onMessage(type, payload) { t, p -> server?.send(t, p) == true } },
+            wifiAddress = { NetAddress.wifiIpv4(this) },
+            wifiInterface = { NetAddress.wifiInterface(this) },
+        )
+        if (!s.start()) return false
+        server = s
+        publishTransports()
+        return true
+    }
+
+    /** El servidor GATT del reloj. Devuelve el motivo si no se puede. */
+    private fun startBle(): String? {
+        if (gatt?.running == true) return null
+        val g = GattServer(this, bleHost, onEvent = { ev -> onBleEvent(ev) }) { conn, _, type, payload ->
+            onMessage(type, payload) { t, p -> gatt?.sendTo(conn, t, p) == true }
+        }
+        val why = g.start()
+        gatt = if (why == null) g else null
+        publishTransports(bleWhy = why)
+        return why
+    }
+
+    private fun stopBle(why: String?) {
+        gatt?.stop()
+        gatt = null
+        synchronized(phaseLock) { registry.setBonds(bonds.list()) }
+        publishTransports(bleWhy = why)
+        refreshDevices()
+    }
+
+    private fun publishTransports(bleWhy: String? = gatt?.lastError) {
+        state.setTransports(FlexPhoneState.Transports(
+            wifi = server?.isRunning() == true,
+            ble = gatt?.running == true,
+            bleWhy = if (gatt?.running == true) null else bleWhy,
+        ))
+    }
+
+    /** Lo que el lado telefono de v2 necesita del almacen de vinculos. */
+    private val bleHost = object : PhoneLinkPeer.Host {
+        override val phoneId: String get() = bonds.selfId()
+        override val phoneName: String get() = device.displayName
+        override fun bondKey(flexosId: String) = bonds.key(flexosId)
+        override fun savePairing(key: ByteArray, flexosId: String, hello: HelloInfo?) {
+            bonds.save(key, flexosId, hello?.name, DeviceModel.fromHello(hello?.model ?: 0))
+            refreshDevices(bondsChanged = true)
+            onLinkEvent(LinkEvent.PairingAccepted)
+        }
+        override fun now() = System.currentTimeMillis()
+    }
+
+    /** Manda a TODAS las sesiones abiertas. true si alguna lo acepto. */
+    private fun sendAll(type: Int, payload: ByteArray): Boolean {
+        val a = server?.send(type, payload) == true
+        val b = (gatt?.sendAll(type, payload) ?: 0) > 0
+        if (a || b) state.countSent()
+        return a || b
+    }
+
+    private fun sessionCount(): Int = (if (server?.hasSession() == true) 1 else 0) + (gatt?.sessionCount() ?: 0)
 
     // ---------------------------------------------------------
     //  Emparejamiento desde la interfaz
     // ---------------------------------------------------------
-    /**
-     * El usuario tecleo el codigo que ensena Flex OS.
-     *
-     * Devuelve el motivo REAL. Antes esto era un booleano y la
-     * pantalla tenia que adivinar si un `false` era "aun no ha llegado
-     * la sal", "caduco" o "se corto la conexion" -- y acababa diciendo
-     * siempre lo mismo.
-     */
-    fun submitPairingCode(code: String): WifiLinkServer.Result =
-        server?.submitPairingCode(code) ?: WifiLinkServer.Result.NO_SESSION
+    /** El usuario tecleo el codigo que ensena Flex OS. Va al transporte que lo pidio. */
+    fun submitPairingCode(code: String): WifiLinkServer.Result {
+        val g = gatt
+        if (g != null && g.isAwaitingCode()) {
+            val r = g.submitPairingCode(code)
+            if (r == PairSubmit.SENT) onLinkEvent(LinkEvent.ProofSent)
+            return when (r) {
+                PairSubmit.SENT -> WifiLinkServer.Result.SENT
+                PairSubmit.BAD_FORMAT -> WifiLinkServer.Result.BAD_FORMAT
+                PairSubmit.NO_SESSION -> WifiLinkServer.Result.NO_SESSION
+                PairSubmit.EXPIRED -> WifiLinkServer.Result.EXPIRED
+                PairSubmit.LINK_DOWN -> WifiLinkServer.Result.LINK_DOWN
+            }
+        }
+        return server?.submitPairingCode(code) ?: WifiLinkServer.Result.NO_SESSION
+    }
 
-    /** Lo que le queda al codigo del reloj, para que la pantalla no se invente el plazo. */
-    fun pairingRemainingMs(): Long = server?.pairingRemainingMs() ?: 0L
+    fun pairingRemainingMs(): Long = maxOf(server?.pairingRemainingMs() ?: 0L, gatt?.pairingRemainingMs() ?: 0L)
+    fun isAwaitingCode(): Boolean = server?.isAwaitingCode() == true || gatt?.isAwaitingCode() == true
 
-    /** ¿Ha llegado la sal de Flex OS? La pantalla lo usa para saber si ya se puede teclear. */
-    fun isAwaitingCode(): Boolean = server?.isAwaitingCode() ?: false
-
-    /** Revoca el vinculo: clave fuera y sesion cerrada. */
+    /** Revoca TODOS los vinculos: claves fuera y sesiones cerradas. */
     fun forgetBond() {
+        for (b in bonds.list()) forgetDevice(b.flexosId)
         bonds.clear()
-        // Se cierra SOLO la sesion abierta. Antes se paraba y arrancaba el
-        // servidor entero (puertos, hilos y cerrojo de multidifusion) para
-        // conseguir lo mismo.
-        server?.dropSession("vinculo olvidado")
+        refreshDevices(bondsChanged = true)
         onLinkEvent(LinkEvent.BondForgotten)
+    }
+
+    /** Olvida UN aparato. */
+    fun forgetDevice(flexosId: String) {
+        bonds.forget(flexosId)
+        gatt?.dropSession(flexosId)
+        server?.dropSession("vinculo olvidado")
+        refreshDevices(bondsChanged = true)
+        if (!bonds.isPaired()) onLinkEvent(LinkEvent.BondForgotten)
     }
 
     fun linkAddress(): String? = server?.localWifiAddress() ?: NetAddress.wifiIpv4(this)
     fun linkPort(): Int = server?.port ?: 0
     fun isPaired(): Boolean = bonds.isPaired()
     fun pairedPeer(): String? = bonds.peerId()
+    fun bleRunning(): Boolean = gatt?.running == true
 
     // ---------------------------------------------------------
-    //  Buscar relojes
+    //  Buscar el P4 por Wi-Fi
     // ---------------------------------------------------------
-    /**
-     * Pregunta a la red quien es un Flex OS.
-     *
-     * Devuelve a cuantos destinos se emitio. CERO significa que este
-     * telefono no pudo mandar nada -- sin Wi-Fi o sin direccion --, y
-     * la pantalla lo dice en vez de dejar un buscador girando sobre
-     * algo que no ha llegado a empezar.
-     */
     fun searchWatches(): Int = server?.probeForWatches() ?: 0
-
-    /**
-     * Pregunta a UNA direccion, sin difusion.
-     *
-     * El respaldo para las redes que filtran la difusion o aislan a
-     * los clientes: el usuario lee la IP en Flex OS (Flex Phone →
-     * Conexion) y la teclea. Al recibir el paquete, el reloj aprende
-     * de el la direccion y el puerto de este telefono, asi que puede
-     * conectar sin haber descubierto nada por su cuenta.
-     */
     fun probeWatchAt(ip: String): Boolean = server?.probeHost(ip) ?: false
 
-    // ---------------------------------------------------------
-    //  Eventos del servidor -> maquina de fases -> pantalla
-    // ---------------------------------------------------------
-    /**
-     * Mete un evento en la maquina y publica el resultado. UN solo sitio escribe
-     * la fase; la pantalla solo la observa.
-     */
+    // =========================================================
+    //  Eventos -> maquina de fases -> pantalla
+    // =========================================================
     private fun onLinkEvent(e: LinkEvent) {
         synchronized(phaseLock) {
-            val before = machine.phase
-            val after = machine.on(e)
-            if (before != after) LinkDiag.d(TAG, "FASE $before -> $after por ${e::class.simpleName}")
-            state.setPhase(after, if (after == LinkPhase.ERROR) machine.fatalReason else null)
-            // El estado del emparejamiento y del vinculo, TAL CUAL: la pantalla no
-            // tiene que preguntar al servicio cada segundo.
-            val srv = server
-            state.setPairing(srv?.isAwaitingCode() == true, srv?.pairingRemainingMs() ?: 0L)
-            state.setBond(bonds.isPaired(), bonds.peerName()?.takeIf { it.isNotBlank() })
+            // Con otra sesion abierta, un cierre o un fallo de un canal no es
+            // "enlace caido": la pantalla sigue en conectado.
+            val ignore = when (e) {
+                is LinkEvent.ChannelClosed, LinkEvent.LinkFailure -> sessionCount() > 0
+                else -> false
+            }
+            if (!ignore) {
+                val before = machine.phase
+                val after = machine.on(e)
+                if (before != after) LinkDiag.d(TAG, "FASE $before -> $after por ${e::class.simpleName}")
+                state.setPhase(after, if (after == LinkPhase.ERROR) machine.fatalReason else null)
+            }
+            state.setPairing(isAwaitingCode(), pairingRemainingMs())
+            val latest = bonds.list().firstOrNull()
+            state.setBond(bonds.isPaired(), latest?.name?.takeIf { it.isNotBlank() })
         }
         updateNotification()
     }
 
-    private fun onServerEvent(ev: WifiLinkServer.Event) {
+    private fun refreshDevices(bondsChanged: Boolean = false) {
+        val list = synchronized(phaseLock) {
+            if (bondsChanged) registry.setBonds(bonds.list())
+            registry.list()
+        }
+        state.setDevices(list)
+    }
+
+    private fun onWifiEvent(ev: WifiLinkServer.Event) {
         when (ev) {
-            is WifiLinkServer.Event.Listening -> {
-                // Informativo: la fase la fija Started (en onStartCommand).
-                state.setAddress(NetAddress.wifiIpv4(this) ?: ev.address)
-            }
+            is WifiLinkServer.Event.Listening -> state.setAddress(NetAddress.wifiIpv4(this) ?: ev.address)
             is WifiLinkServer.Event.Error -> {
                 state.setNotice(ev.message)
-                // Solo un fallo de ESTE lado lleva a ERROR. Un canal que se
-                // descoloca o un reloj que no contesta es del enlace.
                 onLinkEvent(if (ev.fatal) LinkEvent.Fatal(ev.message) else LinkEvent.LinkFailure)
             }
             WifiLinkServer.Event.ChannelOpened -> onLinkEvent(LinkEvent.ChannelOpened)
             is WifiLinkServer.Event.SessionOpen -> {
                 onLinkEvent(LinkEvent.SessionOpened)
                 state.setNotice(null)
-                // Al abrir sesion se manda lo que Flex OS necesita para
-                // pintar la pantalla: capacidades primero, para que no
-                // llegue a ofrecer nada que este telefono no pueda.
-                pushCaps()
-                pushPhoneState()
-                // Flex OS borra su copia del estado del relay cada vez que pierde
-                // el enlace: si el relay sigue arriba, se lo volvemos a decir.
+                // Lo que Flex OS necesita para pintar la pantalla: capacidades
+                // primero, estado despues y el relay si sigue arriba.
+                server?.send(FlexLink.T_CAPS, currentCaps().encode())
+                server?.send(FlexLink.T_PHONE_STATE, device.phoneState().encode())
                 state.reannounceRelay()
             }
             is WifiLinkServer.Event.SessionClosed -> {
@@ -314,60 +331,112 @@ class FlexLinkService : Service() {
                 onLinkEvent(LinkEvent.ChannelClosed(ev.authenticated))
             }
             is WifiLinkServer.Event.PairingRequested -> {
-                // Una sesion NUEVA vacia lo que hubiera tecleado: ese
-                // codigo era de la sesion anterior y ya no vale para
-                // nada. Dejarlo en el campo invita a pulsar
-                // "Emparejar" contra un codigo que ya no existe.
                 if (ev.freshSession) { state.clearTypedCode(); state.setPairFailure(null) }
                 onLinkEvent(LinkEvent.PairSalt)
             }
             WifiLinkServer.Event.ProofResent -> onLinkEvent(LinkEvent.ProofSent)
-            is WifiLinkServer.Event.ProofNotSent -> {
-                // El codigo tecleado se CONSERVA: el servidor lo reenvia solo.
-                onLinkEvent(LinkEvent.ProofNotSent)
-                state.setNotice(ev.why)
-            }
+            is WifiLinkServer.Event.ProofNotSent -> { onLinkEvent(LinkEvent.ProofNotSent); state.setNotice(ev.why) }
             is WifiLinkServer.Event.WatchesFound -> {
-                state.setWatches(ev.watches.map {
-                    FlexPhoneState.Watch(it.id, it.name, it.address, it.pairing)
-                })
-                // La lista no cambia el estado del enlace: encontrar un
-                // reloj no es estar conectado a el, y decirlo seria
-                // exactamente la clase de mentira que hace que nadie
-                // entienda por que "conectado" no recibe nada.
+                state.setWatches(ev.watches.map { FlexPhoneState.Watch(it.id, it.name, it.address, it.pairing) })
+                synchronized(phaseLock) {
+                    registry.setWifiSeen(
+                        ev.watches.map { Triple(it.id, it.name, it.address) },
+                        ev.watches.filter { it.pairing }.map { it.id }.toSet(),
+                    )
+                }
+                refreshDevices()
                 return
             }
-            is WifiLinkServer.Event.PairingFailed -> {
-                // EL TIPO DE FALLO NO SE ADIVINA POR EL TEXTO, y NO TODO FALLO
-                // TIRA LO CONSEGUIDO:
-                //  · codigo rechazado -> se vuelve a pedir el codigo (el reloj
-                //    sigue ensenando el mismo);
-                //  · codigo caducado  -> ese emparejamiento ya no existe;
-                //  · fallo del enlace -> el codigo tecleado se CONSERVA (el
-                //    servidor lo reenvia solo cuando el reloj vuelva).
-                when (ev.kind) {
-                    PairFailure.CODE_REJECTED -> {
-                        state.clearTypedCode()
-                        onLinkEvent(LinkEvent.CodeRejected)
-                    }
-                    PairFailure.CODE_EXPIRED -> {
-                        state.clearTypedCode()
-                        onLinkEvent(LinkEvent.PairingEnded)
-                    }
-                    PairFailure.LINK -> onLinkEvent(LinkEvent.LinkFailure)
+            is WifiLinkServer.Event.PairingFailed -> onPairFailed(ev.why, ev.kind)
+            is WifiLinkServer.Event.Presented -> {
+                synchronized(phaseLock) {
+                    registry.channelOpened("wifi#${ev.conn}", LinkTransport.WIFI, ev.address)
+                    registry.channelHello("wifi#${ev.conn}", ev.hello)
                 }
-                // Despues de la fase: setLink borra el fallo viejo al cambiar de estado.
-                state.setPairFailure(ev.kind)
-                state.setNotice(ev.why)
+                bonds.updateInfo(ev.hello.flexosId, ev.hello.name, DeviceModel.fromHello(ev.hello.model), null)
+                refreshDevices()
+            }
+            is WifiLinkServer.Event.ChannelSession -> {
+                synchronized(phaseLock) { registry.channelSession("wifi#${ev.conn}", true) }
+                refreshDevices()
+            }
+            is WifiLinkServer.Event.ChannelGone -> {
+                synchronized(phaseLock) { registry.channelClosed("wifi#${ev.conn}") }
+                refreshDevices()
             }
         }
     }
 
+    private fun onPairFailed(why: String, kind: PairFailure) {
+        when (kind) {
+            PairFailure.CODE_REJECTED -> { state.clearTypedCode(); onLinkEvent(LinkEvent.CodeRejected) }
+            PairFailure.CODE_EXPIRED -> { state.clearTypedCode(); onLinkEvent(LinkEvent.PairingEnded) }
+            PairFailure.LINK -> onLinkEvent(LinkEvent.LinkFailure)
+        }
+        state.setPairFailure(kind)
+        state.setNotice(why)
+    }
+
+    private fun onBleEvent(ev: GattServer.Event) {
+        when (ev) {
+            is GattServer.Event.Advertising -> publishTransports(bleWhy = ev.why.takeIf { !ev.on })
+            is GattServer.Event.ChannelOpened -> {
+                synchronized(phaseLock) { registry.channelOpened(ev.conn, LinkTransport.BLE, ev.address) }
+                onLinkEvent(LinkEvent.ChannelOpened)
+                refreshDevices()
+            }
+            is GattServer.Event.ChannelClosed -> {
+                synchronized(phaseLock) { registry.channelClosed(ev.conn) }
+                if (ev.authed) state.countReconnect()
+                onLinkEvent(LinkEvent.ChannelClosed(ev.authed))
+                refreshDevices()
+            }
+            is GattServer.Event.Peer -> onBlePeer(ev.conn, ev.address, ev.ev)
+        }
+    }
+
+    private fun onBlePeer(conn: String, address: String, ev: PhoneLinkPeer.Event) {
+        when (ev) {
+            is PhoneLinkPeer.Event.Hello -> {
+                synchronized(phaseLock) { registry.channelHello(conn, ev.info) }
+                // El reloj declara nombre y modelo, y su direccion BLE sirve para
+                // reconocerlo la proxima vez antes de que se presente.
+                bonds.updateInfo(ev.info.flexosId, ev.info.name, DeviceModel.fromHello(ev.info.model), address)
+                refreshDevices()
+            }
+            is PhoneLinkPeer.Event.PairingRequested -> {
+                if (ev.freshSession) { state.clearTypedCode(); state.setPairFailure(null) }
+                synchronized(phaseLock) { registry.channelPairing(conn, "", true) }
+                onLinkEvent(LinkEvent.PairSalt)
+                refreshDevices()
+            }
+            PhoneLinkPeer.Event.ProofResent -> onLinkEvent(LinkEvent.ProofSent)
+            is PhoneLinkPeer.Event.ProofNotSent -> { onLinkEvent(LinkEvent.ProofNotSent); state.setNotice(ev.why) }
+            is PhoneLinkPeer.Event.PairingFailed -> onPairFailed(ev.why, ev.kind)
+            is PhoneLinkPeer.Event.SessionOpen -> {
+                synchronized(phaseLock) { registry.channelSession(conn, true) }
+                bonds.updateInfo(ev.flexosId, null, null, address)
+                refreshDevices(bondsChanged = ev.newlyPaired)
+                onLinkEvent(LinkEvent.SessionOpened)
+                state.setNotice(null)
+                gatt?.sendTo(conn, FlexLink.T_CAPS, currentCaps().encode())
+                gatt?.sendTo(conn, FlexLink.T_PHONE_STATE, device.phoneState().encode())
+                state.reannounceRelay()
+                // Lo que ya esta sonando y las notificaciones activas: el reloj no
+                // sabe lo que paso mientras estaba desconectado.
+                state.media.value?.let { gatt?.sendTo(conn, FlexLink.T_MEDIA_STATE, it.encode()) }
+                FlexNotificationListener.replayActive { p -> gatt?.sendTo(conn, FlexLink.T_NOTIF_ADD, p.encode()) == true }
+            }
+            is PhoneLinkPeer.Event.Error -> { state.setNotice(ev.message); onLinkEvent(LinkEvent.LinkFailure) }
+            is PhoneLinkPeer.Event.CloseRequested -> Unit   // el cierre llega como ChannelClosed
+        }
+    }
+
     /**
-     * Bucle de mantenimiento. NO es sondeo del enlace: el servidor
-     * avisa por eventos. Esto solo refresca el estado del telefono de
-     * vez en cuando (bateria y red cambian sin que nadie avise) y
-     * vuelve a mandar las capacidades si un permiso cambio.
+     * Bucle de mantenimiento. NO es sondeo del enlace: los servidores avisan
+     * por eventos. Refresca el estado del telefono (bateria y red cambian sin
+     * que nadie avise), vuelve a mandar las capacidades si algo cambio y
+     * busca el P4 por Wi-Fi mientras no haya sesion por ese camino.
      */
     private fun loop() = scope.launch {
         var lastCaps: CapsPayload? = null
@@ -376,62 +445,30 @@ class FlexLinkService : Service() {
         while (isActive) {
             delay(5_000)
             try {
-            if (server?.hasSession() != true) {
-                // #########################################################
-                // ##  SIN SESION SE SIGUE PREGUNTANDO
-                // ##  --------------------------------------------------
-                // ##  Y no es solo para pintar una lista. El reloj
-                // ##  aprende la direccion de este telefono DEL PROPIO
-                // ##  paquete de busqueda, asi que emitirlo es lo que
-                // ##  permite conectar en las redes donde la difusion
-                // ##  del reloj no llega hasta aqui -- que es el caso
-                // ##  en el que antes no se encontraban nunca.
-                // ##
-                // ##  Cuesta unos 40 bytes cada cinco segundos, y solo
-                // ##  mientras el usuario tiene el enlace encendido y
-                // ##  todavia no hay sesion. Con la sesion abierta se
-                // ##  deja de emitir del todo.
-                // #########################################################
-                server?.probeForWatches()
-                continue
-            }
-            val caps = currentCaps()
-            if (caps != lastCaps) { lastCaps = caps; server?.send(FlexLink.T_CAPS, caps.encode()) }
-            val st = device.phoneState()
-            val now = System.currentTimeMillis()
-            // Se manda si CAMBIO, o cada minuto como latido. Mandar el
-            // estado entero cada cinco segundos seria trafico inutil y
-            // bateria por nada.
-            if (st != lastState || now - lastPush > STATE_HEARTBEAT_MS) {
-                lastState = st
-                lastPush = now
-                server?.send(FlexLink.T_PHONE_STATE, st.encode())
-            }
+                if (server == null && device.isOnWifi()) startWifi()
+                if (server?.hasSession() != true) server?.probeForWatches()
+                refreshDevices()
+                if (sessionCount() == 0) continue
+                val caps = currentCaps()
+                if (caps != lastCaps) { lastCaps = caps; sendAll(FlexLink.T_CAPS, caps.encode()) }
+                val st = device.phoneState()
+                val now = System.currentTimeMillis()
+                if (st != lastState || now - lastPush > STATE_HEARTBEAT_MS) {
+                    lastState = st
+                    lastPush = now
+                    sendAll(FlexLink.T_PHONE_STATE, st.encode())
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // Una vuelta que falla no mata el mantenimiento: se anota y se sigue.
                 LinkDiag.w(TAG, "mantenimiento: ${e.javaClass.simpleName}")
             }
         }
     }
 
     // ---------------------------------------------------------
-    //  La Wi-Fi: detectar un cambio de IP SIN guardar la IP "para siempre"
+    //  La Wi-Fi y el Bluetooth cambian: se avisa, no se sondea
     // ---------------------------------------------------------
-    /**
-     * Avisos de red de Android. NO es sondeo: Android avisa cuando la Wi-Fi
-     * aparece, desaparece o cambia de direccion, y solo entonces se mira.
-     *
-     * Lo que se hace con cada aviso:
-     *  · cambio de IP: se anota, se renueva el cerrojo de multidifusion, se
-     *    vuelve a anunciar al P4 la direccion del relay (la que el P4 tenia
-     *    guardada ya no sirve) y se actualiza lo que ensena la pantalla. El
-     *    servidor del enlace escucha en TODAS las interfaces: no hay que
-     *    reabrirlo, y por eso no se entra en ningun bucle de reconexion.
-     *  · Wi-Fi perdida: se anota. Las sesiones se caen solas (el socket muere)
-     *    y el P4 vuelve cuando haya red; no se para el servicio.
-     */
     private fun watchNetwork() {
         val cm = getSystemService(ConnectivityManager::class.java) ?: return
         val req = NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build()
@@ -459,54 +496,75 @@ class FlexLinkService : Service() {
     private fun onWifiMaybeChanged(why: String) {
         val now = NetAddress.wifiIpv4(this)
         val before = lastWifiIp
-        if (now == before) return                       // el aviso no trajo ningun cambio de direccion
+        if (now == before) return
         lastWifiIp = now
         LinkDiag.d(TAG, "WIFI $why: ip ${before ?: "ninguna"} -> ${now ?: "ninguna"}")
         state.setAddress(now)
+        if (now != null && server == null) startWifi()
         server?.onNetworkChanged()
         BrowserRelayService.notifyAddressChanged()
+        publishTransports()
         updateNotification()
     }
+
+    private val btReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context?, i: Intent?) {
+            when (i?.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1)) {
+                BluetoothAdapter.STATE_ON -> scope.launch { startBle(); updateNotification() }
+                BluetoothAdapter.STATE_TURNING_OFF, BluetoothAdapter.STATE_OFF ->
+                    scope.launch { stopBle("el Bluetooth esta apagado"); updateNotification() }
+            }
+        }
+    }
+    @Volatile private var btWatched = false
+
+    private fun watchBluetooth() {
+        runCatching {
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(btReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED), Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                @Suppress("UnspecifiedRegisterReceiverFlag")
+                registerReceiver(btReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
+            }
+            btWatched = true
+        }
+    }
+
+    private fun unwatchBluetooth() {
+        if (btWatched) { btWatched = false; runCatching { unregisterReceiver(btReceiver) } }
+    }
+
+    /** La interfaz llama aqui tras conceder los permisos de Bluetooth. */
+    fun retryBluetooth() { scope.launch { startBle(); updateNotification() } }
 
     private fun currentCaps(): CapsPayload = device.caps(
         notifAccess = FlexNotificationListener.hasAccess(this),
         relayRunning = BrowserRelayService.isRunning(),
         mediaActive = media?.hasActiveSession() == true,
+        bleActive = gatt?.running == true,
     )
 
-    private fun pushCaps() {
-        server?.send(FlexLink.T_CAPS, currentCaps().encode())
-    }
-
-    private fun pushPhoneState() {
-        server?.send(FlexLink.T_PHONE_STATE, device.phoneState().encode())
-    }
-
     // ---------------------------------------------------------
-    //  Mensajes de Flex OS
+    //  Mensajes de Flex OS. `reply` es el canal por el que llego.
     // ---------------------------------------------------------
-    private fun onMessage(type: Int, payload: ByteArray) {
+    private fun onMessage(type: Int, payload: ByteArray, reply: (Int, ByteArray) -> Boolean) {
         state.countReceived()
         when (type) {
             FlexLink.T_REPLY_REQ -> {
                 val req = ReplyRequest.decode(payload)
                 if (req == null) { state.countBadFrame(); return }
-                // El resultado que se devuelve es el REAL: si Android
-                // no acepto la accion, se manda el error, no un exito.
+                // El resultado que se devuelve es el REAL.
                 val res = ReplyManager.reply(this, req.notifId, req.action, req.text)
                 state.countReply(res.ok)
-                server?.send(FlexLink.T_REPLY_RESULT, res.encode())
+                reply(FlexLink.T_REPLY_RESULT, res.encode())
             }
             FlexLink.T_ACTION_REQ -> {
                 val r = PayloadReader(payload)
                 val id = r.u32(); val idx = r.u8()
                 if (!r.ok) { state.countBadFrame(); return }
-                val res = ReplyManager.action(this, id, idx)
-                server?.send(FlexLink.T_ACTION_RESULT, res.encode())
+                reply(FlexLink.T_ACTION_RESULT, ReplyManager.action(this, id, idx).encode())
             }
             FlexLink.T_NOTIF_REMOVE -> {
-                // Flex OS descarto una notificacion: se descarta tambien
-                // en el telefono, que es lo que el usuario espera.
                 val r = PayloadReader(payload)
                 val id = r.u32()
                 if (r.ok) FlexNotificationListener.dismiss(id)
@@ -518,20 +576,20 @@ class FlexLinkService : Service() {
             }
             FlexLink.T_FIND_START -> FindMyPhone.start(this)
             FlexLink.T_FIND_STOP -> FindMyPhone.stop()
-            FlexLink.T_PHONE_STATE -> pushPhoneState()   // Flex OS pidio el estado entero
-            // `start`/`stop` pueden fallar (Android niega un servicio en primer plano
-            // desde segundo plano): se anota y se sigue. NUNCA debe cerrar el enlace.
+            FlexLink.T_PHONE_STATE -> reply(FlexLink.T_PHONE_STATE, device.phoneState().encode())
             FlexLink.T_RELAY_START -> {
                 runCatching { BrowserRelayService.start(this) }
                     .onFailure { LinkDiag.w(TAG, "RELAY_START fallo: ${it.javaClass.simpleName}") }
-                pushCaps()
+                sendAll(FlexLink.T_CAPS, currentCaps().encode())
+                // Si ya estaba arriba, se repite su direccion a quien lo pidio.
+                state.reannounceRelay()
             }
             FlexLink.T_RELAY_STOP -> {
                 runCatching { BrowserRelayService.stop(this) }
                     .onFailure { LinkDiag.w(TAG, "RELAY_STOP fallo: ${it.javaClass.simpleName}") }
-                pushCaps()
+                sendAll(FlexLink.T_CAPS, currentCaps().encode())
             }
-            FlexLink.T_TIME_SYNC -> Unit   // el telefono ya tiene la hora del sistema
+            FlexLink.T_TIME_SYNC -> Unit
         }
     }
 
@@ -547,16 +605,20 @@ class FlexLinkService : Service() {
     }
 
     private fun buildNotification(): Notification {
-        // El texto refleja el estado REAL del enlace.
-        val text = when (state.link.value) {
-            LinkState.READY -> getString(R.string.link_connected)
-            LinkState.PAIRING -> getString(R.string.link_pairing)
-            LinkState.CONNECTING -> getString(R.string.link_connecting)
-            LinkState.RECONNECTING -> getString(R.string.link_reconnecting)
-            LinkState.ADVERTISING -> getString(R.string.link_searching)
-            LinkState.UNAVAILABLE -> state.error.value ?: getString(R.string.link_unavailable)
-            LinkState.ERROR -> state.error.value ?: getString(R.string.link_error)
-            LinkState.OFF -> getString(R.string.link_off)
+        val online = state.devices.value.filter { it.online }
+        val text = when {
+            online.size == 1 -> getString(R.string.link_connected) + ": " + online[0].name
+            online.size > 1 -> getString(R.string.link_connected) + ": " + online.size + " Flex OS"
+            else -> when (state.link.value) {
+                LinkState.READY -> getString(R.string.link_connected)
+                LinkState.PAIRING -> getString(R.string.link_pairing)
+                LinkState.CONNECTING -> getString(R.string.link_connecting)
+                LinkState.RECONNECTING -> getString(R.string.link_reconnecting)
+                LinkState.ADVERTISING -> getString(R.string.link_searching)
+                LinkState.UNAVAILABLE -> state.error.value ?: getString(R.string.link_unavailable)
+                LinkState.ERROR -> state.error.value ?: getString(R.string.link_error)
+                LinkState.OFF -> getString(R.string.link_off)
+            }
         }
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java),
@@ -574,8 +636,6 @@ class FlexLinkService : Service() {
             .setOngoing(true)
             .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            // Un boton REAL para pararlo. Es lo minimo que se le debe
-            // a alguien que ve una notificacion permanente.
             .addAction(R.drawable.ic_stop, getString(R.string.stop), stop)
             .build()
     }
@@ -583,8 +643,6 @@ class FlexLinkService : Service() {
     private fun startForegroundHonestly() {
         val n = buildNotification()
         if (Build.VERSION.SDK_INT >= 29) {
-            // CONNECTED_DEVICE es el tipo que corresponde: el servicio
-            // existe para mantener un enlace con otro dispositivo.
             startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         } else {
             startForeground(NOTIF_ID, n)
@@ -599,17 +657,21 @@ class FlexLinkService : Service() {
 
     private fun shutdown() {
         LinkDiag.d(TAG, "SERVICE_STOPPED (shutdown pedido)")
-        // Se libera TODO: sin sockets abiertos, sin hilos vivos y sin
-        // callbacks colgando.
         scope.coroutineContext.cancelChildren()
         unwatchNetwork()
+        unwatchBluetooth()
         state.sender = null
         onLinkEvent(LinkEvent.Stopped)
         media?.stop(); media = null
+        gatt?.stop(); gatt = null
         server?.stop(); server = null
+        started = false
         FindMyPhone.stop()
         state.clearTypedCode()
         state.setPairing(false, 0L)
+        synchronized(phaseLock) { registry.setBonds(bonds.list()) }
+        publishTransports(bleWhy = null)
+        refreshDevices()
         current = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -619,21 +681,15 @@ class FlexLinkService : Service() {
         LinkDiag.d(TAG, "SERVICE_DESTROYED")
         scope.cancel()
         unwatchNetwork()
+        unwatchBluetooth()
         state.sender = null
         media?.stop()
+        gatt?.stop()
         server?.stop()
         FindMyPhone.stop()
         if (current === this) current = null
-        // EL ESTADO TIENE QUE DEJAR DE MENTIR.
-        //
-        // shutdown() ya lo pone en OFF cuando para el usuario, pero
-        // este camino es el otro: Android mata el servicio por bateria,
-        // por memoria o por politica del fabricante. Sin esta linea el
-        // estado se quedaba en "Esperando a Flex OS" con el socket ya
-        // cerrado, asi que la pantalla decia que el telefono estaba
-        // escuchando cuando no habia nadie escuchando -- justo el fallo
-        // que hace imposible entender por que el reloj no encuentra
-        // nada.
+        // EL ESTADO TIENE QUE DEJAR DE MENTIR: si Android mata el servicio, la
+        // pantalla no puede seguir diciendo que se escucha.
         if (state.link.value != LinkState.OFF) {
             synchronized(phaseLock) { machine.on(LinkEvent.Stopped) }
             state.setPhase(LinkPhase.STOPPED, getString(R.string.link_stopped_by_system))

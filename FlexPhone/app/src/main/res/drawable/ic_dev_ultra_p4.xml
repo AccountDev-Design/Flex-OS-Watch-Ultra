@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- GENERADO por tools/devicons/gen_devicons.py desde design/devices/ultra_p4.svg: no editar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="96" android:viewportHeight="96">
+    <path android:pathData="M34,6H62A10,10 0 0 1 72,16V80A10,10 0 0 1 62,90H34A10,10 0 0 1 24,80V16A10,10 0 0 1 34,6Z"
+        android:fillColor="#303648"
+        android:strokeColor="#788CFF"
+        android:strokeWidth="3" />
+    <path android:pathData="M34,14H62A5,5 0 0 1 67,19V73A5,5 0 0 1 62,78H34A5,5 0 0 1 29,73V19A5,5 0 0 1 34,14Z"
+        android:fillColor="#0A0C12" />
+    <path android:pathData="M36.5,20H41.5A3.5,3.5 0 0 1 45,23.5V28.5A3.5,3.5 0 0 1 41.5,32H36.5A3.5,3.5 0 0 1 33,28.5V23.5A3.5,3.5 0 0 1 36.5,20Z"
+        android:fillColor="#3C6EEB" />
+    <path android:pathData="M54.5,20H59.5A3.5,3.5 0 0 1 63,23.5V28.5A3.5,3.5 0 0 1 59.5,32H54.5A3.5,3.5 0 0 1 51,28.5V23.5A3.5,3.5 0 0 1 54.5,20Z"
+        android:fillColor="#50BE6E" />
+    <path android:pathData="M36.5,38H41.5A3.5,3.5 0 0 1 45,41.5V46.5A3.5,3.5 0 0 1 41.5,50H36.5A3.5,3.5 0 0 1 33,46.5V41.5A3.5,3.5 0 0 1 36.5,38Z"
+        android:fillColor="#F0AA32" />
+    <path android:pathData="M54.5,38H59.5A3.5,3.5 0 0 1 63,41.5V46.5A3.5,3.5 0 0 1 59.5,50H54.5A3.5,3.5 0 0 1 51,46.5V41.5A3.5,3.5 0 0 1 54.5,38Z"
+        android:fillColor="#788CFF" />
+    <path android:pathData="M39,58H57A6,6 0 0 1 63,64V64A6,6 0 0 1 57,70H39A6,6 0 0 1 33,64V64A6,6 0 0 1 39,58Z"
+        android:fillColor="#28325A" />
+    <path android:pathData="M45.5,84A2.5,2.5 0 1 0 50.5,84A2.5,2.5 0 1 0 45.5,84Z"
+        android:fillColor="#788CFF" />
+</vector>

@@ -19,13 +19,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ==== Bluetooth: HOY NO SE USA ====
-         El enlace con Flex OS va por Wi-Fi. Estos permisos siguen
-         declarados porque el transporte BLE existe escrito para
-         cuando el co-procesador C6 del P4 pueda ofrecerlo; mientras
-         tanto la app NO los pide en tiempo de ejecucion, porque pedir
-         un permiso que no se va a usar es la forma mas rapida de que
-         alguien desinstale una app. -->
+    <!-- ==== Bluetooth: Flex OS Watch Ultra ====
+         El reloj (ESP32-S3) habla con el telefono por Bluetooth LE: este
+         telefono es el periferico GATT (GattServer) y el reloj el central.
+         Los permisos se piden en tiempo de ejecucion SOLO cuando hace falta
+         (la portada lo ofrece si el Bluetooth no puede arrancar). Flex OS
+         Ultra (P4, sin radio Bluetooth) sigue por Wi-Fi y no los necesita. -->
     <!-- ==== Bluetooth: dos juegos segun la version de Android ==== -->
     <!-- Android 12 (API 31) en adelante -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
@@ -71,13 +70,9 @@
          si el usuario lo habilita en Ajustes: ver BootReceiver. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <!-- BLE NO es imprescindible, y por eso required="false".
-         El enlace con Flex OS va por Wi-Fi: el ESP32-P4 no tiene radio
-         Bluetooth. Dejarlo en "true" excluiria de Google Play a
-         telefonos en los que esta app funciona perfectamente, que es
-         justo lo contrario de lo que se busca. Se conserva declarado
-         porque el transporte BLE existe escrito (ver GattServer) para
-         cuando el co-procesador C6 pueda darlo. -->
+    <!-- BLE NO es imprescindible, y por eso required="false": Flex OS Ultra
+         (P4) va por Wi-Fi y un telefono sin BLE puede usarlo igual. Sin BLE
+         solo falta el reloj, y la portada lo dice. -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <!-- Wi-Fi tampoco se marca imprescindible: un telefono sin Wi-Fi
          puede instalar la app, y la propia app le dira que el enlace
