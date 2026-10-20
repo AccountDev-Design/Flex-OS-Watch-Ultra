@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Flex Phone: manifiesto.
+
+  PERMISOS: cada uno esta aqui porque una funcion CONCRETA lo
+  necesita, y cada uno se pide en el momento en que hace falta, no
+  todos de golpe al abrir la app.
+
+  Lo que NO se pide, a proposito:
+    · no se piden CONTACTOS: las conversaciones salen del titulo de
+      la notificacion, que ya lo da Android;
+    · no se pide SMS ni CALL_LOG: Flex OS no envia SMS y no se va a
+      insinuar que pueda;
+    · no se pide ubicacion. ACCESS_FINE_LOCATION solo aparece
+      limitada a Android 11 y anteriores, donde el sistema la exigia
+      para escanear BLE; a partir de Android 12 se usa
+      BLUETOOTH_SCAN con neverForLocation.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ==== Bluetooth: HOY NO SE USA ====
+         El enlace con Flex OS va por Wi-Fi. Estos permisos siguen
+         declarados porque el transporte BLE existe escrito para
+         cuando el co-procesador C6 del P4 pueda ofrecerlo; mientras
+         tanto la app NO los pide en tiempo de ejecucion, porque pedir
+         un permiso que no se va a usar es la forma mas rapida de que
+         alguien desinstale una app. -->
+    <!-- ==== Bluetooth: dos juegos segun la version de Android ==== -->
+    <!-- Android 12 (API 31) en adelante -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <!-- neverForLocation: se declara que el escaneo NO se usa para
+         deducir la ubicacion del usuario, y asi Android no exige el
+         permiso de ubicacion. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+
+    <!-- Android 11 (API 30) y anteriores -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <!-- Solo hasta API 30, y SOLO porque el sistema lo exigia para
+         escanear BLE. Ver el comentario de arriba. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+
+    <!-- ==== Servicio en primer plano ==== -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Los tres servicios (enlace, Flex Storage y Browser Relay) son
+         connectedDevice. dataSync ya no lo usa ninguno: el relay lo
+         usaba y Android 15 lo cortaba a las 6 horas. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- ==== Red local y cerrojos ==== -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- SIN ESTO EL DESCUBRIMIENTO NO FUNCIONA. El controlador Wi-Fi
+         de Android descarta las tramas de difusion que no van dirigidas
+         a la MAC del telefono antes de que lleguen a ningun socket, y
+         la sonda de Flex OS es justo una difusion. El permiso es lo que
+         permite tomar el MulticastLock que desactiva ese filtro; se
+         toma solo mientras no hay sesion (ver WifiLinkServer). -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Restauracion tras reiniciar. Solo se ACTUA sobre este permiso
+         si el usuario lo habilita en Ajustes: ver BootReceiver. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- BLE NO es imprescindible, y por eso required="false".
+         El enlace con Flex OS va por Wi-Fi: el ESP32-P4 no tiene radio
+         Bluetooth. Dejarlo en "true" excluiria de Google Play a
+         telefonos en los que esta app funciona perfectamente, que es
+         justo lo contrario de lo que se busca. Se conserva declarado
+         porque el transporte BLE existe escrito (ver GattServer) para
+         cuando el co-procesador C6 pueda darlo. -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+    <!-- Wi-Fi tampoco se marca imprescindible: un telefono sin Wi-Fi
+         puede instalar la app, y la propia app le dira que el enlace
+         necesita una red local. Es mejor explicarlo que desaparecer
+         de la tienda sin motivo visible. -->
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+
+    <application
+        android:name=".FlexPhoneApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.FlexPhone"
+        tools:targetApi="35">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.FlexPhone">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          LECTOR DE NOTIFICACIONES.
+          El permiso NO se puede pedir con un dialogo: lo concede el
+          usuario en la pantalla oficial de Ajustes de Android
+          (ACTION_NOTIFICATION_LISTENER_SETTINGS), a la que lleva la
+          pantalla de bienvenida.
+        -->
+        <service
+            android:name=".notifications.FlexNotificationListener"
+            android:exported="false"
+            android:label="@string/notif_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!--
+          Servicio del enlace. foregroundServiceType=connectedDevice
+          es el tipo que corresponde de verdad a mantener un enlace
+          BLE con un accesorio. Solo corre mientras HAY enlace: ver
+          FlexLinkService.
+        -->
+        <service
+            android:name=".link.FlexLinkService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
+        <!--
+          Browser Relay. connectedDevice: el telefono sirve el navegador a
+          un dispositivo externo (el P4) por la red local  -  el mismo caso
+          que Flex Storage  - , y Android 15 no corta este tipo a las 6 horas
+          como hacia con dataSync. Sigue en marcha aunque se cierre la app;
+          solo se para cuando la persona (o Flex OS) lo pide. Los cerrojos,
+          solo con Flex OS conectado.
+        -->
+        <service
+            android:name=".relay.BrowserRelayService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
+        <!--
+          FLEX CLOUD EN ESTE TELEFONO (Flex Storage). connectedDevice: el
+          telefono sirve a un dispositivo externo (el P4) por la red local, y
+          Android 15 no corta este tipo a las 6 horas como dataSync. El
+          servidor escucha SOLO en la IP privada de la Wi-Fi y solo acepta la
+          sesion del Flex OS emparejado. No necesita ningun permiso nuevo
+          (ni de almacenamiento: usa la carpeta privada de la app).
+        -->
+        <service
+            android:name=".flexcloud.FlexStorageService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
+        <!--
+          Enlace flexstorage://attach que abre la web de Flex OS (en este
+          telefono) para activar Flex Cloud: pregunta a la persona, ensena el
+          codigo de 6 cifras y empareja. exported porque la abre el navegador;
+          lo que trae (direccion y oferta de un solo uso) se valida entero.
+        -->
+        <activity
+            android:name=".flexcloud.StorageAttachActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.FlexPhone">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="flexstorage" android:host="attach" />
+            </intent-filter>
+        </activity>
+
+        <receiver
+            android:name=".link.BootReceiver"
+            android:exported="false"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

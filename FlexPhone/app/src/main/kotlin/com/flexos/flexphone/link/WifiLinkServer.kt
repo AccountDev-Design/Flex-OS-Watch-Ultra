@@ -1,0 +1,1437 @@
+package com.flexos.flexphone.link
+
+import android.content.Context
+import android.net.wifi.WifiManager
+import com.flexos.flexphone.protocol.Discovery
+import com.flexos.flexphone.protocol.FlexAuth
+import com.flexos.flexphone.protocol.FlexLink
+import com.flexos.flexphone.protocol.LinkDiag
+import com.flexos.flexphone.protocol.PairFailure
+import com.flexos.flexphone.protocol.PairingSession
+import com.flexos.flexphone.protocol.PayloadReader
+import com.flexos.flexphone.protocol.PayloadWriter
+import java.io.InputStream
+import java.io.OutputStream
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.NetworkInterface
+import java.net.ServerSocket
+import java.net.Socket
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * SERVIDOR Wi-Fi DEL ENLACE.
+ *
+ * Es la pieza que hace que Flex Phone funcione de verdad en el
+ * ESP32-P4. Antes el enlace iba por BLE, y el P4 no tiene radio
+ * Bluetooth: la aplicacion entera vivia en "no disponible".
+ *
+ * QUIEN ES SERVIDOR
+ * -----------------
+ * El TELEFONO escucha y Flex OS se conecta. El telefono esta
+ * encendido siempre y tiene un servicio en primer plano; el reloj se
+ * suspende. Al reves, cada suspension del P4 cortaria el enlace.
+ *
+ * DOS SOCKETS
+ * -----------
+ *   · UDP 47821 -- descubrimiento. Flex OS pregunta a la difusion de
+ *     la red y este servidor contesta con su puerto TCP y su nombre.
+ *   · TCP 47820 -- el enlace. Tramas de Flex Link, una detras de
+ *     otra.
+ *
+ * CONTROL DE ACCESO -- lo importante
+ * ----------------------------------
+ * Abrir un puerto en la red local significa que CUALQUIER equipo de
+ * esa red puede llamar. Por eso:
+ *   · una sola sesion a la vez;
+ *   · sin apreton de manos completo no se acepta NINGUN mensaje que
+ *     no sea del propio apreton;
+ *   · el que llama tiene que demostrar que tiene la clave del
+ *     vinculo, y este servidor demuestra que la tiene tambien;
+ *   · una conexion que no autentica en unos segundos se cierra;
+ *   · latido y tiempo de espera, para que un socket muerto no ocupe
+ *     la sesion para siempre.
+ *
+ * LO QUE ESTO NO DA: la carga viaja EN CLARO por la red local. Impide
+ * que un dispositivo no emparejado abra sesion; no protege frente a
+ * quien ya este escuchando la misma red. La interfaz lo dice tal
+ * cual, no se anuncia como cifrado.
+ */
+class WifiLinkServer(
+    private val ctx: Context,
+    private val phoneId: String,
+    private val phoneName: String,
+    /** Clave del vinculo guardada, o null si todavia no hay ninguno. */
+    private val bondKey: () -> ByteArray?,
+    /** Se llama cuando un emparejamiento se cierra con exito. */
+    private val onPaired: (key: ByteArray, flexosId: String) -> Unit,
+    private val onEvent: (Event) -> Unit,
+    /** Mensajes de aplicacion ya reensamblados. */
+    private val onMessage: (type: Int, payload: ByteArray) -> Unit,
+    /**
+     * La IPv4 de la Wi-Fi tal como la dice Android (ConnectivityManager). Si no
+     * se da, se recurre a recorrer las interfaces -- que NO distingue la Wi-Fi de
+     * los datos moviles: solo para pruebas de PC.
+     */
+    private val wifiAddress: () -> String? = { null },
+    /** Nombre de la interfaz Wi-Fi (`wlan0`), para no emitir la busqueda por los datos moviles. */
+    private val wifiInterface: () -> String? = { null },
+) {
+    sealed class Event {
+        data class Listening(val port: Int, val address: String) : Event()
+        /**
+         * Algo fue mal. [fatal] SOLO cuando este lado no puede seguir (no se pudo
+         * abrir el puerto, el servidor dejo de aceptar): ahi, y solo ahi, la app
+         * pasa a ERROR. Un canal que se cierra, un flujo descolocado o un reloj
+         * que no contesta son problemas del ENLACE, no de la app, y no pueden
+         * tirar lo que ya se habia conseguido.
+         */
+        data class Error(val message: String, val fatal: Boolean = false) : Event()
+        data class SessionOpen(val peer: String) : Event()
+        /** Un Flex OS abrio un canal TCP (todavia sin autenticar). */
+        object ChannelOpened : Event()
+        /**
+         * Se cerro el canal que tenia el hueco de sesion. [authenticated]: ¿estaba
+         * autenticado? Un canal que nunca se presento NO es una sesion caida.
+         */
+        data class SessionClosed(val authenticated: Boolean = true) : Event()
+        /** La prueba del codigo se REENVIO sola por un canal nuevo (el codigo ya estaba tecleado). */
+        object ProofResent : Event()
+        /**
+         * La prueba del codigo NO llego a Flex OS (el canal se cayo al enviarla, o
+         * no contesto). NO dice nada sobre el codigo: se conserva y se reenvia.
+         */
+        data class ProofNotSent(val why: String) : Event()
+        /**
+         * El otro extremo pidio emparejar: hay que ensenar el campo
+         * del codigo. [freshSession] es true cuando Flex OS abrio una
+         * sesion NUEVA (sal distinta): la pantalla tiene que vaciar lo
+         * que hubiera tecleado, porque pertenecia a la sesion anterior
+         * y ya no sirve para nada.
+         */
+        data class PairingRequested(val freshSession: Boolean) : Event()
+        /**
+         * El emparejamiento no salio. [why] es para leer; [kind] es
+         * para que la pantalla diga la verdad: rechazar un codigo y
+         * perder el socket no se cuentan igual.
+         */
+        data class PairingFailed(val why: String, val kind: PairFailure) : Event()
+        /** La lista de relojes que han contestado a una busqueda. */
+        data class WatchesFound(val watches: List<Watch>) : Event()
+    }
+
+    /**
+     * Un Flex OS que ha contestado a una busqueda.
+     *
+     * NO es una sesion: es solo "este reloj esta ahi y me oye". Que
+     * aparezca aqui ya demuestra dos cosas -- que llega el ida y el
+     * vuelta --, que es justo lo que no se sabia cuando el
+     * emparejamiento fallaba sin decir nada.
+     */
+    data class Watch(
+        val id: String,
+        val name: String,
+        val address: String,
+        /** El reloj esta AHORA ensenando un codigo de emparejamiento. */
+        val pairing: Boolean,
+        val seenAt: Long = System.currentTimeMillis(),
+    )
+
+    companion object {
+        private const val TAG = "FlexPhone/WifiLink"
+        // #########################################################
+        // ##  REGISTRO DEL ENLACE
+        // ##  --------------------------------------------------
+        // ##  Todo lo que antes iba a logcat (y estaba ENCENDIDO en el
+        // ##  repositorio) va ahora a LinkDiag: un anillo acotado y
+        // ##  silencioso que se lee en Diagnostico, y que solo se copia a
+        // ##  logcat si la persona enciende "Registro detallado". No
+        // ##  apunta NUNCA contenido de mensajes ni material de clave:
+        // ##  solo el numero de conexion y el motivo del cierre.
+        // #########################################################
+        // Los MISMOS numeros que FlexOS_FlexPhone_WiFi.h. Cambiar uno
+        // solo en un lado deja al telefono y al reloj sin encontrarse,
+        // y sin ningun error que lo explique.
+        const val TCP_PORT = Discovery.TCP_PORT
+        const val UDP_PORT = Discovery.UDP_PORT
+        // #############################################################
+        // ##  LA BUSQUEDA AL REVES -- la direccion que SI funciona
+        // ##  ------------------------------------------------------
+        // ##  PROBE/REPLY es el reloj preguntando y el telefono
+        // ##  contestando. Esa direccion depende de que Android
+        // ##  RECIBA una difusion, y el controlador Wi-Fi las filtra
+        // ##  para ahorrar bateria: el cerrojo de multidifusion
+        // ##  ayuda, pero con la pantalla apagada o la app en segundo
+        // ##  plano no siempre basta.
+        // ##
+        // ##  ASK/ANS es al reves: EMITE el telefono (emitir nunca se
+        // ##  filtra) y el reloj contesta en UNIDIFUSION, que tampoco.
+        // ##  Ademas, al recibir la sonda el reloj ya sabe la IP (el
+        // ##  origen del paquete) y el puerto (la carga), asi que
+        // ##  puede conectar aunque su propia difusion no llegue a
+        // ##  ninguna parte.
+        // ##
+        // ##  LOS BYTES viven en :protocol (Discovery.kt), que es donde
+        // ##  se pueden comparar con los de C++ sin Android de por
+        // ##  medio: los mismos vectores estan en DiscoveryTest.kt y en
+        // ##  tests/host/test_flexphone_discovery.cpp.
+        // #############################################################
+        /** Un reloj que lleva esto sin contestar sale de la lista. */
+        private const val WATCH_TTL_MS = 20_000L
+
+        // #########################################################
+        // ##  DOS PLAZOS, NO UNO
+        // ##  --------------------------------------------------
+        // ##  Antes habia un solo plazo de 15 s desde que se ACEPTA
+        // ##  la conexion, y se aplicaba tambien mientras el usuario
+        // ##  leia seis digitos en la pantalla del reloj y los
+        // ##  tecleaba aqui. Ademas el reloj abre el socket en
+        // ##  cuanto descubre el telefono, que puede ser mucho ANTES
+        // ##  de que nadie pulse "Emparejar telefono".
+        // ##
+        // ##  O sea que el telefono cerraba el socket cada 15 s, el
+        // ##  reloj reconectaba, y el emparejamiento no llegaba a
+        // ##  empezar. Ese ciclo es el que hacia parpadear el codigo
+        // ##  en el reloj.
+        // ##
+        // ##  Ahora: quien no ha hecho NADA se va a los 15 s (que es
+        // ##  lo que protege el puerto de un desconocido), y en
+        // ##  cuanto hay emparejamiento en marcha manda el plazo DE
+        // ##  LA SESION -- los mismos dos minutos que el reloj.
+        // #########################################################
+        /** Un extremo que no dice nada ni empareja se va en este tiempo. */
+        private const val AUTH_TIMEOUT_MS = 15_000L
+        /** Sin recibir nada en este tiempo, la sesion se da por muerta. */
+        private const val IDLE_TIMEOUT_MS = 40_000
+        /**
+         * Cada cuanto despierta la lectura para mirar los plazos.
+         *
+         * NO es un tiempo de espera de la sesion: `read` vuelve cada
+         * dos segundos sin datos y no pasa nada. Existe porque los dos
+         * plazos de arriba solo se comprobaban DESPUES de que `read`
+         * volviera, y `read` bloqueaba los 40 s del plazo largo. O sea
+         * que el plazo de autenticacion de 15 s no podia dispararse
+         * nunca: una conexion muda ocupaba la unica sesion casi un
+         * minuto, y el Flex OS de verdad se encontraba la puerta
+         * cerrada sin ninguna explicacion.
+         */
+        private const val POLL_MS = 2_000
+        /**
+         * Desde que se manda el codigo hasta que Flex OS lo acepta.
+         * Pasado esto se da por fallido: la pantalla NUNCA se queda en
+         * "Comprobando..." para siempre.
+         */
+        private const val PAIR_CONFIRM_TIMEOUT_MS = 12_000L
+        /** Tope de lo acumulado sin completar una trama. */
+        private const val ACC_MAX = FlexLink.MAX_FRAME * 3
+        /**
+         * Conexiones servidas a la vez. Solo UNA puede tener la
+         * sesion; las demas son candidatas que aun no han demostrado
+         * nada y mueren por su propio plazo. El tope existe para que
+         * nadie pueda gastar hilos abriendo sockets sin hablar.
+         */
+        private const val MAX_CONNS = 4
+        /** Cuantos mensajes recientes se recuerdan por conexion para detectar reenvios. */
+        private const val SEEN_N = 32
+        /** Tramas pendientes de salir por conexion. Una trama son <= 244 B. */
+        private const val TX_QUEUE_MAX = 64
+        /** Trama vacia que despierta al hilo de salida para que termine. */
+        private val TX_POISON = ByteArray(0)
+        /** Ordenes de Flex OS que se ACUSAN: las que el reloj manda "con acuse". */
+        private val ACKED_TYPES = intArrayOf(
+            FlexLink.T_RELAY_START, FlexLink.T_RELAY_STOP,
+            FlexLink.T_FIND_START, FlexLink.T_FIND_STOP,
+            FlexLink.T_REPLY_REQ, FlexLink.T_ACTION_REQ,
+        )
+    }
+
+    private val running = AtomicBoolean(false)
+    private var server: ServerSocket? = null
+    private var udp: DatagramSocket? = null
+
+    // #############################################################
+    // ##  EL CERROJO DE MULTIDIFUSION -- sin esto no llega NADA
+    // ##  ------------------------------------------------------
+    // ##  El descubrimiento de Flex OS es una sonda a la DIFUSION de
+    // ##  la red. Y el controlador Wi-Fi de Android descarta las
+    // ##  tramas de difusion y multidifusion que no van dirigidas a
+    // ##  la MAC del propio telefono ANTES de que lleguen a ningun
+    // ##  socket, para ahorrar bateria.
+    // ##
+    // ##  O sea: sin este cerrojo, el ESP32 emite la sonda
+    // ##  perfectamente, el telefono esta escuchando en el puerto
+    // ##  correcto... y receive() no despierta nunca. No hay ningun
+    // ##  error que lo explique, que es lo que lo hacia tan dificil
+    // ##  de ver.
+    // ##
+    // ##  Se suelta mientras hay sesion abierta: con el enlace
+    // ##  establecido ya no hace falta oir sondas, y el filtro del
+    // ##  controlador es justo lo que ahorra bateria.
+    // #############################################################
+    private var multicastLock: WifiManager.MulticastLock? = null
+
+    private fun acquireMulticast() {
+        if (multicastLock?.isHeld == true) return
+        runCatching {
+            val wm = ctx.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            multicastLock = wm?.createMulticastLock("flexphone-discovery")?.apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        }.onFailure { LinkDiag.w(TAG, "no se pudo tomar el cerrojo de multidifusion") }
+        LinkDiag.d(TAG, "cerrojo de multidifusion: ${if (multicastLock?.isHeld == true) "tomado" else "NO"}")
+    }
+
+    private fun releaseMulticast() {
+        runCatching { if (multicastLock?.isHeld == true) multicastLock?.release() }
+        multicastLock = null
+    }
+    private var tcpThread: Thread? = null
+    private var udpThread: Thread? = null
+
+    // #############################################################
+    // ##  UNA CONEXION, UN DUENO
+    // ##  ------------------------------------------------------
+    // ##  AQUI ESTABA EL BUCLE DE CONECTA/DESCONECTA CADA SEGUNDO.
+    // ##
+    // ##  Todo el estado de la conexion vivia en campos COMPARTIDOS
+    // ##  del servidor (`sock`, `out`, `authed`, `txCounter`...), y
+    // ##  `serve()` los pisaba al entrar y `closeSession()` los
+    // ##  borraba al salir. Con una sola conexion a la vez eso
+    // ##  parece bastar; con dos solapadas, no:
+    // ##
+    // ##    1. muere el socket A (basta un hipo de Wi-Fi);
+    // ##    2. el reloj reconecta un segundo despues -> socket B;
+    // ##    3. el hilo de A sigue dentro de `read()` (hasta 2 s),
+    // ##       asi que `sock` todavia apunta a A y el `accept()`
+    // ##       CIERRA B en el acto por "ya hay sesion";
+    // ##    4. el reloj vuelve a conectar -> socket C;
+    // ##    5. el hilo de A por fin despierta y ejecuta su
+    // ##       `finally`, que cierra "la sesion"... que ya es C.
+    // ##
+    // ##  Los pasos 3 y 5 se rearman entre si: la conexion buena
+    // ##  muere siempre a manos de la limpieza de la anterior, y el
+    // ##  ciclo se sostiene solo indefinidamente. El reloj
+    // ##  reintentaba a 1 Hz, que es justo el periodo que se veia.
+    // ##
+    // ##  Ahora cada conexion es un objeto con su estado dentro, y
+    // ##  el hueco de "sesion activa" se toma y se suelta de forma
+    // ##  ATOMICA. Un hilo solo puede cerrar la conexion que es
+    // ##  suya; si ya no es el dueno, no toca nada de nadie.
+    // #############################################################
+    private class Conn(val id: Long, val socket: Socket) {
+        val out: OutputStream = socket.getOutputStream()
+        /** Cuando se acepto. Sirve para decir cuanto duro al cerrarse. */
+        val openedAt: Long = System.currentTimeMillis()
+        @Volatile var authed = false
+        @Volatile var session = 0
+        @Volatile var sessionKey: ByteArray? = null
+        @Volatile var nonce: ByteArray? = null
+        @Volatile var flexosId: String = ""
+        // Solo los toca el hilo de ESTA conexion, bajo su propio
+        // `synchronized(this)` al enmarcar.
+        var txCounter = 0L
+        var txPacket = 1
+        /** Latidos recibidos por esta conexion (solo para el diagnostico). */
+        var pings = 0
+
+        /**
+         * COLA DE SALIDA. Nadie escribe en el socket salvo el hilo `flex-link-tx-N`
+         * de ESTA conexion: el resto de la app (hilo principal incluido) solo
+         * encola tramas ya enmarcadas. Acotada: si el otro extremo no lee, se
+         * descarta y se cuenta; no se bloquea a nadie ni crece sin limite.
+         */
+        val txQueue = LinkedBlockingQueue<ByteArray>(TX_QUEUE_MAX)
+        /** Hilo que hizo la ULTIMA escritura al socket (para el diagnostico y las pruebas). */
+        @Volatile var lastWriteThread: String = ""
+        @Volatile var txDropped = 0
+
+        /**
+         * Los ultimos mensajes de aplicacion recibidos, por (tipo, id de
+         * paquete, fragmento). Solo lo toca el hilo de ESTA conexion.
+         *
+         * Un id de paquete NO se repite dentro de una conexion (el reloj lo
+         * incrementa por mensaje), asi que ver el mismo dos veces es un
+         * REENVIO, no una orden nueva. Un reloj con el firmware anterior
+         * reenviaba cada orden "con acuse" hasta cinco veces porque este
+         * lado nunca contestaba el ACK: "Iniciar relay" arrancaba el relay
+         * cinco veces y "Hacer sonar" sonaba cinco. Ver tambien
+         * FlexOS_FlexPhone_Link.cpp.
+         */
+        private val seen = IntArray(SEEN_N)
+        private var seenAt = 0
+        private var seenFill = 0
+
+        /** true la PRIMERA vez que se ve esta clave. */
+        fun firstSight(type: Int, packet: Int, frag: Int): Boolean {
+            val key = ((type and 0xFF) shl 24) or ((frag and 0xFF) shl 16) or (packet and 0xFFFF)
+            for (i in 0 until seenFill) if (seen[i] == key) return false
+            seen[seenAt] = key
+            seenAt = (seenAt + 1) % SEEN_N
+            if (seenFill < SEEN_N) seenFill++
+            return true
+        }
+    }
+
+    /**
+     * LA CONEXION QUE TIENE LA SESION, o null.
+     *
+     * El hueco se toma de dos maneras, y solo de esas dos:
+     *   · esta libre y la coge quien llega, o
+     *   · el que llega SE AUTENTICA -- y entonces desaloja al que
+     *     hubiera, porque una conexion que ya no responde no puede
+     *     dejar fuera al reloj de verdad.
+     *
+     * Una conexion SIN autenticar no desaloja a nadie nunca, asi que
+     * un equipo cualquiera de la red no puede tirar una sesion viva:
+     * para eso tendria que demostrar la clave del vinculo.
+     */
+    private val conn = java.util.concurrent.atomic.AtomicReference<Conn?>(null)
+    private val connSeq = java.util.concurrent.atomic.AtomicLong(0)
+    /** Conexiones sirviendose ahora mismo, para no aceptar sin limite. */
+    private val liveConns = java.util.concurrent.atomic.AtomicInteger(0)
+    /**
+     * La conexion por la que llego la sal del emparejamiento en curso.
+     * El PAIR_CONFIRM tiene que salir POR ESA, no por "la activa":
+     * durante el emparejamiento todavia no hay sesion que valga.
+     */
+    @Volatile private var pairConn: Conn? = null
+
+    val port: Int get() = server?.localPort ?: 0
+    fun isRunning(): Boolean = running.get()
+    fun hasSession(): Boolean = conn.get()?.authed == true
+
+    // =========================================================
+    //  Arranque y parada
+    // =========================================================
+    /**
+     * Entrega un evento a quien escucha SIN dejar que su fallo salga de aqui.
+     *
+     * Los eventos se emiten desde los hilos de conexion: una excepcion del oyente
+     * (la pantalla, el servicio) subiria hasta `serve()` y cerraria la sesion por
+     * un fallo que no es del enlace.
+     */
+    private fun emit(ev: Event) {
+        try { onEvent(ev) } catch (e: Exception) {
+            LinkDiag.w(TAG, "el oyente de ${ev::class.simpleName} fallo: ${e.javaClass.simpleName}")
+        }
+    }
+
+    fun start(): Boolean {
+        if (running.get()) return true
+        return try {
+            server = ServerSocket().apply {
+                reuseAddress = true
+                bind(InetSocketAddress(TCP_PORT))
+            }
+            udp = DatagramSocket(null).apply {
+                reuseAddress = true
+                broadcast = true
+                bind(InetSocketAddress(UDP_PORT))
+            }
+            running.set(true)
+            probeExec = newProbeExec()
+            acquireMulticast()
+            tcpThread = Thread({ acceptLoop() }, "flex-link-tcp").apply { isDaemon = true; start() }
+            udpThread = Thread({ discoveryLoop() }, "flex-link-udp").apply { isDaemon = true; start() }
+            emit(Event.Listening(server!!.localPort, localWifiAddress() ?: "?"))
+            true
+        } catch (e: Exception) {
+            // El motivo REAL, no un generico: un puerto ocupado y un
+            // telefono sin Wi-Fi se arreglan de formas distintas.
+            emit(Event.Error(
+                if (e is java.net.BindException) "el puerto $TCP_PORT ya esta en uso"
+                else "no se pudo abrir el enlace",
+                fatal = true,
+            ))
+            stop()
+            false
+        }
+    }
+
+    fun stop() {
+        running.set(false)
+        releaseMulticast()
+        // La lista de relojes deja de ser cierta en cuanto se para el
+        // socket: se vacia en vez de quedarse mostrando dispositivos
+        // que ya no se estan viendo.
+        synchronized(watches) { watches.clear() }
+        // Parar el servidor SI cierra el emparejamiento: es una orden
+        // del usuario, no un parpadeo de la red.
+        pairing = null
+        pairConn = null
+        closeActive("servidor parado")
+        runCatching { server?.close() }; server = null
+        runCatching { udp?.close() }; udp = null
+        runCatching { probeExec?.shutdownNow() }; probeExec = null
+        tcpThread = null
+        udpThread = null
+    }
+
+    // =========================================================
+    //  Descubrimiento
+    // =========================================================
+    private fun discoveryLoop() {
+        val buf = ByteArray(96)
+        LinkDiag.d(TAG, "descubrimiento escuchando en UDP $UDP_PORT")
+        while (running.get()) {
+            try {
+                val pkt = DatagramPacket(buf, buf.size)
+                udp?.receive(pkt) ?: break
+                // (b) ALGO ha llegado. Si esta linea no sale nunca y el
+                //     ESP32 si dice que emite, el controlador Wi-Fi esta
+                //     filtrando la difusion (ver el cerrojo de arriba) o
+                //     el router aisla a los clientes entre si.
+                LinkDiag.d(TAG, "(b) ${pkt.length} B de ${pkt.address?.hostAddress}:${pkt.port}")
+                when {
+                    Discovery.isProbe(buf, pkt.length) -> onWatchProbe(buf, pkt)
+                    Discovery.isAnswer(buf, pkt.length) -> onWatchAnswer(buf, pkt)
+                    // Lo normal que queda aqui es oir la PROPIA sonda de
+                    // vuelta: la difusion se entrega tambien al que la
+                    // emitio. No es un fallo.
+                }
+            } catch (e: Exception) {
+                if (running.get()) LinkDiag.w(TAG, "descubrimiento detenido: ${e.javaClass.simpleName}")
+                break
+            }
+        }
+    }
+
+    /** El reloj pregunta quien hay: se contesta con el puerto TCP. */
+    private fun onWatchProbe(buf: ByteArray, pkt: DatagramPacket) {
+        val probe = Discovery.parseProbe(buf, pkt.length) ?: return
+        // Una version que no entendemos NO se contesta: seria invitar a
+        // una conexion que va a fallar despues.
+        if (probe.ver < FlexLink.VERSION_MIN) {
+            LinkDiag.w(TAG, "(b) sonda de protocolo v${probe.ver}, se necesita v${FlexLink.VERSION_MIN}")
+            return
+        }
+        val p = server?.localPort ?: TCP_PORT
+        val reply = Discovery.buildReply(p, phoneName)
+        udp?.send(DatagramPacket(reply, reply.size, pkt.address, pkt.port))
+        // (c) contestado. Si se ve esto y el ESP32 no registra su (d),
+        //     la respuesta se pierde de vuelta -- ahi ya es la red, no
+        //     el codigo.
+        LinkDiag.d(TAG, "(c) respondido a ${pkt.address?.hostAddress}:${pkt.port}, puerto TCP $p")
+    }
+
+    /** El reloj contesta a NUESTRA busqueda: entra en la lista. */
+    private fun onWatchAnswer(buf: ByteArray, pkt: DatagramPacket) {
+        val a = Discovery.parseAnswer(buf, pkt.length) ?: return
+        if (a.ver < FlexLink.VERSION_MIN) {
+            LinkDiag.w(TAG, "(2) un reloj contesto con protocolo v${a.ver}, se necesita v${FlexLink.VERSION_MIN}")
+            return
+        }
+        val addr = pkt.address?.hostAddress ?: return
+        val w = Watch(id = a.id, name = a.name, address = addr, pairing = a.pairing)
+        // (2) un reloj CONTESTO. Que se vea esta linea demuestra que la
+        //     ida y la vuelta funcionan; si no se ve nunca, el problema
+        //     esta en la red (aislamiento de clientes) o el reloj no
+        //     tiene el enlace encendido.
+        LinkDiag.d(TAG, "(2) reloj: ${w.name} (${w.id}) en ${w.address}${if (w.pairing) " [emparejando]" else ""}")
+        synchronized(watches) { watches[w.id] = w }
+        publishWatches()
+    }
+
+    // =========================================================
+    //  Buscar relojes (la direccion fiable)
+    // =========================================================
+    private val watches = LinkedHashMap<String, Watch>()
+
+    private fun publishWatches() {
+        val now = System.currentTimeMillis()
+        val live = synchronized(watches) {
+            // Un reloj que dejo de contestar SALE. Dejarlo ahi seria
+            // ofrecer un dispositivo que ya no esta, y el usuario lo
+            // tocaria y no pasaria nada.
+            watches.entries.removeAll { now - it.value.seenAt > WATCH_TTL_MS }
+            watches.values.sortedBy { it.name }
+        }
+        emit(Event.WatchesFound(live))
+    }
+
+    private fun askPacket(): ByteArray =
+        Discovery.buildAsk(server?.localPort ?: TCP_PORT, phoneName)
+
+    /**
+     * Quien envia los paquetes UDP de busqueda: UN hilo propio.
+     *
+     * Estas dos funciones las llama la INTERFAZ (el hilo principal) y Android
+     * lanza NetworkOnMainThreadException en cuanto el hilo principal envia un
+     * datagrama. Antes la excepcion se tragaba en un `runCatching`: la busqueda
+     * "no emitia a ningun destino" y la pantalla decia "este telefono no tiene
+     * una direccion en ninguna red Wi-Fi" teniendola, y "Preguntar a esta
+     * direccion" contestaba "Esa no es una direccion valida" con una IP buena.
+     */
+    @Volatile private var probeExec: java.util.concurrent.ExecutorService? = null
+
+    private fun newProbeExec(): java.util.concurrent.ExecutorService =
+        java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+            Thread(r, "flex-link-probe").apply { isDaemon = true }
+        }
+
+    /**
+     * Pregunta a toda la red quien es un Flex OS.
+     *
+     * Devuelve a cuantos destinos se EMITIRA. Cero significa que este telefono
+     * no tiene ningun destino -- sin Wi-Fi, o la interfaz sin direccion --, y
+     * eso se dice en pantalla en vez de dejar un buscador girando. El envio en
+     * si sale en otro hilo; no se espera.
+     */
+    fun probeForWatches(): Int {
+        val u = udp ?: return 0
+        val ex = probeExec ?: return 0
+        val pkt = askPacket()
+        val dests = ArrayList<InetAddress>()
+        // Difusion DIRIGIDA de cada interfaz Wi-Fi activa. Es la que menos
+        // molesta y la que mas pilas dejan pasar. (Listar interfaces no es E/S
+        // de red: se puede hacer desde cualquier hilo.)
+        runCatching {
+            val only = wifiInterface()
+            NetworkInterface.getNetworkInterfaces().toList()
+                .filter { it.isUp && !it.isLoopback && (only == null || it.name == only) }
+                .flatMap { it.interfaceAddresses }
+                .mapNotNull { it.broadcast }
+                .distinct()
+                .forEach { dests.add(it) }
+        }
+        // Y la LIMITADA, porque hay puntos de acceso que filtran la
+        // dirigida y dejan pasar esta. Son 40 bytes. (Literal: sin DNS.)
+        runCatching { dests.add(InetAddress.getByAddress(byteArrayOf(-1, -1, -1, -1))) }
+        if (dests.isEmpty()) return 0
+        try {
+            ex.execute {
+                var sent = 0
+                for (d in dests) runCatching { u.send(DatagramPacket(pkt, pkt.size, d, UDP_PORT)); sent++ }
+                // (1) emitido. Si esto sale y nunca llega un (2), la red esta
+                //     filtrando la difusion o aislando a los clientes: para eso
+                //     esta probeHost.
+                LinkDiag.d(TAG, "(1) busqueda emitida a $sent/${dests.size} destinos")
+            }
+        } catch (e: java.util.concurrent.RejectedExecutionException) {
+            return 0                       // el servidor se esta parando
+        }
+        return dests.size
+    }
+
+    /**
+     * Pregunta a UNA direccion concreta, sin difusion de por medio.
+     *
+     * Es el respaldo para las redes que filtran o aislan: el usuario
+     * lee la IP en la pantalla de Flex OS y la teclea aqui. El paquete
+     * va en unidifusion, que no filtra nadie, y al recibirlo el reloj
+     * aprende la IP y el puerto de este telefono del propio paquete --
+     * asi que puede conectar sin haber descubierto nada.
+     *
+     * Devuelve false SOLO si lo tecleado no es una IPv4 valida. El envio sale en
+     * otro hilo (ver [probeExec]).
+     */
+    fun probeHost(ip: String): Boolean {
+        val u = udp ?: return false
+        val ex = probeExec ?: return false
+        val m = Regex("^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$").matchEntire(ip.trim())
+        val o = m?.groupValues?.drop(1)?.map { it.toInt() }
+        if (o == null || o.any { it > 255 }) {
+            LinkDiag.w(TAG, "direccion invalida: $ip")
+            return false
+        }
+        // Por octetos, NUNCA getByName: con un nombre haria DNS (red) en este hilo.
+        val a = InetAddress.getByAddress(ByteArray(4) { o[it].toByte() })
+        val pkt = askPacket()
+        return try {
+            ex.execute {
+                runCatching { u.send(DatagramPacket(pkt, pkt.size, a, UDP_PORT)); LinkDiag.d(TAG, "(1) busqueda directa a $ip") }
+                    .onFailure { LinkDiag.w(TAG, "no se pudo preguntar a $ip: ${it.javaClass.simpleName}") }
+            }
+            true
+        } catch (e: java.util.concurrent.RejectedExecutionException) { false }
+    }
+
+    /** IP local de la interfaz Wi-Fi, para ensenarla. Null si no hay. */
+    fun localWifiAddress(): String? = wifiAddress() ?: runCatching {
+        NetworkInterface.getNetworkInterfaces().toList()
+            .asSequence()
+            .filter { it.isUp && !it.isLoopback }
+            .flatMap { it.inetAddresses.toList().asSequence() }
+            .firstOrNull { !it.isLoopbackAddress && it is java.net.Inet4Address }
+            ?.hostAddress
+    }.getOrNull()
+
+    /**
+     * La red Wi-Fi cambio (otra IP, otra banda, se fue y volvio).
+     *
+     * El servidor escucha en TODAS las interfaces (0.0.0.0), asi que NO hay que
+     * volver a abrir ningun socket: lo que si cambia es lo que se ensena y lo
+     * que se anuncia. Aqui solo se renueva el cerrojo de multidifusion (el
+     * controlador Wi-Fi reconfigura sus filtros al cambiar de red) cuando no hay
+     * sesion, y se deja constancia.
+     */
+    fun onNetworkChanged() {
+        LinkDiag.d(TAG, "NET_CHANGED ip=${localWifiAddress() ?: "ninguna"} sesion=${hasSession()}")
+        if (running.get() && !hasSession()) { releaseMulticast(); acquireMulticast() }
+    }
+
+    // =========================================================
+    //  Aceptacion
+    // =========================================================
+    private fun acceptLoop() {
+        while (running.get()) {
+            val s = try {
+                server?.accept() ?: break
+            } catch (e: Exception) {
+                if (running.get()) emit(Event.Error("el enlace dejo de aceptar conexiones", fatal = true))
+                break
+            }
+            // #####################################################
+            // ##  AL QUE LLEGA SE LE DEJA INTENTARLO
+            // ##  ----------------------------------------------
+            // ##  Antes, si ya habia una conexion, la nueva se
+            // ##  cerraba en el acto. Eso suena prudente y era justo
+            // ##  lo que dejaba al usuario sin enlace: cuando el
+            // ##  socket del reloj muere SIN aviso -- se va el
+            // ##  Wi-Fi, se reinicia el reloj --, aqui no hay ningun
+            // ##  FIN que leer, asi que `read()` sigue bloqueado y
+            // ##  el hueco lo guarda un CADAVER hasta que salte el
+            // ##  plazo de inactividad. Mientras tanto el reloj
+            // ##  reintentaba cada segundo y se le cerraba la puerta
+            // ##  cada segundo: el ciclo que se veia en pantalla.
+            // ##
+            // ##  Ahora se le sirve, pero NO se le da la sesion: el
+            // ##  hueco solo cambia de dueno cuando alguien completa
+            // ##  la autenticacion. Un desconocido no puede, asi que
+            // ##  no puede desalojar a nadie.
+            // #####################################################
+            if (liveConns.get() >= MAX_CONNS) {
+                LinkDiag.d(TAG, "CLIENT_REJECTED: demasiadas conexiones a la vez")
+                runCatching { s.close() }
+                continue
+            }
+            val c = try {
+                Conn(connSeq.incrementAndGet(), s)
+            } catch (e: Exception) {
+                runCatching { s.close() }
+                continue
+            }
+            // Si el hueco esta libre se coge ya, para que el
+            // emparejamiento y los envios tengan por donde salir.
+            conn.compareAndSet(null, c)
+            liveConns.incrementAndGet()
+            LinkDiag.d(TAG, "CLIENT_ACCEPTED #${c.id} ${s.inetAddress?.hostAddress}")
+            emit(Event.ChannelOpened)
+            Thread({ txLoop(c) }, "flex-link-tx-${c.id}").apply { isDaemon = true; start() }
+            Thread({ serve(c) }, "flex-link-conn-${c.id}").apply { isDaemon = true; start() }
+        }
+    }
+
+    private fun serve(c: Conn) {
+        // LA SESION DE EMPAREJAMIENTO NO SE TOCA AQUI. El reloj
+        // reconecta a menudo durante un emparejamiento, y reenvia LA
+        // MISMA sal: borrarla en cada accept() era perder el codigo
+        // que el usuario ya habia tecleado y reiniciarle el plazo.
+        val s = c.socket
+        val peer = s.inetAddress?.hostAddress ?: "?"
+        var why = "el otro extremo cerro"
+        try {
+            s.tcpNoDelay = true             // el enlace manda mensajes cortos
+            // Se despierta cada POLL_MS para mirar los plazos. Poner
+            // aqui IDLE_TIMEOUT_MS hacia que `read` bloqueara 40 s y
+            // que ningun plazo mas corto pudiera dispararse.
+            s.soTimeout = POLL_MS
+            val input: InputStream = s.getInputStream()
+
+            val acc = ByteArray(ACC_MAX)
+            var accN = 0
+            val opened = System.currentTimeMillis()
+            var lastRx = opened
+
+            while (running.get() && !s.isClosed) {
+                val now = System.currentTimeMillis()
+                // #############################################
+                // ##  EL PLAZO DEPENDE DE LO QUE ESTE PASANDO
+                // ##  ---------------------------------------
+                // ##  Tres situaciones distintas, tres plazos:
+                // ##
+                // ##  1) Emparejamiento en marcha -> el plazo de la
+                // ##     sesion (los mismos 2 min que el reloj). Al
+                // ##     otro lado hay una persona leyendo seis
+                // ##     digitos de una pantalla pequena.
+                // ##
+                // ##  2) Un Flex OS que ya se presento pero todavia
+                // ##     no empareja -> la ventana de emparejamiento.
+                // ##     Es el caso de "el reloj se conecta solo en
+                // ##     cuanto me descubre y el usuario aun no ha
+                // ##     pulsado Emparejar telefono". Con el plazo
+                // ##     corto, el telefono le colgaba cada 15 s y el
+                // ##     reloj reconectaba sin parar -- ese ciclo era
+                // ##     lo que hacia parpadear el codigo.
+                // ##
+                // ##  3) Alguien que abre el puerto y NO se presenta
+                // ##     -> 15 s y fuera. Es el unico caso que hay
+                // ##     que cortar rapido, y el unico que se corta:
+                // ##     nadie ocupa la unica sesion sin identificarse.
+                // #############################################
+                val pair = pairing
+                val deadline = when {
+                    pair != null && !pair.isExpired(now) -> pair.expiresAt
+                    c.flexosId.isNotEmpty() -> opened + PairingSession.WINDOW_MS
+                    else -> opened + AUTH_TIMEOUT_MS
+                }
+                if (!c.authed && now > deadline) {
+                    val expired = pair != null
+                    why = if (expired) "el codigo caduco" else "no se autentico a tiempo"
+                    emit(Event.PairingFailed(
+                        if (expired)
+                            "el codigo de Flex OS caduco; vuelve a pulsar \"Emparejar telefono\" en el reloj"
+                        else "la otra parte no se autentico",
+                        if (expired) PairFailure.CODE_EXPIRED else PairFailure.LINK,
+                    ))
+                    break
+                }
+                // NINGUN ESTADO INFINITO. El codigo se mando y Flex OS
+                // no lo confirmo: se dice por que en vez de dejar la
+                // pantalla en "Comprobando..." hasta que caduque la
+                // ventana de emparejamiento.
+                //
+                // Y NO SE CIERRA EL SOCKET: que una prueba se quede sin
+                // respuesta no prueba que el codigo estuviera mal, asi
+                // que la sesion sigue viva y el usuario puede volver a
+                // teclear contra el MISMO codigo que tiene delante.
+                val sentAt = pairSentAt
+                if (!c.authed && sentAt != 0L && now - sentAt > PAIR_CONFIRM_TIMEOUT_MS) {
+                    pairSentAt = 0L
+                    // Sin respuesta no es "codigo mal": el codigo se
+                    // conserva y se reenvia si el canal vuelve.
+                    pairing?.onSendFailed()
+                    emit(Event.ProofNotSent(
+                        "Flex OS no contesto al codigo. Comprueba que los dos siguen en la misma red " +
+                            "y vuelve a intentarlo.",
+                    ))
+                }
+                // #############################################
+                // ##  EL SILENCIO DE UN EMPAREJAMIENTO NO ES UN
+                // ##  ENLACE MUERTO
+                // ##  ---------------------------------------
+                // ##  AQUI MORIA EL EMPAREJAMIENTO. Mientras hay un
+                // ##  codigo en pantalla el canal esta legitimamente
+                // ##  mudo: el reloj mando su sal y se callo, y este
+                // ##  telefono no tiene nada que decir hasta que el
+                // ##  usuario teclee. Cuarenta segundos de eso son
+                // ##  completamente normales -- leer seis digitos de
+                // ##  un reloj y teclearlos cuesta mas.
+                // ##
+                // ##  El plazo saltaba, se cerraba el socket, y
+                // ##  cuando el usuario por fin pulsaba "Emparejar"
+                // ##  leia "se corto la conexion al enviar el
+                // ##  codigo", con el codigo correcto y la ventana
+                // ##  abierta en los dos lados.
+                // ##
+                // ##  El reloj ademas late ahora durante el
+                // ##  emparejamiento, asi que el canal ya no se
+                // ##  queda mudo; esto es el cinturon ademas de los
+                // ##  tirantes, y el que cubre a un reloj con
+                // ##  firmware anterior.
+                // #############################################
+                val pairingNow = pair != null && !pair.isExpired(now)
+                if (!pairingNow && now - lastRx > IDLE_TIMEOUT_MS) {
+                    why = "sin respuesta en ${IDLE_TIMEOUT_MS / 1000} s"
+                    emit(Event.Error("sin respuesta de Flex OS"))
+                    break
+                }
+                val room = ACC_MAX - accN
+                if (room <= 0) {
+                    // Lleno sin una trama completa: el otro extremo no
+                    // habla este protocolo.
+                    why = "flujo sin tramas validas"
+                    emit(Event.Error("el otro extremo no habla Flex Link"))
+                    break
+                }
+                val got = try { input.read(acc, accN, room) } catch (e: java.net.SocketTimeoutException) {
+                    continue                    // solo es que no hubo datos en este tramo
+                }
+                if (got <= 0) { why = "el otro extremo cerro"; break }
+                lastRx = System.currentTimeMillis()
+                accN += got
+                val left = drainFrames(c, acc, accN)
+                if (left == null) { why = "flujo descolocado"; break }
+                accN = left
+            }
+        } catch (e: Exception) {
+            // Un socket que se cierra por el otro lado es normal, no un
+            // fallo que haya que ensenar como error.
+            why = e.javaClass.simpleName
+        } finally {
+            // SOLO la conexion propia. Si mientras tanto el hueco ya es
+            // de otra conexion, esta limpieza no la toca: eso es
+            // exactamente lo que producia el bucle de un segundo.
+            closeSession(c, why)
+            liveConns.decrementAndGet()
+        }
+    }
+
+    /**
+     * TCP es un FLUJO: no respeta los limites de las tramas. Se
+     * reconstruyen con la propia cabecera de Flex Link, que ya dice su
+     * longitud. Devuelve los bytes que quedan sin consumir, o null si
+     * el flujo esta descolocado y hay que cerrar.
+     *
+     * Si la marca no cuadra NO se busca la siguiente a ciegas: un
+     * flujo corrupto en el que se va saltando hasta encontrar algo que
+     * parezca una cabecera acaba interpretando basura como mensajes.
+     */
+    private fun drainFrames(c: Conn, acc: ByteArray, accN: Int): Int? {
+        var at = 0
+        while (accN - at >= FlexLink.HDR_SIZE) {
+            if (acc[at] != 0xF1.toByte() || acc[at + 1] != 0x58.toByte()) {
+                emit(Event.Error("el flujo llego descolocado"))
+                return null
+            }
+            val len = (acc[at + 10].toInt() and 0xFF) or ((acc[at + 11].toInt() and 0xFF) shl 8)
+            if (len > FlexLink.MAX_PAYLOAD) {
+                emit(Event.Error("trama de tamano imposible"))
+                return null
+            }
+            val total = FlexLink.HDR_SIZE + len
+            if (accN - at < total) break               // falta cola: se espera
+            handleFrame(c, acc.copyOfRange(at, at + total))
+            at += total
+        }
+        if (at > 0 && accN > at) acc.copyInto(acc, 0, at, accN)
+        return accN - at
+    }
+
+    // =========================================================
+    //  Un mensaje entrante
+    // =========================================================
+    private fun handleFrame(c: Conn, frame: ByteArray) {
+        val r = FlexLink.readFrame(frame)
+        if (r !is FlexLink.ReadResult.Ok) {
+            // Version incompatible: se dice y se corta. Seguir hablando
+            // con un extremo que no entiende el protocolo solo produce
+            // un "no conecta" sin explicacion en las dos puntas.
+            if (r is FlexLink.ReadResult.BadVersion) {
+                sendRaw(c, FlexLink.T_ERR, byteArrayOf(FlexLink.E_VERSION.toByte()), 0)
+                emit(Event.Error("Flex OS habla otra version del protocolo"))
+                LinkDiag.d(TAG, "CLOSE_REQUEST conn=#${c.id} reason=version incompatible")
+                runCatching { c.socket.close() }
+            }
+            return
+        }
+        val h = r.header
+        val body = r.payload
+
+        // ---- Control de acceso ----
+        // Fuera de sesion SOLO pasa el apreton de manos. Una orden de
+        // un extremo sin autenticar se descarta aunque la trama sea
+        // perfecta: ese es justo el ataque que hay que parar.
+        if (!c.authed && h.type !in HANDSHAKE_TYPES) return
+
+        when (h.type) {
+            FlexLink.T_HELLO -> onHello(c, body)
+            FlexLink.T_PAIR_CODE -> onPairCode(c, body)
+            FlexLink.T_AUTH_CHALLENGE -> onAuthChallenge(c, body)
+            FlexLink.T_AUTH_OK -> onAuthOk(c, body, h.session)
+            // EL LATIDO. Se contesta siempre, con o sin sesion: es lo
+            // que le dice al reloj que este socket sigue vivo.
+            FlexLink.T_PING -> {
+                sendRaw(c, FlexLink.T_PONG, ByteArray(0), h.session)
+                // Solo el PRIMER latido de cada conexion: uno cada 8 s llenaria el
+                // anillo de diagnostico y echaria fuera lo que de verdad importa.
+                if (++c.pings == 1) LinkDiag.d(TAG, "PING_RECEIVED #${c.id} (primer latido; PONG enviado)")
+            }
+            FlexLink.T_PONG -> { /* latido: nada que hacer */ }
+            FlexLink.T_ERR -> onPeerError(c, body)
+            FlexLink.T_BYE -> {
+                LinkDiag.d(TAG, "CLOSE_REQUEST conn=#${c.id} reason=BYE de Flex OS")
+                runCatching { c.socket.close() }
+            }
+            else -> if (c.authed) {
+                // Se ACUSA siempre (tambien un reenvio: el ACK anterior pudo
+                // perderse) y se ENTREGA solo la primera vez.
+                if (h.type in ACKED_TYPES) {
+                    sendRaw(c, FlexLink.T_ACK, PayloadWriter().u16(h.packet).build(), h.session)
+                }
+                if (c.firstSight(h.type, h.packet, h.frag)) {
+                    // Si la orden falla (Android niega arrancar un servicio, por
+                    // ejemplo), se anota: NO es motivo para cerrar la sesion.
+                    try { onMessage(h.type, body) } catch (e: Exception) {
+                        LinkDiag.w(TAG, "la orden 0x%02x fallo: ${e.javaClass.simpleName}".format(h.type))
+                    }
+                }
+                else LinkDiag.d(TAG, "DUPLICATE_DROPPED #${c.id} type=0x%02x packet=${h.packet}".format(h.type))
+            }
+        }
+    }
+
+    /**
+     * Flex OS dice que algo fue mal.
+     *
+     * ANTES ESTE MENSAJE SE TIRABA. `T_ERR` estaba en la lista de
+     * tipos permitidos sin sesion, pero no tenia rama en el `when`, asi
+     * que caia en el `else` y, sin autenticar, no hacia nada. O sea que
+     * cuando Flex OS avisaba de que el codigo estaba mal, aqui no se
+     * enteraba nadie: la pantalla seguia diciendo "Comprobando..." y el
+     * usuario no tenia forma de saber que habia pasado.
+     */
+    private fun onPeerError(c: Conn, body: ByteArray) {
+        val code = if (body.isNotEmpty()) body[0].toInt() and 0xFF else FlexLink.E_INTERNAL
+        pairSentAt = 0L
+        val why = when (code) {
+            FlexLink.E_AUTH ->
+                "el codigo no coincide con el que ensena Flex OS"
+            FlexLink.E_TIMEOUT ->
+                "el emparejamiento caduco en Flex OS; vuelve a pulsar \"Emparejar telefono\" en el reloj"
+            FlexLink.E_NOTPAIRED ->
+                "Flex OS ya no tiene guardado el vinculo con este telefono"
+            FlexLink.E_VERSION ->
+                "Flex OS habla otra version del protocolo"
+            FlexLink.E_BUSY ->
+                "Flex OS ya tiene otro telefono conectado"
+            else -> "Flex OS rechazo la conexion (codigo $code)"
+        }
+        // EL TIPO DE FALLO NO SE ADIVINA POR EL TEXTO. Rechazar un
+        // codigo y quedarse sin enlace se arreglan de formas distintas,
+        // y la pantalla tiene que poder decir cual de las dos fue.
+        val kind = when (code) {
+            FlexLink.E_AUTH -> PairFailure.CODE_REJECTED
+            FlexLink.E_TIMEOUT -> PairFailure.CODE_EXPIRED
+            else -> PairFailure.LINK
+        }
+        LinkDiag.w(TAG, "T_ERR de Flex OS: $code -- $why")
+        when (kind) {
+            // Un codigo rechazado NO tira la sesion: el reloj sigue
+            // ensenando EL MISMO codigo, asi que el usuario puede
+            // corregir un digito y reintentar sin tocar nada mas.
+            PairFailure.CODE_REJECTED -> pairing?.onRejected()
+            // Caducado si: ese codigo ya no existe en el reloj.
+            PairFailure.CODE_EXPIRED -> pairing = null
+            PairFailure.LINK -> { /* la sesion la decide su propio plazo */ }
+        }
+        if (c.authed) emit(Event.Error(why)) else emit(Event.PairingFailed(why, kind))
+    }
+
+    private fun onHello(c: Conn, body: ByteArray) {
+        val rd = PayloadReader(body)
+        val ver = rd.u8()
+        c.flexosId = rd.str()
+        if (ver < FlexLink.VERSION_MIN) {
+            sendRaw(c, FlexLink.T_ERR, byteArrayOf(FlexLink.E_VERSION.toByte()), 0)
+            emit(Event.Error("Flex OS habla una version anterior del protocolo"))
+            return
+        }
+        val w = PayloadWriter()
+        w.u8(FlexLink.VERSION)
+        w.str(phoneId, FlexAuth.ID_MAX - 1)
+        w.str(phoneName, 31)
+        sendRaw(c, FlexLink.T_WELCOME, w.build(), 0)
+    }
+
+    /**
+     * Flex OS manda la SAL de su sesion de emparejamiento. El codigo
+     * NO viene en el mensaje: lo teclea el usuario en esta app.
+     *
+     * DOS COSAS QUE ESTA FUNCION YA NO HACE
+     * -------------------------------------
+     *  · No tira la sesion cuando el reloj reenvia LA MISMA sal. El
+     *    reloj la reenvia en cada reconexion, y reiniciar aqui era
+     *    perder el codigo ya tecleado y regalarle al plazo otros dos
+     *    minutos en cada corte.
+     *
+     *  · NO CONTESTA SOLA CON UN CODIGO VIEJO. Este era el fallo: el
+     *    codigo tecleado vivia suelto en el servicio y sobrevivia a
+     *    los intentos fallidos, asi que cuando el usuario pulsaba
+     *    "Emparejar telefono" otra vez -- codigo nuevo y sal nueva en
+     *    el reloj -- esta app mandaba en el acto la prueba del intento
+     *    ANTERIOR. Flex OS la rechazaba, con razon, y el usuario leia
+     *    "el codigo no coincide" sin que le hubieran dejado teclear.
+     *    Un codigo pertenece a la sal para la que se tecleo.
+     */
+    private fun onPairCode(c: Conn, body: ByteArray) {
+        val rd = PayloadReader(body)
+        val salt = rd.bytes(FlexAuth.SALT_SIZE)
+        val n = rd.bytes(FlexAuth.NONCE_SIZE)
+        val hostId = rd.str()
+        if (!rd.ok || hostId.isEmpty()) return
+
+        val now = System.currentTimeMillis()
+        val cur = pairing
+        // ¿La misma sesion que ya teniamos, solo que por un canal
+        // nuevo? Entonces no se toca nada de lo que hay dentro.
+        val same = cur != null && cur.hasSalt(salt) && !cur.isExpired(now)
+        if (!same) {
+            pairing = PairingSession(salt, n, hostId, phoneId, now)
+            pairSentAt = 0L
+        }
+        c.nonce = n
+        c.flexosId = hostId
+        // El PAIR_CONFIRM saldra POR AQUI: la sal llego por este socket.
+        pairConn = c
+        val sess = pairing ?: return
+        LinkDiag.d(TAG, "PAIR_CODE de $hostId: sesion ${if (same) "en curso" else "NUEVA"}")
+
+        // Solo se contesta solo con un codigo que se tecleo PARA ESTA
+        // sal. En cualquier otro caso se le pide al usuario: en ningun
+        // caso se deriva una clave con un codigo que el usuario no ha
+        // visto junto al que ensena el reloj ahora mismo.
+        //
+        // Cuando SI lo hay, reenviarlo es lo correcto: la prueba
+        // anterior murio con el socket anterior, y volver a pedirle al
+        // usuario que teclee lo que ya tecleo no aporta nada.
+        if (same) {
+            val again = sess.proofForTypedCode(now)
+            if (again != null) {
+                if (sendRaw(c, FlexLink.T_PAIR_CONFIRM, again.proof, 0)) {
+                    c.sessionKey = again.key
+                    pairSentAt = now
+                    LinkDiag.d(TAG, "PAIR_CONFIRM reenviado por el canal nuevo")
+                    emit(Event.ProofResent)
+                } else {
+                    sess.onSendFailed()
+                    emit(Event.ProofNotSent("se corto la conexion al enviar el codigo"))
+                }
+                return
+            }
+        }
+        emit(Event.PairingRequested(freshSession = !same))
+    }
+
+    /**
+     * La interfaz llama aqui cuando el usuario teclea el codigo.
+     *
+     * Devuelve el motivo REAL cuando todavia no se puede emparejar, y
+     * ese motivo sube hasta la pantalla: el usuario tiene que leer
+     * "esperando a Flex OS" o "el codigo caduco", no un circulo
+     * girando que no termina.
+     */
+    fun submitPairingCode(code: String): Result {
+        val sess = pairing ?: run {
+            LinkDiag.w(TAG, "codigo tecleado pero Flex OS aun no ha mandado su sal")
+            return Result.NO_SESSION
+        }
+        // Por la conexion que trajo la sal, no por "la activa": durante
+        // el emparejamiento todavia no hay sesion autenticada.
+        val c = pairConn ?: conn.get() ?: return Result.LINK_DOWN
+        val now = System.currentTimeMillis()
+        return when (val r = sess.submit(code, now)) {
+            is PairingSession.Submit.Ready -> {
+                if (sendRaw(c, FlexLink.T_PAIR_CONFIRM, r.proof, 0)) {
+                    c.sessionKey = r.key
+                    pairSentAt = now
+                    LinkDiag.d(TAG, "PAIR_CONFIRM enviado")
+                    Result.SENT
+                } else {
+                    // NO es un rechazo: la prueba no llego a salir. El
+                    // codigo se conserva y se reenvia solo en cuanto el
+                    // reloj reabra el canal -- el usuario no tiene que
+                    // volver a teclear lo que ya tecleo.
+                    sess.onSendFailed()
+                    Result.LINK_DOWN
+                }
+            }
+            PairingSession.Submit.BadFormat -> Result.BAD_FORMAT
+            PairingSession.Submit.Expired -> Result.EXPIRED
+            PairingSession.Submit.AlreadyInFlight -> Result.SENT   // ya iba; no se duplica
+            PairingSession.Submit.AlreadyDone -> Result.SENT
+        }
+    }
+
+    /** Lo que puede pasar al teclear el codigo. Cada rama tiene un texto propio en la pantalla. */
+    enum class Result {
+        /** La prueba salio; se espera la respuesta de Flex OS. */
+        SENT,
+        /** No son seis digitos. */
+        BAD_FORMAT,
+        /** Flex OS todavia no ha mandado su sal. */
+        NO_SESSION,
+        /** El codigo de Flex OS caduco: hay que pedir otro en el reloj. */
+        EXPIRED,
+        /** Se corto la conexion al enviar. NO es un codigo mal tecleado. */
+        LINK_DOWN,
+    }
+
+    /** ¿Ha llegado ya la sal y sigue valiendo? La pantalla lo necesita para no pedir el codigo antes de tiempo. */
+    fun isAwaitingCode(): Boolean =
+        pairing?.acceptsCode(System.currentTimeMillis()) == true
+
+    /** Cuanto le queda al codigo del reloj, para que la pantalla no se invente el plazo. */
+    fun pairingRemainingMs(): Long =
+        pairing?.remainingMs(System.currentTimeMillis()) ?: 0L
+
+    /**
+     * LA SESION DE EMPAREJAMIENTO EN CURSO -- la unica fuente de
+     * verdad de este lado. Sustituye a la pareja `pendingSalt` +
+     * `typedCode`, que podian pertenecer a emparejamientos distintos
+     * sin que nada lo impidiera.
+     */
+    @Volatile private var pairing: PairingSession? = null
+    /** Cuando se mando el PAIR_CONFIRM, para no esperarlo eternamente. 0 = no hay ninguno en vuelo. */
+    @Volatile private var pairSentAt: Long = 0L
+
+    private fun onAuthChallenge(c: Conn, body: ByteArray) {
+        val rd = PayloadReader(body)
+        val n = rd.bytes(FlexAuth.NONCE_SIZE)
+        val sess = rd.u16()
+        if (!rd.ok) return
+        val key = bondKey()
+        if (key == null) {
+            // Flex OS cree que estamos vinculados y aqui no hay clave:
+            // el usuario borro los datos de la app. Se dice, en vez de
+            // dejar a Flex OS esperando una respuesta que no llegara.
+            sendRaw(c, FlexLink.T_ERR, byteArrayOf(FlexLink.E_NOTPAIRED.toByte()), sess)
+            emit(Event.PairingFailed(
+                "este telefono ya no tiene el vinculo guardado", PairFailure.LINK))
+            return
+        }
+        c.nonce = n
+        c.session = sess
+        c.sessionKey = key
+        sendRaw(c, FlexLink.T_AUTH_RESPONSE, FlexAuth.proof(key, FlexAuth.ROLE_PHONE, n, sess), sess)
+    }
+
+    /**
+     * Flex OS devuelve SU prueba. Se comprueba: sin esto, un equipo
+     * cualquiera de la red podria hacerse pasar por el reloj y
+     * quedarse con todas las notificaciones del usuario.
+     */
+    private fun onAuthOk(c: Conn, body: ByteArray, sess: Int) {
+        val key = c.sessionKey ?: bondKey() ?: return
+        val n = c.nonce ?: return
+        val rd = PayloadReader(body)
+        val got = rd.bytes(FlexAuth.PROOF_SIZE)
+        if (!rd.ok) return
+        if (!FlexAuth.verify(key, FlexAuth.ROLE_HOST, n, sess, got)) {
+            emit(Event.PairingFailed(
+                "quien contesta no es el Flex OS emparejado", PairFailure.LINK))
+            LinkDiag.d(TAG, "CLOSE_REQUEST conn=#${c.id} reason=la prueba de Flex OS no cuadra")
+            runCatching { c.socket.close() }
+            return
+        }
+        // Emparejamiento nuevo: ahora SI se guarda la clave. No antes:
+        // guardarla al derivarla dejaria un vinculo con quien resulto
+        // no ser Flex OS.
+        if (bondKey() == null) {
+            // Guardar el vinculo puede fallar (Keystore). Si falla NO se abre sesion
+            // con un vinculo que no existe: se dice y se cierra este canal.
+            try { onPaired(key, c.flexosId) } catch (e: Exception) {
+                LinkDiag.w(TAG, "no se pudo guardar el vinculo: ${e.javaClass.simpleName}")
+                emit(Event.PairingFailed("no se pudo guardar el vinculo en este telefono", PairFailure.LINK))
+                runCatching { c.socket.close() }
+                return
+            }
+        }
+        c.session = sess
+        c.authed = true
+        pairSentAt = 0L
+        // AUTENTICADO: ahora si, esta conexion es LA sesion.
+        claimSession(c)
+        LinkDiag.d(TAG, "SESSION_CONNECTED #${c.id} sesion=$sess")
+        // El emparejamiento se cerro: la sesion (y con ella el codigo
+        // tecleado y la clave a medio derivar) deja de existir.
+        pairing?.onAccepted()
+        pairing = null
+        releaseMulticast()          // con sesion abierta ya no hay que oir sondas
+        emit(Event.SessionOpen(c.socket.inetAddress?.hostAddress ?: "?"))
+    }
+
+    /**
+     * Cierra UNA conexion concreta -- la suya, o ninguna.
+     *
+     * El `compareAndSet` es lo que rompe el bucle de conecta/desconecta:
+     * si mientras este hilo dormia en `read()` el hueco ya paso a otra
+     * conexion, aqui NO se toca nada de esa otra. Antes esta limpieza
+     * cerraba "la sesion activa" fuera cual fuera, asi que el socket
+     * recien aceptado moria a manos del anterior, una y otra vez.
+     */
+    /**
+     * TODO cierre pasa por aqui, y TODO cierre deja constancia.
+     *
+     * Se apunta en LinkDiag, por cada cierre, quien lo pidio y en que
+     * estado estaba: sin eso, "se desconecta" es todo
+     * lo que se sabe, y no se puede distinguir un socket que murio de
+     * una limpieza que cerro lo que no era suyo.
+     */
+    private fun closeSession(c: Conn, why: String?) {
+        val owner = conn.compareAndSet(c, null)
+        val upMs = System.currentTimeMillis() - c.openedAt
+        if (pairConn === c) pairConn = null
+        runCatching { c.socket.close() }
+        c.txQueue.offer(TX_POISON)         // despierta al hilo de salida para que termine
+        // UNA sola linea por cierre, con todo lo que hace falta para saber quien
+        // cuelga primero: quien lo pidio (hilo), por que, si estaba autenticado,
+        // si era la conexion con la sesion y cuanto duro.
+        LinkDiag.d(TAG, "CLOSE #${c.id} reason=$why thread=${Thread.currentThread().name} " +
+            "authed=${c.authed} owner=$owner conns=${liveConns.get()} upMs=$upMs")
+        if (!owner) {
+            // Esta conexion ya habia sido relevada -- o nunca llego a
+            // tener la sesion. Se cierra su propio socket y se sale sin
+            // avisar a nadie: la sesion buena es de otro y sigue viva.
+            return
+        }
+        pairSentAt = 0L
+        // LA SESION DE EMPAREJAMIENTO SOBREVIVE AL SOCKET. El reloj
+        // reconecta solo, reenvia la MISMA sal y el usuario sigue con
+        // el mismo codigo delante. Borrarla aqui era obligar a
+        // empezar de cero cada vez que el canal parpadeaba.
+        // Quien la cierra de verdad es su propio plazo (dos minutos),
+        // un emparejamiento completado, o `stop()`.
+        // Sin sesion vuelve a hacer falta oir las sondas del reloj.
+        if (running.get()) acquireMulticast()
+        emit(Event.SessionClosed(authenticated = c.authed))
+    }
+
+    /** Cierra la conexion activa, si la hay. Para `stop()` y para revocar. */
+    private fun closeActive(why: String?) {
+        conn.get()?.let { closeSession(it, why) }
+    }
+
+    /** Cierra SOLO la sesion abierta (el servidor sigue escuchando). Para olvidar el vinculo. */
+    fun dropSession(why: String) = closeActive(why)
+
+    /**
+     * [c] acaba de autenticarse: se queda con la sesion y desaloja a
+     * quien la tuviera.
+     *
+     * Esto es lo que permite volver despues de un corte que no dejo
+     * FIN (Wi-Fi que se va, reloj que se reinicia): el socket viejo
+     * sigue ahi como un cadaver hasta que salte su plazo, y sin esto
+     * el reloj de verdad se quedaba fuera todo ese rato.
+     *
+     * Solo llega aqui quien YA demostro la clave del vinculo, asi que
+     * un equipo cualquiera de la red no puede usarlo para tirar una
+     * sesion ajena.
+     */
+    private fun claimSession(c: Conn) {
+        val old = conn.getAndSet(c)
+        if (old != null && old !== c) {
+            LinkDiag.d(TAG, "SESSION_HANDOVER conn=#${old.id} -> conn=#${c.id} " +
+                "(la vieja llevaba ${System.currentTimeMillis() - old.openedAt} ms)")
+            runCatching { old.socket.close() }   // su hilo lo vera y se ira
+        }
+    }
+
+    // =========================================================
+    //  Envio
+    // =========================================================
+    /** Manda un mensaje de aplicacion. Exige sesion autenticada. */
+    fun send(type: Int, payload: ByteArray): Boolean {
+        val c = conn.get() ?: return false
+        if (!c.authed) return false
+        return sendRaw(c, type, payload, c.session)
+    }
+
+    /**
+     * Enmarca y ENCOLA POR UNA CONEXION CONCRETA. No escribe en el socket.
+     *
+     * #############################################################
+     * ##  NADIE ESCRIBE EN EL SOCKET DESDE FUERA DE SU HILO DE SALIDA
+     * ##  ------------------------------------------------------
+     * ##  ESTE ES UN DEFECTO QUE SOLO SE VE EN UN ANDROID DE VERDAD.
+     * ##
+     * ##  Android lanza `NetworkOnMainThreadException` si el hilo
+     * ##  PRINCIPAL toca un socket. Y esta funcion se llamaba, sin
+     * ##  querer, desde el hilo principal en todos estos sitios:
+     * ##
+     * ##    · el boton "Emparejar" (submitPairingCode);
+     * ##    · onNotificationPosted / onNotificationRemoved (el servicio de
+     * ##      notificaciones se ejecuta en el hilo principal);
+     * ##    · las llamadas de MediaController (cada cambio de reproduccion);
+     * ##    · BrowserRelayService.onStartCommand / onDestroy
+     * ##      (state.setRelay).
+     * ##
+     * ##  La excepcion la cogia el `catch (e: Exception)` de aqui y la
+     * ##  trataba como "el socket murio": `closeSession(...)`. O sea que
+     * ##  CADA una de esas cosas CERRABA LA SESION DEL ENLACE: pulsar
+     * ##  "Emparejar" la tiraba (la pantalla del codigo desaparecia y
+     * ##  volvia a "Esperando a Flex OS"), una notificacion o un cambio
+     * ##  de cancion la tiraba, y activar el relay la tiraba. El reloj
+     * ##  reconectaba en un par de segundos y el ciclo empezaba otra vez.
+     * ##  Las pruebas de PC no lo veian porque la JVM de escritorio no
+     * ##  tiene ese guardian.
+     * ##
+     * ##  Ahora el hilo que llama solo COLOCA tramas en una cola acotada
+     * ##  (no hace E/S, no espera) y las escribe `txLoop`, en su propio
+     * ##  hilo. Un fallo REAL de escritura cierra la sesion; que la cola
+     * ##  este llena, no.
+     * #############################################################
+     *
+     * El contador y el numero de paquete son de esa conexion, y el
+     * cerrojo tambien: dos conexiones solapadas ya no pueden pisarse
+     * el contador ni entrelazar los bytes de sus tramas en el flujo
+     * de la otra.
+     *
+     * Devuelve true si TODAS las tramas del mensaje quedaron en la cola.
+     */
+    private fun sendRaw(c: Conn, type: Int, payload: ByteArray, sess: Int): Boolean {
+        // Se trocea segun el MTU del protocolo. Un mensaje medio
+        // entregado no se puede reensamblar, asi que o entran todos los
+        // fragmentos o no entra ninguno.
+        val perFrag = FlexLink.MAX_PAYLOAD
+        val frags = if (payload.isEmpty()) 1
+                    else (payload.size + perFrag - 1) / perFrag
+        if (frags > FlexLink.MAX_FRAGS) return false
+        if (c.socket.isClosed) return false
+        return synchronized(c) {
+            if (c.txQueue.remainingCapacity() < frags) {
+                c.txDropped++
+                LinkDiag.w(TAG, "TX_QUEUE_FULL #${c.id} se descarta type=0x%02x (descartados=${c.txDropped})".format(type))
+                return@synchronized false
+            }
+            val packet = c.txPacket.also { c.txPacket = if (it >= 0xFFFF) 1 else it + 1 }
+            var at = 0
+            for (i in 0 until frags) {
+                val take = minOf(perFrag, payload.size - at)
+                val chunk = if (take > 0) payload.copyOfRange(at, at + take) else ByteArray(0)
+                c.txCounter++
+                val frame = FlexLink.writeFrame(
+                    FlexLink.Header(
+                        type = type, session = sess, packet = packet,
+                        frag = i, fragCount = frags, counter = c.txCounter,
+                    ),
+                    chunk,
+                )
+                c.txQueue.offer(frame)
+                at += take
+            }
+            true
+        }
+    }
+
+    /**
+     * El hilo de SALIDA de una conexion: el unico que escribe en su socket.
+     * Vive mientras el socket este abierto y muere con el.
+     */
+    private fun txLoop(c: Conn) {
+        try {
+            while (!c.socket.isClosed) {
+                val first = c.txQueue.poll(500, TimeUnit.MILLISECONDS) ?: continue
+                if (first === TX_POISON) return
+                c.out.write(first)
+                // Todo lo que ya este esperando sale junto antes de vaciar.
+                while (true) {
+                    val more = c.txQueue.poll() ?: break
+                    if (more === TX_POISON) return
+                    c.out.write(more)
+                }
+                c.out.flush()
+                c.lastWriteThread = Thread.currentThread().name
+            }
+        } catch (e: Exception) {
+            // Un fallo REAL de escritura: el socket murio. Si ya lo cerro otro
+            // (el cierre normal), closeSession no hace nada de mas.
+            closeSession(c, "fallo al escribir: ${e.javaClass.simpleName}")
+        }
+    }
+
+    /** Hilo que escribio por ultima vez en la conexion activa. Solo para pruebas y diagnostico. */
+    fun lastWriteThread(): String = conn.get()?.lastWriteThread ?: ""
+
+    private val HANDSHAKE_TYPES = intArrayOf(
+        FlexLink.T_HELLO, FlexLink.T_WELCOME, FlexLink.T_BYE, FlexLink.T_ERR,
+        FlexLink.T_PAIR_REQ, FlexLink.T_PAIR_CODE, FlexLink.T_PAIR_CONFIRM,
+        FlexLink.T_AUTH_CHALLENGE, FlexLink.T_AUTH_RESPONSE, FlexLink.T_AUTH_OK,
+        FlexLink.T_PING, FlexLink.T_PONG,
+    )
+}

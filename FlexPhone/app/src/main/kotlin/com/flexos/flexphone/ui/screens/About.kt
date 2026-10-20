@@ -1,0 +1,85 @@
+package com.flexos.flexphone.ui.screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
+import com.flexos.flexphone.protocol.Fbp
+import com.flexos.flexphone.protocol.FlexLink
+import com.flexos.flexphone.relay.RelayEngine
+import com.flexos.flexphone.ui.FlexTopBar
+
+@Composable
+fun AboutScreen(nav: NavController) {
+    val ctx = LocalContext.current
+    val version = runCatching {
+        ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName
+    }.getOrDefault("?")
+
+    Column(Modifier.fillMaxSize()) {
+        FlexTopBar("Acerca de", onBack = { nav.popBackStack() })
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SectionCard("Flex Phone") {
+                KeyValue("Version de la app", version ?: "?")
+                KeyValue("Protocolo Flex Link", "v${FlexLink.VERSION}")
+                KeyValue("Protocolo del navegador", "FBP/${Fbp.VERSION}")
+                // El build del Relay es lo que el P4 lee para saber si este telefono lleva la correccion
+                // de la web ampliada (ver FLEXBR_RELAY_MIN_BUILD): aqui se ve sin tener que adivinarlo.
+                KeyValue("Navegador del telefono (Relay)", "build ${RelayEngine.BUILD}")
+                KeyValue("Transporte del enlace", "Wi-Fi (red local)")
+            }
+
+            Notice(
+                "Limites reales",
+                "El contenido del enlace viaja SIN CIFRAR por tu red local: el " +
+                    "emparejamiento impide que entre quien no ha emparejado, pero no " +
+                    "protege frente a quien ya escuche tu red.\n\n" +
+                    "Android puede detener el servicio por bateria, memoria o politica " +
+                    "del fabricante. Cuando pasa, Flex OS lo ensena como error, no se " +
+                    "queda esperando.\n\n" +
+                    "No se prometen 60 fotogramas por segundo en el navegador: una " +
+                    "pagina renderizada aqui, comprimida y enviada a un ESP32 que ademas " +
+                    "tiene que descodificarla no da eso.",
+                MaterialTheme.colorScheme.tertiary,
+            )
+
+            SectionCard("Que puede y que no puede hacer") {
+                Text(
+                    "PUEDE:\n" +
+                    "· mostrar tus notificaciones en Flex OS;\n" +
+                    "· responder a un mensaje CUANDO la notificacion de Android " +
+                    "trae una accion de respuesta (RemoteInput);\n" +
+                    "· controlar la reproduccion de musica;\n" +
+                    "· hacer sonar el telefono para encontrarlo;\n" +
+                    "· servir un navegador a Flex OS por Wi-Fi.\n\n" +
+                    "NO PUEDE:\n" +
+                    "· iniciar una conversacion nueva de WhatsApp ni de otras apps " +
+                    "de mensajeria. WhatsApp no ofrece una interfaz publica para " +
+                    "eso, y Flex Phone no automatiza WhatsApp Web ni usa APIs no " +
+                    "oficiales: pondria tu cuenta en riesgo;\n" +
+                    "· responder a una notificacion que ya desaparecio;\n" +
+                    "· hacer llamadas ni enviar SMS desde Flex OS sin el telefono. " +
+                    "El ESP32-P4 no tiene modem celular.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
+            SectionCard("Codigo y documentacion") {
+                Text(
+                    "El protocolo esta documentado en docs/FLEX-PHONE.md del " +
+                    "repositorio, junto con las pruebas fisicas pendientes y como " +
+                    "compilar esta app.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+    }
+}
