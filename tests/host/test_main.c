@@ -578,6 +578,8 @@ int main(void)
     test_flexlink_all();
     test_files_all();
     test_weather_all();
+    test_browser_all();
+    test_br_net_all();
     printf("%d comprobaciones, %d fallos\n", g_checks, g_fail);
     return g_fail ? 1 : 0;
 }

@@ -20,7 +20,8 @@ INC := -I$(FW)/components/watch_power/include \
        -I$(FW)/components/watch_net/include \
        -I$(FW)/components/flexlink/include \
        -I$(FW)/components/watch_files/include \
-       -I$(FW)/components/watch_weather/include
+       -I$(FW)/components/watch_weather/include \
+       -I$(FW)/components/watch_browser/include
 SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test_power_sched.c test_safe.c \
        test_settings.c $(FW)/components/watch_settings/ws_logic.c \
        test_clock.c $(FW)/components/watch_ui/ui_clock_logic.c \
@@ -33,6 +34,8 @@ SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test
        $(FW)/components/flexlink/flex_phone.c $(FW)/components/flexlink/flex_phone_transport.c \
        $(FW)/components/flexlink/flex_phone_link.c \
        test_files.c $(FW)/components/watch_files/files_logic.c $(FW)/components/watch_files/flexfs.c $(FW)/components/watch_files/fxp.c \
+       test_browser.c $(FW)/components/watch_browser/br_logic.c \
+       test_br_net.c fbp_fake.c $(FW)/components/watch_browser/br_net.c \
        test_weather.c $(FW)/components/watch_weather/wx_logic.c $(FW)/components/watch_weather/wx_core.c \
        $(FW)/components/watch_power/battery_model.c \
        $(FW)/components/watch_power/battery_alerts.c \
