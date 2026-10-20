@@ -234,6 +234,7 @@ esp_err_t watch_phone_start(void)
     flexPhoneLinkInit(s_L);
     flexPhoneModelInit(s_M);
     flexPhoneLinkSetIdentity(s_L, self_id);
+    flexPhoneLinkSetModel(s_L, "Flex OS Watch Ultra", FLP_MODEL_WATCH_ULTRA);
     flexPhoneLinkSetRandom(s_L, rnd);
     flexPhoneLinkSetBond(s_L, &bond);
     flexPhoneLinkSetTransport(s_L, ble_link_transport(wake));

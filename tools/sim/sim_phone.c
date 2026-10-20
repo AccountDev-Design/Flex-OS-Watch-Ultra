@@ -454,6 +454,7 @@ void sim_phone_reset(void)
     flexPhoneLinkInit(&s_L);
     flexPhoneModelInit(&s_M);
     flexPhoneLinkSetIdentity(&s_L, "flexos-5a1c09e2d47b3f80");
+    flexPhoneLinkSetModel(&s_L, "Flex OS Watch Ultra", FLP_MODEL_WATCH_ULTRA);
     flexPhoneLinkSetRandom(&s_L, rnd);
     flexPhoneLinkSetTransport(&s_L, &s_tr);
     s_now = lv_tick_get();

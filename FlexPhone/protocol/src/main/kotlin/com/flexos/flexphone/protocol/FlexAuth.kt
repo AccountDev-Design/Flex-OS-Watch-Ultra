@@ -57,6 +57,17 @@ object FlexAuth {
     fun sha256(data: ByteArray): ByteArray =
         MessageDigest.getInstance("SHA-256").digest(data)
 
+    private val RELAY_TAG = "flexphone-relay-v2".toByteArray(Charsets.US_ASCII)
+
+    /**
+     * TOKEN DEL BROWSER RELAY de un vinculo: los 32 primeros hex de
+     * HMAC-SHA256(clave, "flexphone-relay-v2"). El MISMO calculo que
+     * flexPhoneRelayToken (P4) y watch_phone_relay_token (reloj): el token no
+     * viaja nunca, cada extremo lo deriva de la clave que comparten.
+     */
+    fun relayToken(bondKey: ByteArray): String =
+        hmacSha256(bondKey, RELAY_TAG).joinToString("") { "%02x".format(it) }.take(32)
+
     /**
      * Comparacion en TIEMPO CONSTANTE. Un `contentEquals` sale en el
      * primer byte distinto, y ese tiempo se puede medir para adivinar

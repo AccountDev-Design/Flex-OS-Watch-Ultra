@@ -110,6 +110,9 @@ class PayloadReader(private val buf: ByteArray, private val len: Int = buf.size)
     }
 
     val ok: Boolean get() = !overflow
+
+    /** Bytes que quedan por leer (0 tras un overflow). Para campos opcionales al final. */
+    fun remaining(): Int = if (overflow) 0 else len - at
 }
 
 /** Truncado UTF-8 que no parte caracteres. Misma regla que el firmware. */

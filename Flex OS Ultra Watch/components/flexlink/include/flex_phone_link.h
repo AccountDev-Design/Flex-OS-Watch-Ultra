@@ -196,6 +196,12 @@ typedef struct {
 
   // -- identidad y material del vinculo --
   char     selfId[FLXA_ID_MAX];       // id de este Flex OS
+  // RELOJ: nombre y modelo que se declaran en el HELLO, DETRAS de los
+  // campos de siempre (FLP_MODEL_*; 0 = no se declaran y el HELLO queda
+  // exactamente como el de la referencia). Flex Phone los usa para pintar
+  // el aparato correcto y no confundir el reloj con un P4.
+  char     selfName[FLP_DEVNAME_MAX];
+  uint8_t  selfModel;
   FlexPhoneBond bond;                 // vinculo guardado
   FlexPhonePairing pair;              // emparejamiento en curso (si lo hay)
   uint8_t  nonce[FLXA_NONCE_SIZE];    // reto de la SESION en curso (vinculo ya guardado)
@@ -243,6 +249,15 @@ void flexPhoneLinkInit(FlexPhoneLink* L);
 // Fija la identidad de este Flex OS. Entra en la derivacion de la
 // clave, asi que cambiarla invalida los vinculos existentes.
 void flexPhoneLinkSetIdentity(FlexPhoneLink* L, const char* selfId);
+// RELOJ: nombre y modelo que se anuncian en el HELLO (campos opcionales al
+// final; un lector antiguo los ignora). model = FLP_MODEL_*.
+enum { FLP_MODEL_UNKNOWN = 0, FLP_MODEL_ULTRA_P4 = 1, FLP_MODEL_WATCH_ULTRA = 2 };
+void flexPhoneLinkSetModel(FlexPhoneLink* L, const char* name, uint8_t model);
+// RELOJ: credencial del Browser Relay del telefono (flexPhoneRelayToken del
+// P4): los 32 primeros hex de HMAC-SHA256(clave del vinculo,
+// "flexphone-relay-v2"). El token no viaja nunca: cada extremo lo deriva.
+// false (y out vacio) sin vinculo. outN >= 33.
+bool flexPhoneLinkRelayToken(const FlexPhoneLink* L, char* out, size_t outN);
 // Conecta un transporte. Se puede cambiar con el enlace parado; con
 // el enlace vivo, primero se para. NULL restaura el transporte nulo.
 void flexPhoneLinkSetTransport(FlexPhoneLink* L, FlexPhoneTransport* tr);

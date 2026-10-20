@@ -57,8 +57,17 @@ MBT_CC := $(CC)
 include mbedtls_host.mk
 .DEFAULT_GOAL := all
 
-.PHONY: all test clean
+.PHONY: all test clean peer
 all: test
+
+# El motor del reloj como proceso de PC, para la prueba de interoperabilidad
+# con el lado Android (FlexPhone: WatchPeerInteropTest).
+PEER_SRC := flexlink_watch_peer.c $(FW)/components/flexlink/flex_link.c $(FW)/components/flexlink/flex_auth.c \
+            $(FW)/components/flexlink/flex_phone.c $(FW)/components/flexlink/flex_phone_transport.c \
+            $(FW)/components/flexlink/flex_phone_link.c
+peer: $(BUILD)/flexlink_watch_peer
+$(BUILD)/flexlink_watch_peer: $(PEER_SRC) $(wildcard $(FW)/components/flexlink/include/*.h)
+	$(CC) $(CFLAGS) -I$(FW)/components/flexlink/include $(PEER_SRC) -o $@
 
 $(BUILD)/test_host: $(SRC) $(wildcard $(FW)/components/*/include/*.h) $(MBT_LIB)
 	$(CC) $(CFLAGS) $(INC) $(MBT_INC) $(SRC) $(MBT_LIB) -lm -o $@

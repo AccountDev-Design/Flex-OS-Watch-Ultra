@@ -1035,8 +1035,36 @@ static void test_link_edges(void)
     CHECK_EQ(flexRingCount(&g.lp.w2p), 10); /* el PING sí, el de 3 tramas no */
 }
 
+/* Credencial del Browser Relay y HELLO con modelo (integración con Flex Phone). */
+static void test_relay_token_hello(void)
+{
+    static FlexPhoneLink L;
+    flexPhoneLinkInit(&L);
+    char tok[40];
+    CHECK(!flexPhoneLinkRelayToken(&L, tok, sizeof(tok)));
+    CHECK_EQ(tok[0], 0);
+    FlexPhoneBond b = {0};
+    for (int i = 0; i < 32; i++) {
+        b.key[i] = (uint8_t)i;
+    }
+    snprintf(b.peerId, sizeof(b.peerId), "phone-1");
+    b.valid = true;
+    flexPhoneLinkSetBond(&L, &b);
+    CHECK(!flexPhoneLinkRelayToken(&L, tok, 32)); /* sin sitio para el terminador */
+    CHECK(flexPhoneLinkRelayToken(&L, tok, sizeof(tok)));
+    /* El MISMO vector que PhoneLinkPeerTest.RELAY_TOKEN_VECTOR (Kotlin) y que
+     * calcula el BrowserRelayService de Flex Phone. */
+    CHECK(strcmp(tok, "5ae3f87bd1b53ec61eab7c39250623a4") == 0);
+
+    /* HELLO: sin modelo, el de la referencia; con modelo, nombre y modelo DETRÁS. */
+    flexPhoneLinkSetModel(&L, "Flex OS Watch Ultra", FLP_MODEL_WATCH_ULTRA);
+    CHECK_EQ(L.selfModel, FLP_MODEL_WATCH_ULTRA);
+    CHECK(strcmp(L.selfName, "Flex OS Watch Ultra") == 0);
+}
+
 void test_flexlink_all(void)
 {
+    test_relay_token_hello();
     test_frames();
     test_reasm();
     test_antireplay_retry();

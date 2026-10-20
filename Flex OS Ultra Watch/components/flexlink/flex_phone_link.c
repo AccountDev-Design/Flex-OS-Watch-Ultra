@@ -225,6 +225,29 @@ void flexPhoneLinkSetIdentity(FlexPhoneLink* L, const char* selfId){
   flexLinkUtf8Copy(L->selfId, sizeof(L->selfId), selfId ? selfId : "");
 }
 
+void flexPhoneLinkSetModel(FlexPhoneLink* L, const char* name, uint8_t model){
+  if(!L) return;
+  flexLinkUtf8Copy(L->selfName, sizeof(L->selfName), name ? name : "");
+  L->selfModel = model;
+}
+
+bool flexPhoneLinkRelayToken(const FlexPhoneLink* L, char* out, size_t outN){
+  static const char TAG[] = "flexphone-relay-v2";
+  static const char* D = "0123456789abcdef";
+  if(!out || outN < 33) return false;
+  out[0] = 0;
+  if(!L || !L->bond.valid) return false;
+  uint8_t mac[FLXA_SHA256_SIZE];
+  flexHmacSha256(L->bond.key, FLXA_KEY_SIZE, TAG, sizeof(TAG) - 1, mac);
+  for(size_t i = 0; i < 16; i++){
+    out[2 * i]     = D[mac[i] >> 4];
+    out[2 * i + 1] = D[mac[i] & 0xF];
+  }
+  out[32] = 0;
+  memset(mac, 0, sizeof(mac));
+  return true;
+}
+
 void flexPhoneLinkSetTransport(FlexPhoneLink* L, FlexPhoneTransport* tr){
   if(!L) return;
   if(L->tr && L->tr != tr) flexPhoneTrStop(L->tr);
@@ -1088,10 +1111,14 @@ void flexPhoneLinkTick(FlexPhoneLink* L, FlexPhoneModel* M, uint32_t nowMs){
     // viajan --, y al llegar el WELCOME nuevo se reenvia la sal.
     if(!pairAlive(&L->pair, nowMs)) gotoState(L, FLP_LS_CONNECTING, nowMs);
     else                            gotoState(L, FLP_LS_PAIRING,    nowMs);
-    uint8_t body[1 + FLXA_ID_MAX];
+    uint8_t body[1 + FLXA_ID_MAX + FLP_DEVNAME_MAX + 1];
     FlexLinkWr w; flexLinkWrInit(&w, body, sizeof(body));
     flexLinkWrU8(&w, FLNK_VERSION);
     flexLinkWrStr(&w, L->selfId, FLXA_ID_MAX - 1);
+    if(L->selfModel){            // RELOJ: nombre y modelo, detras y opcionales
+      flexLinkWrStr(&w, L->selfName, FLP_DEVNAME_MAX - 1);
+      flexLinkWrU8(&w, L->selfModel);
+    }
     if(flexLinkWrOk(&w)) flexPhoneLinkSend(L, FLNK_T_HELLO, body, w.at, false);
     L->helloSent = true;
     L->helloAtMs = nowMs ? nowMs : 1;  // RELOJ
