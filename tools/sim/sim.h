@@ -126,6 +126,18 @@ void sim_suite_phone(const char *out);
 void sim_suite_notes(const char *out);
 void sim_suite_weather(const char *out);
 void sim_suite_browser(const char *out);
+void sim_suite_ota(const char *out);
+/* OTA simulado (sim_ota.c): motor y firma reales, servidor y flash falsos */
+void sim_ota_reset(void);
+void sim_ota_publish(const char *ver, bool good_sig, const char *changelog);
+void sim_ota_online(bool on);
+void sim_ota_key(bool on);
+void sim_ota_batt(int pct, bool charging);
+void sim_ota_boot(int notice);
+bool sim_ota_busy(void);
+int sim_ota_runs(void);
+bool sim_ota_installed(const char *ver);
+bool sim_ota_aborted(void);
 /* Clima simulado (sim_wx.c): motor y parser reales, red falsa */
 void sim_wx_reset(void);
 void sim_wx_online(bool on);

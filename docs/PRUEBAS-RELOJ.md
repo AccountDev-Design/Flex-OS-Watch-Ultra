@@ -13,6 +13,8 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | T74-T77, T94-T99 | [F9-APPS.md](F9-APPS.md) (Calculadora, Calendario, Flex Compass, Device Care, Notas, Archivos, Paint) |
 | T78-T83 | [F5-CONECTIVIDAD.md](F5-CONECTIVIDAD.md) (Wi-Fi) |
 | T84-T93 | [F5-CONECTIVIDAD.md](F5-CONECTIVIDAD.md) §3.6 (Flex Phone por Bluetooth; T86-T93 necesitan la app Android con el servidor v2, [FLEX-PHONE-ANDROID.md](FLEX-PHONE-ANDROID.md)) |
+| T104-T108 | [F6-NAVEGADOR.md](F6-NAVEGADOR.md) |
+| T109-T115 | [F7-OTA.md](F7-OTA.md) (actualizaciones) |
 | Flash de 32 MB | [FLASH-32MB.md](FLASH-32MB.md) |
 
 **Verificado en el reloj hasta ahora** (fotos y vídeo del 2026-10-15): pantalla, táctil, LVGL y la sonda de 32 MB (T10). Lo demás no. Compilar y pasar las pruebas de PC no prueba el reloj: cada resultado que me envíes es lo que convierte una tarea del 50 % al 100 %.
@@ -129,6 +131,15 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | Pruebas | Qué mirar |
 |---|---|
 | T104-T108 | Con el servicio `server/` de Flex OS Ultra: sesión `wss://` con certificado público y credencial, desplazar y tocar (anotar la latencia), escribir en la página, certificado autofirmado rechazado, Wi-Fi que se va y vuelve sin cortar el BLE, abrir y cerrar 10 veces sin perder memoria. Copiar las líneas `watch_browser` |
+
+## 12. Actualizaciones (`F7-OTA.md`)
+
+Grabar **por USB** el firmware de esta versión: lleva el cargador de arranque con la reversión automática.
+
+| Pruebas | Qué mirar |
+|---|---|
+| T109 | Ajustes > Actualizaciones > «Buscar actualización» con Wi-Fi: hoy «Archivo no encontrado» (el manifiesto no está publicado). Copiar las líneas `watch_ota` |
+| T110-T115 | Con un firmware de prueba con clave y un servidor `https://` propio: instalar una versión mayor (tiempo y velocidad), tocar y usar el BLE durante la descarga, cancelar, Wi-Fi que se va, una imagen que falla antes de 60 s (vuelve a la anterior), batería baja y la pila mínima del registro |
 
 ## Qué enviarme
 

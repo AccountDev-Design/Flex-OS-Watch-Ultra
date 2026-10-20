@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include "ui_logic.h"
 #include "watch_net.h"
+#include "watch_ota.h"
 #include "watch_settings.h"
 #include "watch_theme.h"
 #include "watch_time.h"
@@ -19,6 +20,7 @@ typedef struct {
     lv_obj_t *display;
     lv_obj_t *time;
     lv_obj_t *battery;
+    lv_obj_t *ota;
 } settings_t;
 
 static void back_cb(lv_event_t *e)
@@ -42,6 +44,23 @@ static lv_obj_t *row(lv_obj_t *list, flex_icon_t icon, uint32_t accent, const ch
         watch_theme_row_set_pending(r);
     }
     return r;
+}
+
+/* Valor corto de la fila (la frase entera, flexOtaStatusText, está dentro). */
+static const char *ota_row_text(char *b, size_t n)
+{
+    watch_ota_status_t o;
+    watch_ota_get(&o);
+    switch (o.state) {
+    case OTA_CHECKING: return "Buscando";
+    case OTA_UP_TO_DATE: return "Al día";
+    case OTA_AVAILABLE: snprintf(b, n, "%s", o.ver); return b;
+    case OTA_ERROR:
+        snprintf(b, n, "%s", o.has_upd ? o.ver : "Error");
+        return b;
+    case OTA_IDLE: return "";
+    default: snprintf(b, n, "%u %%", (unsigned)o.pct); return b;
+    }
 }
 
 static void refresh(settings_t *s)
@@ -73,6 +92,7 @@ static void refresh(settings_t *s)
     watch_net_status_t ns;
     watch_net_get(&ns);
     watch_theme_row_set_value(s->wifi, ns.state == NET_CONNECTED ? ns.ssid : watch_net_state_text(&ns));
+    watch_theme_row_set_value(s->ota, ota_row_text(buf, sizeof(buf)));
     watch_power_snapshot_t snap;
     if (ui_system_power(&snap) && snap.track.percent >= 0) {
         snprintf(buf, sizeof(buf), "%d %%", snap.track.percent);
@@ -113,6 +133,7 @@ lv_obj_t *ui_settings_create(lv_obj_t *parent)
     s->battery = row(list, FLEX_ICON_BOLT, FLEX_C_CAT_GREEN, "Batería", "", ui_battery_page_create);
     row(list, FLEX_ICON_PULSE, FLEX_C_CAT_BLUE, "Diagnóstico", NULL, ui_diag_create);
     row(list, FLEX_ICON_STORAGE, FLEX_C_CAT_BLUE, "Almacenamiento", NULL, ui_storage_create);
+    s->ota = row(list, FLEX_ICON_UPDATE, FLEX_C_CAT_BLUE, "Actualizaciones", "", ui_ota_create);
     const watch_ui_boot_info_t *bi = ui_boot_info();
     row(list, FLEX_ICON_INFO, FLEX_C_CAT_BLUE, "Acerca de", bi->fw_version, ui_about_create);
     refresh(s);

@@ -35,6 +35,7 @@ CFLAGS := -std=gnu11 -O1 -g -Wall $(SANFLAGS) -DLV_CONF_INCLUDE_SIMPLE -DLV_LVGL
           -I$(FW)/components/watch_files/include \
           -I$(FW)/components/watch_weather/include \
           -I$(FW)/components/watch_browser/include \
+          -I$(FW)/components/watch_ota/include \
           -I../../tests/host
 
 LVGL_SRC := $(shell find $(LVGL_DIR)/src -name '*.c')
@@ -63,6 +64,9 @@ APP_SRC := $(wildcard sim_*.c) \
            $(FW)/components/watch_browser/br_net.c \
            $(FW)/components/watch_browser/br_lists.c \
            ../../tests/host/fbp_fake.c \
+           $(FW)/components/watch_ota/ota_core.c \
+           $(FW)/components/watch_ota/ota_sig.c \
+           ../../tests/host/ota_fake.c \
            $(FW)/components/watch_diag/flash_probe_logic.c
 
 LVGL_OBJ := $(patsubst $(LVGL_DIR)/%.c,$(BUILD)/lvgl/%.o,$(LVGL_SRC))
@@ -76,6 +80,13 @@ ICON_ASM := $(BUILD)/flex_app_icons_data.S
 # Páginas JPEG de prueba del navegador (gen_br_pages.py)
 BR_JPGS := $(wildcard fixtures/br_*.jpg)
 BR_ASM := $(BUILD)/br_pages_data.S
+
+# mbedTLS de ESP-IDF para el PC: la firma del OTA se verifica de verdad.
+MBT_OUT := $(BUILD)/mbedtls
+MBT_CC := $(CC)
+include ../../tests/host/mbedtls_host.mk
+.DEFAULT_GOAL := all
+CFLAGS += $(MBT_INC)
 
 .PHONY: all clean
 all: $(BUILD)/sim
@@ -109,9 +120,9 @@ $(BR_ASM): $(BR_JPGS) Makefile
 	      $$n $$n "$(abspath $$f)" $$n $$n; \
 	  done; echo '.section .note.GNU-stack,"",@progbits'; } > $@
 
-$(BUILD)/sim: $(APP_SRC) $(APP_HDR) $(LVGL_OBJ) $(ICON_ASM) $(BR_ASM)
+$(BUILD)/sim: $(APP_SRC) $(APP_HDR) $(LVGL_OBJ) $(ICON_ASM) $(BR_ASM) $(MBT_LIB)
 	@echo "LD $@"
-	@$(CC) $(CFLAGS) -Werror $(APP_SRC) $(ICON_ASM) $(BR_ASM) $(LVGL_OBJ) -lm -o $@
+	@$(CC) $(CFLAGS) -Werror -pthread $(APP_SRC) $(ICON_ASM) $(BR_ASM) $(LVGL_OBJ) $(MBT_LIB) -lm -o $@
 
 clean:
 	rm -rf build build-san out

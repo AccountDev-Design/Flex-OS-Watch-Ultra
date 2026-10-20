@@ -7,9 +7,11 @@
  * otro aviso mientras se ve uno, se sustituye el contenido y se reinicia la
  * espera.
  *
- * Dos clases de aviso con la misma tarjeta: batería (icono de pila) y
- * notificación del teléfono (campana, app y "remitente: texto"). Tocar el de
- * una notificación abre su detalle (ui_notif_open).
+ * Tres clases de aviso con la misma tarjeta: batería (icono de pila),
+ * notificación del teléfono (campana, app y "remitente: texto"; tocarlo abre
+ * su detalle, ui_notif_open) y actualización del sistema (F7; tocarlo abre
+ * Ajustes > Actualizaciones). El de actualización dura 9 s, como la
+ * notificación flotante de FlexOS_OTA.
  */
 #include "ui_internal.h"
 
@@ -30,14 +32,17 @@
 #define T_IN_MS    220
 #define T_SHOW_MS  4200
 #define T_OUT_MS   180
+#define T_SHOW_OTA_MS 9000
 
 static struct {
     lv_obj_t *card;
     lv_obj_t *icon;
     lv_obj_t *bell;
+    lv_obj_t *upd;
     lv_obj_t *title;
     lv_obj_t *text;
     uint32_t notif_id; /* 0 = aviso de batería */
+    bool open_ota;     /* tocarlo abre Ajustes > Actualizaciones */
 } s_b;
 
 /* Funciones distintas para entrada y salida: lv_anim_start() sustituye una
@@ -84,10 +89,13 @@ static void tap_cb(lv_event_t *e)
     (void)e;
     if (s_b.card) {
         const uint32_t id = s_b.notif_id;
+        const bool ota = s_b.open_ota;
         lv_anim_delete(s_b.card, y_in_cb);
         start_out(0);
         if (id) {
             ui_notif_open(id);
+        } else if (ota) {
+            ui_nav_push(ui_ota_create);
         }
     }
 }
@@ -107,6 +115,9 @@ static void build(void)
     s_b.bell = flex_icon_create(card, FLEX_ICON_BELL, 36, FLEX_C_ACCENT);
     lv_obj_align(s_b.bell, LV_ALIGN_LEFT_MID, 4, 0);
     lv_obj_add_flag(s_b.bell, LV_OBJ_FLAG_HIDDEN);
+    s_b.upd = flex_icon_create(card, FLEX_ICON_UPDATE, 36, FLEX_C_ACCENT);
+    lv_obj_align(s_b.upd, LV_ALIGN_LEFT_MID, 4, 0);
+    lv_obj_add_flag(s_b.upd, LV_OBJ_FLAG_HIDDEN);
     /* Título y texto en columna: no se pisan. */
     lv_obj_t *col = lv_obj_create(card);
     lv_obj_remove_style_all(col);
@@ -143,7 +154,9 @@ void ui_banner_show_notif(const char *app, const char *text, uint32_t notif_id)
 {
     ensure_shown();
     s_b.notif_id = notif_id;
+    s_b.open_ota = false;
     lv_obj_add_flag(s_b.icon, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_b.upd, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(s_b.bell, LV_OBJ_FLAG_HIDDEN);
     lv_label_set_text(s_b.title, app && app[0] ? app : "Notificación");
     lv_obj_set_style_text_color(s_b.title, flex_color(FLEX_C_TXT), 0);
@@ -159,8 +172,10 @@ void ui_banner_show_battery(batt_alert_t alert, int percent)
     const bool critical = (alert == BATT_ALERT_CRITICAL);
     ensure_shown();
     s_b.notif_id = 0;
+    s_b.open_ota = false;
     lv_obj_remove_flag(s_b.icon, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_b.bell, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_b.upd, LV_OBJ_FLAG_HIDDEN);
     lv_label_set_text(s_b.text, "Conecta el cargador");
     flex_battery_icon_set(s_b.icon, critical ? FLEX_BATT_CRITICAL : FLEX_BATT_LOW, percent);
     const char *title = critical ? "Batería crítica" : "Batería baja";
@@ -171,6 +186,20 @@ void ui_banner_show_battery(batt_alert_t alert, int percent)
     }
     lv_obj_set_style_text_color(s_b.title, flex_color(critical ? FLEX_C_ERR : FLEX_C_WARN), 0);
     start_out(T_IN_MS + T_SHOW_MS);
+}
+
+void ui_banner_show_ota(const char *title, const char *text, uint32_t title_rgb, bool open)
+{
+    ensure_shown();
+    s_b.notif_id = 0;
+    s_b.open_ota = open;
+    lv_obj_add_flag(s_b.icon, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_b.bell, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(s_b.upd, LV_OBJ_FLAG_HIDDEN);
+    lv_label_set_text(s_b.title, title);
+    lv_obj_set_style_text_color(s_b.title, flex_color(title_rgb), 0);
+    lv_label_set_text(s_b.text, text ? text : "");
+    start_out(T_IN_MS + T_SHOW_OTA_MS);
 }
 
 bool ui_banner_active(void)

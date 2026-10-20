@@ -42,6 +42,8 @@ lv_obj_t *ui_charge_anim_obj(void);
 void ui_banner_show_battery(batt_alert_t alert, int percent);
 /** Aviso de una notificación del teléfono; tocarlo abre su detalle. */
 void ui_banner_show_notif(const char *app, const char *text, uint32_t notif_id);
+/** Aviso del sistema de actualizaciones (F7); open: tocarlo abre Ajustes > Actualizaciones. */
+void ui_banner_show_ota(const char *title, const char *text, uint32_t title_rgb, bool open);
 bool ui_banner_active(void);
 
 /* ---- Navegación (ui_nav) ----
@@ -150,6 +152,11 @@ lv_obj_t *ui_music_create(lv_obj_t *parent);        /**< app Música: lo que sue
 lv_obj_t *ui_weather_create(lv_obj_t *parent);      /**< app Clima: Open-Meteo por Wi-Fi */
 lv_obj_t *ui_wx_locs_create(lv_obj_t *parent);      /**< Clima > Mis ubicaciones */
 lv_obj_t *ui_wx_search_create(lv_obj_t *parent);    /**< Clima > Buscar ciudad */
+/* Actualizaciones (F7; ui_ota.c) */
+lv_obj_t *ui_ota_create(lv_obj_t *parent);          /**< Ajustes > Actualizaciones */
+lv_obj_t *ui_ota_install_create(lv_obj_t *parent);  /**< pantalla de instalación (sin gesto "volver") */
+/** Cada 100 ms (ui_system): aviso de versión nueva en la esfera y aviso tras reiniciar. */
+void ui_ota_watch_tick(void);
 /* Navegador (F6; ui_browser.c, ui_jpeg.c) */
 lv_obj_t *ui_browser_create(lv_obj_t *parent);      /**< app Navegador: web renderizada por el servicio FBP/1 */
 /** JPEG baseline a un lienzo RGB565 cw x ch en (dx,dy) con tamaño dw x dh (vecino más próximo). 0 = bien. */

@@ -21,7 +21,8 @@ INC := -I$(FW)/components/watch_power/include \
        -I$(FW)/components/flexlink/include \
        -I$(FW)/components/watch_files/include \
        -I$(FW)/components/watch_weather/include \
-       -I$(FW)/components/watch_browser/include
+       -I$(FW)/components/watch_browser/include \
+       -I$(FW)/components/watch_ota/include
 SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test_power_sched.c test_safe.c \
        test_settings.c $(FW)/components/watch_settings/ws_logic.c \
        test_clock.c $(FW)/components/watch_ui/ui_clock_logic.c \
@@ -36,6 +37,7 @@ SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test
        test_files.c $(FW)/components/watch_files/files_logic.c $(FW)/components/watch_files/flexfs.c $(FW)/components/watch_files/fxp.c \
        test_browser.c $(FW)/components/watch_browser/br_logic.c \
        test_br_net.c fbp_fake.c $(FW)/components/watch_browser/br_net.c $(FW)/components/watch_browser/br_lists.c \
+       test_ota.c ota_fake.c $(FW)/components/watch_ota/ota_core.c $(FW)/components/watch_ota/ota_sig.c \
        test_weather.c $(FW)/components/watch_weather/wx_logic.c $(FW)/components/watch_weather/wx_core.c \
        $(FW)/components/watch_power/battery_model.c \
        $(FW)/components/watch_power/battery_alerts.c \
@@ -50,11 +52,16 @@ SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test
        $(FW)/components/watch_time/wt_time.c \
        $(FW)/components/watch_time/rtc_pcf85063.c
 
+MBT_OUT := $(BUILD)/mbedtls
+MBT_CC := $(CC)
+include mbedtls_host.mk
+.DEFAULT_GOAL := all
+
 .PHONY: all test clean
 all: test
 
-$(BUILD)/test_host: $(SRC) $(wildcard $(FW)/components/*/include/*.h)
-	$(CC) $(CFLAGS) $(INC) $(SRC) -lm -o $@
+$(BUILD)/test_host: $(SRC) $(wildcard $(FW)/components/*/include/*.h) $(MBT_LIB)
+	$(CC) $(CFLAGS) $(INC) $(MBT_INC) $(SRC) $(MBT_LIB) -lm -o $@
 
 test: $(BUILD)/test_host
 	./$(BUILD)/test_host

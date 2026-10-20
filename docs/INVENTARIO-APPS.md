@@ -50,7 +50,7 @@ F4.4), que pasa a ser parte de Device Care / Flex Compass.
 | Teclado | `Keyboard.h` (QWERTY completo, 480 px) | Teclado compacto por páginas para 410 px | ⬜ |
 | Fondos de pantalla | `Wallpaper.h` (8 fondos procedurales) | Los 8 fondos regenerados para 410×502 + negro AMOLED, con selector | 🟡 (F3.6) |
 | Temas | `Wallpaper.h:504` (`LOOKS`, 8 temas) | Tema "AMOLED" por defecto (fondo negro, acento #788CFF) | 🟡 (solo AMOLED) |
-| OTA | `FlexOS_OTA.cpp` | F7 | ⬜ |
+| OTA | `FlexOS_OTA.cpp` | F7 (`docs/F7-OTA.md`) | 🟡 |
 | Antirrobo, cuenta, nube | `Theft*.h`, `FlexOS_Account`, `FlexOS_Cloud` | F8 (❓ D11) | ⬜ |
 | Recuperación | `Recovery.h` | Modo seguro: pendiente de evaluar | ⬜ |
 

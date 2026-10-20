@@ -230,6 +230,7 @@ void sim_suite_monkey(const char *out)
                     ui_notes_create,    ui_note_edit_create,    ui_files_create,        ui_file_opts_create,
                     ui_file_rename_create, ui_paint_create,     ui_paint_canvas_create,
                     ui_weather_create,  ui_wx_locs_create,      ui_wx_search_create,    ui_browser_create,
+                    ui_ota_create,      ui_ota_install_create,
                 };
                 ui_nav_push(pages[rnd(sizeof(pages) / sizeof(pages[0]))]);
             }

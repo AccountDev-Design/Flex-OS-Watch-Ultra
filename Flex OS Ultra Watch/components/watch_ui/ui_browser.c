@@ -1369,6 +1369,9 @@ static void delete_cb(lv_event_t *e)
 
 lv_obj_t *ui_browser_create(lv_obj_t *parent)
 {
+    if (U) {
+        return NULL; /* una sola instancia: la sesión y el estado son únicos */
+    }
     U = lv_malloc_zeroed(sizeof(*U));
     LV_ASSERT_MALLOC(U);
     watch_browser_get_settings(&U->set);

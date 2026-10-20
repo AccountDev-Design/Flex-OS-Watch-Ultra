@@ -40,6 +40,7 @@ typedef enum {
     FLEX_ICON_PAUSE,
     FLEX_ICON_STOP,
     FLEX_ICON_FLAG,         /**< vuelta del cronómetro */
+    FLEX_ICON_UPDATE,       /**< actualización del sistema (OTA) */
     FLEX_ICON_COUNT_
 } flex_icon_t;
 

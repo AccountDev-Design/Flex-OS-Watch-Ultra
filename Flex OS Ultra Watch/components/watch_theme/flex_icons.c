@@ -305,6 +305,16 @@ void flex_icon_draw(lv_layer_t *layer, flex_icon_t icon, const lv_area_t *box, l
         tri(&p, f);
         break;
     }
+    case FLEX_ICON_UPDATE: {
+        /* Flecha que baja a una bandeja: descargar e instalar. */
+        line(&p, 50, 8, 50, 52, 12);
+        static const int32_t h[6] = {26, 42, 74, 42, 50, 68};
+        tri(&p, h);
+        line(&p, 12, 66, 12, 88, 11);
+        line(&p, 12, 88, 88, 88, 11);
+        line(&p, 88, 88, 88, 66, 11);
+        break;
+    }
     default:
         break;
     }

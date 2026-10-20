@@ -1,7 +1,7 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 48,0 %   [█████████░░░░░░░░░░░]   52,0 % pendiente   (verificado en el reloj: 8,6 %)
+PROGRESO GLOBAL: 50,8 %   [██████████░░░░░░░░░░]   49,2 % pendiente   (verificado en el reloj: 8,6 %)
 ```
 
 El 2026-10-16 el alcance creció con el prompt maestro de migración (iconos y fondos originales, todas las apps del
@@ -37,7 +37,8 @@ el porcentaje baja porque ahora mide más trabajo. Detalle en el historial del f
   - La calibración de umbrales (❓ D4).
   - Prueba de extremo a extremo de Flex Phone: necesita la app Android con el servidor BLE v2
     (`docs/FLEX-PHONE-ANDROID.md`).
-  - OTA, la seguridad y las pruebas finales; el navegador, probarlo en el reloj con el servicio.
+  - La seguridad y las pruebas finales; el navegador, probarlo en el reloj con el servicio; el OTA, probarlo en el
+    reloj y publicar la clave y el manifiesto (`docs/F7-OTA.md`).
 - **Siguiente:** pruebas físicas de F2-F4 (`docs/PRUEBAS-RELOJ.md`); después F5 (Wi-Fi y Flex Phone).
 
 ## Cómo se calcula
@@ -122,12 +123,12 @@ Detalle y pruebas en `docs/F4-SERVICIOS.md`.
 
 Limitación conocida: sin servidor de renderizado o sin el móvil, no hay web. Nunca será un motor HTML local.
 
-### F7 · Actualizaciones OTA — 0 / 7
+### F7 · Actualizaciones OTA (`docs/F7-OTA.md`) — 3,5 / 7
 | Tarea | Peso | Estado |
 |---|---|---|
-| F7.1 OTA HTTPS (`esp_https_ota`) entre `ota_0` y `ota_1` + reversión automática | 3 | ⬜ |
-| F7.2 Manifiesto propio (`flex_os_watch_ultra`) + firma de la imagen | 3 | ⬜ |
-| F7.3 Interfaz de actualización | 1 | ⬜ |
+| F7.1 OTA HTTPS (`esp_http_client` + `esp_ota_*`, escritura por partes) entre `ota_0` y `ota_1` + reversión automática | 3 | 🟡 faltan T109-T113, T115 |
+| F7.2 Manifiesto propio (`flex_os_watch_ultra`) + firma de la imagen (ECDSA P-256 sobre producto, versión, tamaño y SHA-256) | 3 | 🟡 falta T110 (y publicar la clave y el manifiesto) |
+| F7.3 Interfaz de actualización | 1 | 🟡 faltan T110, T112, T114 |
 
 ### F8 · Cuenta, nube, seguridad y cierre — 0 / 10
 | Tarea | Peso | Estado |
@@ -236,3 +237,4 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-16 | **43,9 %** | +0,5 | F9.11 Paint (50 % de 1): formato FXP1 de la referencia byte a byte (`watch_files/fxp.c`, 23 comprobaciones), lienzo con trazos guardados al levantar el dedo, deshacer real y galería con miniaturas reproducidas del archivo. Puntos 53,5 / 122 |
 | 2026-10-17 | **44,7 %** | +1 | F9.8 Clima (50 % de 2): motor de `FlexOS_Weather` portado a C puro (`watch_weather`: parser, cadencia, ubicaciones; 225 comprobaciones con las respuestas reales de Open-Meteo de la referencia), servicio con `esp_http_client` sobre TLS verificado (paquete de CA, mbedTLS en PSRAM), NVS `flexwx` y app Clima con iconos procedurales; suite "clima" de la vista previa. Puntos 54,5 / 122 |
 | 2026-10-20 | **48,0 %** | +4 | F6 Navegador (50 % de 8): núcleo de `FlexOS_Browser` pasado a C con el perfil S3 (las comprobaciones de `test_browser.cpp` sin tocar un vector + vectores dorados), sesión FBP/1 con WebSocket propio probada contra un servicio a nivel de bytes, TLS verificado con el paquete de CA (la referencia no verificaba), JPEG con el TJpgDec de LVGL, app con omnibox anti-SSRF, páginas `flex://`, pestañas, historial, favoritos y teclado de página; suite "navegador". Puntos 58,5 / 122 |
+| 2026-10-20 | **50,8 %** | +3,5 | F7 OTA (50 % de 7): motor de `FlexOS_OTA` en C puro (`watch_ota/ota_core.c`: versiones con SemVer, manifiesto con JSON leído de verdad, instalación paso a paso sobre un transporte abstracto; 492 comprobaciones con los vectores de la especificación y el motor entero contra un servidor y una flash falsos), firma ECDSA P-256 obligatoria con el mbedTLS de IDF (la referencia no verificaba), comprobación de producto, chip y versión de la imagen, reversión automática con confirmación a los 60 s, reglas de batería, Ajustes > Actualizaciones, pantalla de instalación y avisos; `tools/ota/ota_sign.py` comprobado con la imagen real; suite "ota". Sin clave ni manifiesto publicados todavía: el reloj comprueba pero no instala. Puntos 62 / 122 |

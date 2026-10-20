@@ -76,6 +76,10 @@ CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
 CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
 CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
+# OTA (F7): reversión automática. La imagen nueva arranca "pendiente" y
+# watch_ota la confirma a los 60 s; un reinicio antes vuelve a la anterior.
+# Va en el cargador de arranque: hay que grabarlo una vez por USB.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 # Navegador (F6): JPEG baseline con el TJpgDec de LVGL (el S3 no tiene
 # decodificador JPEG por hardware).
 CONFIG_LV_USE_TJPGD=y

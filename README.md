@@ -19,7 +19,7 @@ Detalles, archivos generados y avisos: [`Flex OS Ultra Watch/README.md`](Flex%20
 
 ## Estado
 
-**Progreso global: 48,0 %** (52,0 % pendiente), del que un 8,6 % está verificado en el reloj. El alcance se amplió el 2026-10-16 (iconos y fondos originales, todas las apps del inventario, BLE): ver el historial de [docs/ROADMAP.md](docs/ROADMAP.md).
+**Progreso global: 50,8 %** (49,2 % pendiente), del que un 8,6 % está verificado en el reloj. El alcance se amplió el 2026-10-16 (iconos y fondos originales, todas las apps del inventario, BLE): ver el historial de [docs/ROADMAP.md](docs/ROADMAP.md).
 
 - Referencia única: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Ahí están el plan completo, los pesos, las decisiones pendientes y el historial.
 - F2 (batería y energía), F3 (interfaz, tema y navegación) y F4 (servicios) están hechas en software: compilan y pasan las pruebas de PC y de la vista previa.
@@ -76,6 +76,7 @@ simulados**: sirven para probar la interfaz, no el hardware.
 
 - [docs/ROADMAP.md](docs/ROADMAP.md): hoja de ruta y progreso global
 - [docs/F6-NAVEGADOR.md](docs/F6-NAVEGADOR.md): navegador por renderizado remoto (FBP/1)
+- [docs/F7-OTA.md](docs/F7-OTA.md): actualizaciones por Wi-Fi firmadas, con reversión automática
 - [docs/MIGRACION.md](docs/MIGRACION.md): mapa de migración desde Flex OS Ultra (componente por componente)
 - [docs/INVENTARIO-APPS.md](docs/INVENTARIO-APPS.md): inventario de las 19 apps de Flex OS Ultra y su estado en el reloj
 - [docs/F3-IDENTIDAD-ORIGINAL.md](docs/F3-IDENTIDAD-ORIGINAL.md): iconos originales, lanzador, app Reloj y fondos (F3.5, F3.6, F9.1)

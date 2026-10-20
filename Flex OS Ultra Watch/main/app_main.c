@@ -29,6 +29,7 @@
 #include "watch_net.h"
 #include "watch_phone.h"
 #include "watch_weather.h"
+#include "watch_ota.h"
 #include "watch_power.h"
 #include "watch_settings.h"
 #include "watch_storage.h"
@@ -141,6 +142,12 @@ void app_main(void)
     err = watch_weather_start();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Clima no disponible: %s", esp_err_to_name(err));
+    }
+    /* Actualizaciones (F7): confirma la imagen recién instalada a los 60 s y
+     * comprueba con Wi-Fi; instalar lo decide siempre el usuario. */
+    err = watch_ota_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "OTA no disponible: %s", esp_err_to_name(err));
     }
 
     ESP_ERROR_CHECK(bsp_i2c_init());

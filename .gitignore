@@ -7,6 +7,15 @@ sdkconfig.old
 # Pruebas de PC
 tests/host/build/
 
+# Claves: la privada del OTA (y cualquier otra) nunca va al repositorio
+*.pem
+*.key
+*.p8
+keys/
+
+# Python
+__pycache__/
+
 # Editores / sistema
 .vscode/*.log
 .DS_Store
