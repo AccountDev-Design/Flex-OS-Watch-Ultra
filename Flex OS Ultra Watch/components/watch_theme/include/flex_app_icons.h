@@ -3,10 +3,11 @@
  *
  * Son el dibujo de drawAppIcon() de la referencia (FlexOS_Ultra_Icons.h:65-305,
  * estilo "Plano"), rasterizado en el PC por tools/icons/gen_app_icons.c a
- * 104x104 px (el mismo tamaño físico que los 72 px del P4) con antialiasing.
- * Se guardan en flash como RGB565A8 (assets/icons/app_*.bin, 31,7 KB cada
- * uno) y LVGL los dibuja tal cual: sin escalar, sin decodificar y sin
- * reservar memoria.
+ * 92x92 px con antialiasing y BASE CIRCULAR (modo "round": el cajón en panal
+ * del reloj, sin nombres, como Apple Watch / One UI Watch; el glifo es el
+ * original). Se guardan en flash como RGB565A8 (assets/icons/app_*.bin,
+ * 24,8 KB cada uno) y LVGL los dibuja tal cual: sin escalar, sin decodificar,
+ * sin máscaras de recorte y sin reservar memoria.
  *
  * Los iconos de Modo PC (DeX), Juegos, Cámara, Galería y Multimedia no se
  * incluyen: esas apps están excluidas en el reloj (docs/INVENTARIO-APPS.md).
@@ -19,7 +20,7 @@
 extern "C" {
 #endif
 
-#define FLEX_APP_ICON_SIZE 104
+#define FLEX_APP_ICON_SIZE 92
 
 /** Apps con icono original. El orden es el de la Caja de aplicaciones. */
 typedef enum {

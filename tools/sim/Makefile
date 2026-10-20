@@ -49,6 +49,7 @@ APP_SRC := $(wildcard sim_*.c) \
            $(FW)/components/watch_time/rtc_pcf85063.c \
            $(FW)/components/watch_settings/ws_logic.c \
            $(FW)/components/watch_imu/qmi8658.c \
+           $(FW)/components/watch_imu/imu_heading.c \
            $(FW)/components/watch_storage/stg_logic.c \
            $(FW)/components/watch_net/net_logic.c \
            $(FW)/components/watch_net/net_text.c \

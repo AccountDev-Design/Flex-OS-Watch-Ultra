@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "qmi8658.h"
+#include "imu_heading.h"
 #include "test_util.h"
 
 static void test_decode(void)
@@ -90,9 +91,57 @@ static void test_config(void)
     CHECK(!qmi_config_verify(ok));
 }
 
+/* Rumbo relativo: proyección del giro sobre la gravedad, sesgo en reposo y
+ * deriva. */
+static void feed(imu_heading_t *h, int32_t ax, int32_t ay, int32_t az, int32_t gx, int32_t gy, int32_t gz, int ms)
+{
+    const int32_t a[3] = {ax, ay, az}, g[3] = {gx, gy, gz};
+    for (int t = 0; t < ms; t += 18) {
+        imu_heading_update(h, a, g, 18);
+    }
+}
+
+static void test_heading(void)
+{
+    imu_heading_t h;
+    imu_heading_init(&h);
+    /* Plano, quieto con un sesgo de 0,5 °/s en Z: se estima y no se integra */
+    feed(&h, 0, 0, 1000, 0, 0, 500, 3000);
+    CHECK(h.bias_ok);
+    CHECK(h.yaw < 0.5f || h.yaw > 359.5f);
+    CHECK(h.drift < 0.01f);
+    CHECK(h.bias < -0.3f && h.bias > -0.6f); /* horario positivo: Z+ antihorario */
+    /* Girar 90° en sentido horario (Z negativo, 45 °/s durante 2 s) + el sesgo */
+    feed(&h, 0, 0, 1000, 0, 0, -45000 + 500, 2016);
+    CHECK(h.yaw > 85.0f && h.yaw < 95.0f);
+    CHECK(h.drift > 0.0f && h.drift < 5.0f);
+    /* Inclinado 60°: el mismo giro alrededor de la vertical se mide igual */
+    imu_heading_reset(&h);
+    feed(&h, 0, 866, 500, 0, -38971, -22500, 2016);
+    CHECK(h.yaw > 85.0f && h.yaw < 95.0f);
+    /* Giro antihorario: el rumbo da la vuelta por 360 */
+    imu_heading_reset(&h);
+    feed(&h, 0, 0, 1000, 0, 0, 30000, 1008);
+    CHECK(h.yaw > 325.0f && h.yaw < 335.0f);
+    /* Sin gravedad (caída libre): no se integra y se avisa */
+    const float y0 = h.yaw;
+    feed(&h, 0, 0, 100, 0, 0, 90000, 500);
+    CHECK(!h.valid && h.yaw == y0);
+    /* Un hueco largo (muestras perdidas) no se integra */
+    const int32_t a[3] = {0, 0, 1000}, g[3] = {0, 0, -90000};
+    imu_heading_update(&h, a, g, 500);
+    CHECK(h.yaw == y0);
+    /* Sin sesgo estimado la incertidumbre crece más deprisa */
+    imu_heading_t n;
+    imu_heading_init(&n);
+    feed(&n, 0, 0, 1000, 0, 0, -45000, 2016);
+    CHECK(!n.bias_ok && n.drift > h.drift);
+}
+
 void test_imu_all(void)
 {
     test_decode();
     test_tilt();
     test_config();
+    test_heading();
 }

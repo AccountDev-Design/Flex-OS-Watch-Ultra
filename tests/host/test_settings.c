@@ -132,8 +132,38 @@ static void test_blob(void)
     CHECK(ws_crc32("123456789", 9) == 0xCBF43926u);
 }
 
+/* Ajustes de pantalla, protección AMOLED y ahorro */
+static void test_power_fields(void)
+{
+    ws_settings_t s;
+    ws_defaults(&s);
+    CHECK(!s.aod && s.pshift && s.dim == WS_DIM_MED && !s.psave && s.psave_radio == WS_PS_RADIO_WIFI);
+    s.dim = 9;
+    s.psave_radio = 7;
+    s.ps_bright = 5;
+    s.ps_flags = 0xFF;
+    s.face = WS_FACE_COUNT;
+    CHECK(ws_normalize(&s));
+    CHECK_EQ(s.dim, WS_DIM_MED);
+    CHECK_EQ(s.psave_radio, WS_PS_RADIO_WIFI);
+    CHECK_EQ(s.ps_bright, 0);
+    CHECK_EQ(s.ps_flags, WS_PS_PREV_VALID | WS_PS_PREV_AOD | WS_PS_PREV_WIFI | WS_PS_PREV_BT);
+    CHECK_EQ(s.face, 0);
+    ws_settings_t t = s;
+    t.aod = true;
+    CHECK(!ws_equal(&s, &t));
+    /* Niveles de atenuación */
+    CHECK_EQ(ws_dim_level(WS_DIM_MED, 70), 23);
+    CHECK_EQ(ws_dim_level(WS_DIM_SOFT, 70), 35);
+    CHECK_EQ(ws_dim_level(WS_DIM_STRONG, 70), 10);
+    CHECK_EQ(ws_dim_level(WS_DIM_OFF, 70), 70);
+    CHECK_EQ(ws_dim_level(WS_DIM_STRONG, 10), 5);
+    CHECK_EQ(ws_dim_level(WS_DIM_MED, 3), 3);
+}
+
 void test_settings_all(void)
 {
+    test_power_fields();
     test_defaults();
     test_normalize();
     test_deadline();

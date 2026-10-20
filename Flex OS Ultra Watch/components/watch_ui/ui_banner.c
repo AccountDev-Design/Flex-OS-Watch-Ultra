@@ -39,6 +39,7 @@ static struct {
     lv_obj_t *icon;
     lv_obj_t *bell;
     lv_obj_t *upd;
+    lv_obj_t *info;
     lv_obj_t *title;
     lv_obj_t *text;
     uint32_t notif_id; /* 0 = aviso de batería */
@@ -121,6 +122,9 @@ static void build(void)
     s_b.upd = flex_icon_create(card, FLEX_ICON_UPDATE, 36, FLEX_C_ACCENT);
     lv_obj_align(s_b.upd, LV_ALIGN_LEFT_MID, 4, 0);
     lv_obj_add_flag(s_b.upd, LV_OBJ_FLAG_HIDDEN);
+    s_b.info = flex_icon_create(card, FLEX_ICON_INFO, 36, FLEX_C_WARN);
+    lv_obj_align(s_b.info, LV_ALIGN_LEFT_MID, 4, 0);
+    lv_obj_add_flag(s_b.info, LV_OBJ_FLAG_HIDDEN);
     /* Título y texto en columna: no se pisan. */
     lv_obj_t *col = lv_obj_create(card);
     lv_obj_remove_style_all(col);
@@ -160,6 +164,7 @@ void ui_banner_show_notif(const char *app, const char *text, uint32_t notif_id)
     s_b.open_ota = false;
     lv_obj_add_flag(s_b.icon, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_b.upd, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_b.info, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(s_b.bell, LV_OBJ_FLAG_HIDDEN);
     lv_label_set_text(s_b.title, app && app[0] ? app : "Notificación");
     lv_obj_set_style_text_color(s_b.title, flex_color(FLEX_C_TXT), 0);
@@ -179,6 +184,7 @@ void ui_banner_show_battery(batt_alert_t alert, int percent)
     lv_obj_remove_flag(s_b.icon, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_b.bell, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_b.upd, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_b.info, LV_OBJ_FLAG_HIDDEN);
     lv_label_set_text(s_b.text, "Conecta el cargador");
     flex_battery_icon_set(s_b.icon, critical ? FLEX_BATT_CRITICAL : FLEX_BATT_LOW, percent);
     const char *title = critical ? "Batería crítica" : "Batería baja";
@@ -198,11 +204,27 @@ void ui_banner_show_ota(const char *title, const char *text, uint32_t title_rgb,
     s_b.open_ota = open;
     lv_obj_add_flag(s_b.icon, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_b.bell, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_b.info, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(s_b.upd, LV_OBJ_FLAG_HIDDEN);
     lv_label_set_text(s_b.title, title);
     lv_obj_set_style_text_color(s_b.title, flex_color(title_rgb), 0);
     lv_label_set_text(s_b.text, text ? text : "");
     start_out(T_IN_MS + T_SHOW_OTA_MS);
+}
+
+void ui_banner_show_info(const char *title, const char *text)
+{
+    ensure_shown();
+    s_b.notif_id = 0;
+    s_b.open_ota = false;
+    lv_obj_add_flag(s_b.icon, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_b.bell, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_b.upd, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(s_b.info, LV_OBJ_FLAG_HIDDEN);
+    lv_label_set_text(s_b.title, title ? title : "");
+    lv_obj_set_style_text_color(s_b.title, flex_color(FLEX_C_WARN), 0);
+    lv_label_set_text(s_b.text, text ? text : "");
+    start_out(T_IN_MS + T_SHOW_MS);
 }
 
 bool ui_banner_active(void)

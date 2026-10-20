@@ -1,7 +1,10 @@
 /*
  * Apagado de pantalla (F4.5) en la vista previa:
- *  - atenuada en los últimos 3 s y apagada al tiempo elegido; vuelve a la
- *    esfera;
+ *  - atenuación PROGRESIVA del brillo físico en los últimos 3 s y apagada al
+ *    tiempo elegido; vuelve a la esfera con la app suspendida (no cerrada);
+ *  - AOD: en vez de apagarse, negro con la hora atenuada, brillo bajo y
+ *    Pixel Shift por minuto; un toque la enciende; con el ahorro de energía
+ *    no hay AOD;
  *  - el toque que la enciende (o que la saca de la atenuación) no llega a la
  *    interfaz;
  *  - el botón lateral la apaga y la enciende (polaridad aprendida);
@@ -13,6 +16,7 @@
 
 #include "sim.h"
 #include "ui_internal.h"
+#include "ui_screen_logic.h"
 #include "watch_theme.h"
 
 int sim_lint(const char *where);
@@ -71,7 +75,11 @@ void sim_suite_screen(const char *out)
     EXPECT(ui_screen_state() == 0 && sim_display_level == -1, "se atenuo antes de tiempo");
     sim_run(1500);
     EXPECT(ui_screen_state() == 1, "no se atenuo a los 12 s (estado %d)", ui_screen_state());
-    EXPECT(sim_display_level == 23, "brillo atenuado %d (esperado 23 = 70/3)", sim_display_level);
+    EXPECT(sim_display_level < 70 && sim_display_level > 30, "la atenuacion no es progresiva (%d a 0,8 s)",
+           sim_display_level);
+    sim_run(1900); /* 14,7 s: casi al final de la rampa (hacia 70/3 = 23) */
+    EXPECT(sim_display_level >= 23 && sim_display_level <= 28, "brillo atenuado %d (esperado ~23 = 70/3)",
+           sim_display_level);
     EXPECT(sim_brightness == 70, "la atenuacion cambio el brillo del usuario");
     sim_save(out, "f4_atenuada");
     EXPECT(tap_text("Pantalla"), "no hay fila Pantalla");
@@ -84,6 +92,7 @@ void sim_suite_screen(const char *out)
     sim_run(15500);
     EXPECT(!sim_display_on && ui_screen_offs() == offs + 1, "no se apago a los 15 s");
     EXPECT(ui_nav_depth() == 1, "al apagarse no volvio a la esfera");
+    EXPECT(ui_nav_suspended_app() == ui_settings_create, "al apagarse se cerro la app en vez de suspenderla");
     sim_run(30000);
     EXPECT(!sim_display_on, "se encendio sola");
     /* un toque la enciende y no hace nada más */
@@ -153,8 +162,47 @@ void sim_suite_screen(const char *out)
     sim_tap(205, 300);
     sim_run(400);
 
+    /* ---- AOD: negro, hora atenuada, brillo bajo y Pixel Shift ---- */
+    ws.screen_to_s = 15;
+    ws.aod = true;
+    watch_settings_update(&ws);
+    sim_tap(205, 300);
+    sim_run(16000);
+    EXPECT(ui_screen_state() == SCR_AOD && sim_display_on && ui_aod_active(), "no paso al AOD (estado %d)",
+           ui_screen_state());
+    EXPECT(sim_display_level == 8, "brillo fisico del AOD %d (esperado 8)", sim_display_level);
+    EXPECT(!ui_screen_is_on(), "el AOD cuenta como pantalla encendida");
+    sim_save(out, "f4_aod");
+    lv_obj_t *aod_root = lv_obj_get_child(ui_nav_screen(), -1); /* capa del AOD, encima de todo */
+    lv_obj_t *box = aod_root ? lv_obj_get_child(aod_root, 0) : NULL;
+    const int32_t bx = box ? lv_obj_get_x(box) : 0, by = box ? lv_obj_get_y(box) : 0;
+    sim_run(61000);
+    EXPECT(box && (lv_obj_get_x(box) != bx || lv_obj_get_y(box) != by), "el AOD no hizo Pixel Shift al cambiar el minuto");
+    EXPECT(box && lv_obj_get_x(box) >= -8 && lv_obj_get_x(box) <= 8 && lv_obj_get_y(box) >= -8 &&
+               lv_obj_get_y(box) <= 8,
+           "Pixel Shift fuera de los limites seguros");
+    sim_tap(205, 300);
+    sim_run(400);
+    EXPECT(ui_screen_state() == 0 && !ui_aod_active() && sim_display_level == -1, "un toque no salio del AOD");
+    /* Con el ahorro de energía no hay AOD: se apaga. */
+    ui_psave_set(true);
+    sim_run(400);
+    sim_tap(205, 300);
+    sim_run(11000); /* en ahorro el apagado es de 10 s como mucho */
+    EXPECT(ui_screen_state() == SCR_OFF && !sim_display_on, "con ahorro de energia no se apago (estado %d)",
+           ui_screen_state());
+    sim_tap(205, 300);
+    sim_run(400);
+    ui_psave_set(false);
+    sim_run(400);
+    EXPECT(sim_brightness == 70, "al salir del ahorro el brillo no volvio a 70 (%d)", sim_brightness);
+
     ui_screen_enable(false);
     sim_ws_reset(NULL);
+    /* Cierra la app que quedó suspendida al apagarse. */
+    ui_nav_open_app(ui_about_create);
+    sim_run(400);
+    ui_nav_home();
     sim_run(1500);
     EXPECT(sim_display_on, "no quedo encendida al terminar");
     sim_check_residue("tras el apagado de pantalla");

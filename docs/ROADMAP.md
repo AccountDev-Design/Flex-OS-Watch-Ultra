@@ -1,7 +1,7 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 50,8 %   [██████████░░░░░░░░░░]   49,2 % pendiente   (verificado en el reloj: 8,1 %)
+PROGRESO GLOBAL: 50,7 %   [██████████░░░░░░░░░░]   49,3 % pendiente   (verificado en el reloj: 7,6 %)
 ```
 
 El alcance ha crecido dos veces y ningún trabajo hecho se perdió. Cuando crece el alcance, el porcentaje baja porque
@@ -11,6 +11,9 @@ mide más trabajo. Detalle en el historial del final.
   canal principal con el teléfono. El peso total pasó de 100 a 122.
 - **2026-10-20, integración con Flex Phone:** la app Android entra en `FlexPhone/` y se añade el navegador del reloj
   por el teléfono. Fase FP, con lo que el peso total pasa a 130.
+- **2026-10-20, experiencia Watch Ultra (F10):** gestos globales, cajón en panal, 5 esferas con selector, AOD y
+  protección AMOLED, Flex Ultra Power Saving, rumbo relativo y correcciones de estabilidad (Wi-Fi, splash). El peso
+  total pasa a 138 (`docs/F10-EXPERIENCIA.md`).
 
 - **Completado:**
   - Auditoría y plan (F0).
@@ -41,6 +44,10 @@ mide más trabajo. Detalle en el historial del final.
     - el navegador del reloj usa Internet a través del teléfono (Browser Relay pedido por BLE), con la página
       actualizándose sola;
     - interoperabilidad probada entre el motor C del reloj y el motor Kotlin del teléfono.
+  - Experiencia Watch Ultra (F10, `docs/F10-EXPERIENCIA.md`), compilada y probada en el PC: gestos de los cuatro
+    bordes con apps suspendidas, cajón en panal, 5 esferas con selector y persistencia, panel rápido desde cualquier
+    página, AOD, Pixel Shift, atenuación progresiva, Flex Ultra Power Saving, Device Care ampliada, rumbo relativo en
+    Flex Compass, splash de 3 s, sin medidor de FPS y cinco causas de fallo del Wi-Fi corregidas.
 - **En curso:** pruebas físicas de F2-F4.
 - **Falta:**
   - Pruebas físicas de F2-F4 sobre el firmware actual (T41-T66 y las T de F2/F3 aún sin resultado).
@@ -50,7 +57,8 @@ mide más trabajo. Detalle en el historial del final.
     Plugin.
   - La seguridad y las pruebas finales; el navegador, probarlo en el reloj con el servicio; el OTA, probarlo en el
     reloj y publicar la clave y el manifiesto (`docs/F7-OTA.md`).
-- **Siguiente:** pruebas físicas de F2-F4 (`docs/PRUEBAS-RELOJ.md`); después F5 (Wi-Fi y Flex Phone).
+- **Siguiente:** pruebas físicas de F2-F4 y de F10 (`docs/PRUEBAS-RELOJ.md`, T124-T141 con prioridad al Wi-Fi);
+  después F5 (Wi-Fi y Flex Phone).
 
 ## Cómo se calcula
 
@@ -172,6 +180,18 @@ Limitación conocida: sin servidor de renderizado o sin el móvil, no hay web. N
 | FP.2 Android: lista de dispositivos sin duplicados, icono de un único SVG (VectorDrawable en Android, RGB565A8 en el reloj) y pantalla por modelo | 2 | 🟡 faltan T116-T117 |
 | FP.3 Reloj: navegador por el Browser Relay del teléfono (`br_backend`, `RELAY_START` por BLE, origen en `flex://settings`, página «Web del teléfono», refresco continuo sin tocar) | 3 | 🟡 faltan T118-T123 |
 
+### F10 · Experiencia Watch Ultra (`docs/F10-EXPERIENCIA.md`) — 4 / 8
+| Tarea | Peso | Estado |
+|---|---|---|
+| F10.1 Gestos globales (cuatro bordes, apps suspendidas, cambios sin guardar), cajón en panal y panel rápido desde cualquier página | 2 | 🟡 faltan T130-T132 |
+| F10.2 Esferas (digital, analógica, modular, Liquid Glass, Parallax), selector con vistas previas reales y persistencia | 2 | 🟡 faltan T133-T135 |
+| F10.3 AOD, Pixel Shift y atenuación progresiva en `ui_screen`, configurables en Ajustes y Device Care | 1,5 | 🟡 faltan T136-T137 |
+| F10.4 Flex Ultra Power Saving (panel rápido y Device Care) con restauración del estado real | 1,5 | 🟡 faltan T138-T140 |
+| F10.5 Flex Compass: rumbo relativo por giroscopio con incertidumbre (sin Norte) | 1 | 🟡 falta T141 |
+
+Fuera del peso (correcciones de tareas que ya contaban): Wi-Fi (F5.1, T124-T128), splash (F3.4, T129), medidor de FPS
+retirado.
+
 ### Acordado sin peso asignado
 
 Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y quedará anotado en el historial.
@@ -257,3 +277,4 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-20 | **48,0 %** | +4 | F6 Navegador (50 % de 8): núcleo de `FlexOS_Browser` pasado a C con el perfil S3 (las comprobaciones de `test_browser.cpp` sin tocar un vector + vectores dorados), sesión FBP/1 con WebSocket propio probada contra un servicio a nivel de bytes, TLS verificado con el paquete de CA (la referencia no verificaba), JPEG con el TJpgDec de LVGL, app con omnibox anti-SSRF, páginas `flex://`, pestañas, historial, favoritos y teclado de página; suite "navegador". Puntos 58,5 / 122 |
 | 2026-10-20 | **50,8 %** | +3,5 | F7 OTA (50 % de 7): motor de `FlexOS_OTA` en C puro (`watch_ota/ota_core.c`: versiones con SemVer, manifiesto con JSON leído de verdad, instalación paso a paso sobre un transporte abstracto; 492 comprobaciones con los vectores de la especificación y el motor entero contra un servidor y una flash falsos), firma ECDSA P-256 obligatoria con el mbedTLS de IDF (la referencia no verificaba), comprobación de producto, chip y versión de la imagen, reversión automática con confirmación a los 60 s, reglas de batería, Ajustes > Actualizaciones, pantalla de instalación y avisos; `tools/ota/ota_sign.py` comprobado con la imagen real; suite "ota". Sin clave ni manifiesto publicados todavía: el reloj comprueba pero no instala. Puntos 62 / 122 |
 | 2026-10-20 | **50,8 %** | 0 (peso +8, puntos +4) | **Ampliación del alcance**: fase FP (integración con Flex Phone, peso 8). La app Android entra en `FlexPhone/`, importada sin cambios y modificada encima. Las tres tareas compilan y pasan las pruebas de PC, así que cuentan al 50 %: FP.1 (50 % de 3), FP.2 (50 % de 2) y FP.3 (50 % de 3). Pruebas que respaldan ese 50 %: 2756 comprobaciones de PC con ASan, vista previa completa y con sanitizadores (semillas 2, 9 y 13), 244 pruebas Kotlin, interoperabilidad con el motor C del reloj y el firmware compilado. El APK no se construyó aquí. Además se corrigió un fallo de navegación anterior (tocar un aviso con el panel rápido abierto dejaba la página debajo del panel). Puntos 66 / 130. Verificado en el reloj: 10,5 / 130 = 8,1 % |
+| 2026-10-20 | **50,7 %** | −0,1 (peso +8, puntos +4) | **Ampliación del alcance**: fase F10 (experiencia Watch Ultra, peso 8). Las cinco tareas compilan con ESP-IDF 5.5.5 y pasan las pruebas de PC (3019 comprobaciones con ASan/UBSan) y la vista previa completa, también con sanitizadores (semillas 2, 9 y 13) y la batería nueva `esferas`: 50 % de 8. Además, sin peso: cinco causas de fallo del Wi-Fi corregidas en `watch_net` (sin reproducir en el reloj), splash de 3 s como mínimo y medidor de FPS fuera de la interfaz. Puntos 70 / 138. Verificado en el reloj: 10,5 / 138 = 7,6 % |

@@ -83,7 +83,7 @@ centro, ampliado al mismo tamaño) con el del reloj (104 px, 8×8). Se genera co
 
 ## 2. Lanzador (Caja de aplicaciones)
 
-Se abre deslizando la esfera hacia la izquierda (como antes).
+Se abre deslizando la esfera hacia la izquierda (como antes). **Actualizado en F10:** ahora se abre deslizando la esfera hacia abajo y es un panal de iconos circulares sin nombres (`docs/F10-EXPERIENCIA.md` §3).
 
 | Referencia (`AppDrawer.h`) | Reloj |
 |---|---|

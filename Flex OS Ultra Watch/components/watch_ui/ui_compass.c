@@ -7,24 +7,33 @@
  * dice "No disponible" en vez de un cero (AppCompass.h:834-870).
  *
  * El QMI8658 del reloj tiene acelerómetro y giroscopio pero NO magnetómetro,
- * así que aquí no hay Norte: se muestra el requisito con los textos de la
- * referencia adaptados al reloj y, como en la referencia, los datos que sí
- * son reales (cabeceo y alabeo del acelerómetro, estado de cada sensor). El
- * IMU solo mide mientras la página existe (watch_imu_set_active, con
- * recuento: no apaga el sensor a otra página que lo use).
+ * así que aquí no hay Norte. Lo que sí se mide es el RUMBO RELATIVO: cuánto
+ * ha girado el reloj alrededor de la vertical desde una referencia que fija
+ * el usuario ("Fijar referencia"), integrando el giroscopio proyectado sobre
+ * la gravedad (watch_imu, imu_heading.c). Se enseña siempre con su
+ * incertidumbre (la deriva del giroscopio crece al moverse) y con el aviso de
+ * que no es el Norte magnético ni el geográfico. Debajo siguen el requisito
+ * con los textos de la referencia y los datos reales (cabeceo, alabeo,
+ * estado de cada sensor). El IMU solo mide mientras la página se ve
+ * (watch_imu_set_active, con recuento; se suelta si la app se suspende).
  */
 #include "ui_internal.h"
 
+#include <math.h>
 #include <stdio.h>
 #include "qmi8658.h"
 #include "watch_imu.h"
 #include "watch_theme.h"
 
-#define CMP_TICK_MS 200
+#define CMP_TICK_MS 100
+#define DIAL_D      200
 
 typedef struct {
     lv_obj_t *acc, *gyr, *fusion;
     lv_obj_t *pitch, *roll, *state;
+    lv_obj_t *head, *deg, *unc, *needle;
+    lv_point_precise_t npts[2];
+    bool imu_on;
 } cmp_page_t;
 
 static void back_cb(lv_event_t *e)
@@ -52,6 +61,32 @@ static void refresh(cmp_page_t *p)
     const bool have = watch_imu_get(&im);
     const imu_state_t st = have ? im.state : IMU_ABSENT;
     const bool live = st == IMU_RUNNING && im.samples > 0;
+    /* Rumbo relativo y su incertidumbre */
+    char b[64];
+    if (live && im.heading.valid) {
+        const int deg = (int)lroundf(im.heading.yaw) % 360;
+        snprintf(b, sizeof(b), "%d°", deg);
+        lv_label_set_text(p->deg, b);
+        snprintf(b, sizeof(b), "± %d° · %s", (int)lroundf(im.heading.drift),
+                 im.heading.bias_ok ? "giroscopio calibrado" : "quieto 1 s para calibrar");
+        lv_label_set_text(p->unc, b);
+        lv_obj_set_style_text_color(p->unc, flex_color(im.heading.drift > 20.0f ? FLEX_C_WARN : FLEX_C_TXT2), 0);
+        /* La aguja apunta a la referencia (0°): gira al revés que el reloj. */
+        const float a = -im.heading.yaw * 3.14159265f / 180.0f;
+        const float r = DIAL_D / 2.0f;
+        p->npts[0].x = r;
+        p->npts[0].y = r;
+        p->npts[1].x = r + sinf(a) * r * 0.82f;
+        p->npts[1].y = r - cosf(a) * r * 0.82f;
+        lv_line_set_points(p->needle, p->npts, 2);
+        lv_obj_remove_flag(p->needle, LV_OBJ_FLAG_HIDDEN);
+        set(p->head, "Relativo (sin Norte)", FLEX_C_TXT2);
+    } else {
+        lv_label_set_text(p->deg, "--");
+        lv_label_set_text(p->unc, live ? "Sin vertical clara: sujeta el reloj" : "Esperando al IMU");
+        lv_obj_add_flag(p->needle, LV_OBJ_FLAG_HIDDEN);
+        set(p->head, "No disponible", FLEX_C_MUTE);
+    }
     const char *stxt = st == IMU_RUNNING ? "Conectado"
                        : st == IMU_STARTING || st == IMU_IDLE ? "Detectando"
                        : st == IMU_ERROR ? "Error del bus" : "IMU no detectada";
@@ -78,8 +113,28 @@ static void tick_cb(lv_timer_t *t)
 
 static void delete_cb(lv_event_t *e)
 {
-    watch_imu_set_active(false);
-    lv_free(lv_event_get_user_data(e));
+    cmp_page_t *p = lv_event_get_user_data(e);
+    if (p->imu_on) {
+        watch_imu_set_active(false);
+    }
+    lv_free(p);
+}
+
+/* App suspendida (gesto hacia arriba): el IMU se suelta; al volver, se pide. */
+static void suspend_cb(lv_event_t *e)
+{
+    cmp_page_t *p = lv_event_get_user_data(e);
+    const bool on = lv_event_get_code(e) == (lv_event_code_t)ui_nav_event_resume();
+    if (on != p->imu_on) {
+        p->imu_on = on;
+        watch_imu_set_active(on);
+    }
+}
+
+static void reset_cb(lv_event_t *e)
+{
+    (void)e;
+    watch_imu_heading_reset();
 }
 
 static lv_obj_t *para(lv_obj_t *list, const lv_font_t *font, uint32_t rgb, const char *text)
@@ -101,8 +156,35 @@ lv_obj_t *ui_compass_create(lv_obj_t *parent)
     watch_theme_header(page, "Flex Compass", back_cb, NULL);
     lv_obj_t *list = watch_theme_list(page);
 
+    /* Rumbo relativo: esfera con marcas, aguja hacia la referencia y grados */
+    lv_obj_t *card = watch_theme_tile(list, 0, 0, LV_PCT(100), DIAL_D + 150);
+    lv_obj_remove_flag(card, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t *dial = ui_analog_create(card, DIAL_D, true);
+    lv_obj_align(dial, LV_ALIGN_TOP_MID, 0, 0);
+    ui_analog_set(dial, -1, 0, -1);
+    p->needle = lv_line_create(dial);
+    lv_obj_set_style_line_width(p->needle, 6, 0);
+    lv_obj_set_style_line_color(p->needle, flex_color(FLEX_C_ACCENT), 0);
+    lv_obj_set_style_line_rounded(p->needle, true, 0);
+    lv_obj_remove_flag(p->needle, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(p->needle, LV_OBJ_FLAG_HIDDEN);
+    p->deg = watch_theme_label(dial, FLEX_FONT_LARGE, FLEX_C_TXT, "--");
+    lv_obj_align(p->deg, LV_ALIGN_CENTER, 0, 30);
+    p->unc = watch_theme_label(card, FLEX_FONT_SMALL, FLEX_C_TXT2, "");
+    lv_obj_set_width(p->unc, LV_PCT(100));
+    lv_obj_set_style_text_align(p->unc, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(p->unc, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_align(p->unc, LV_ALIGN_TOP_MID, 0, DIAL_D + 6);
+    lv_obj_t *rb = watch_theme_button(card, "Fijar referencia", FLEX_C_PRIMARY, 240, 56);
+    lv_obj_align(rb, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_add_event_cb(rb, reset_cb, LV_EVENT_CLICKED, NULL);
+    para(list, FLEX_FONT_SMALL, FLEX_C_MUTE,
+         "La aguja señala la referencia. Rumbo relativo medido con el giroscopio: no es el Norte magnético ni el "
+         "geográfico. "
+         "La deriva aumenta al moverse; fija la referencia de nuevo cuando la incertidumbre crezca.");
+
     /* Pantalla de requisito (AppCompass.h:683-695) */
-    para(list, FLEX_FONT_TITLE, FLEX_C_TXT, "Requiere magnetómetro");
+    para(list, FLEX_FONT_TITLE, FLEX_C_TXT, "Norte: requiere magnetómetro");
     para(list, FLEX_FONT_SMALL, FLEX_C_TXT2,
          "Flex Compass necesita un módulo IMU con magnetómetro para determinar la orientación y el Norte.");
     para(list, FLEX_FONT_SMALL, FLEX_C_MUTE,
@@ -119,14 +201,18 @@ lv_obj_t *ui_compass_create(lv_obj_t *parent)
     set(p->fusion, "Inactivo", FLEX_C_MUTE);
 
     watch_theme_section(list, "Datos técnicos");
-    lv_obj_t *head = watch_theme_info_row(list, "Heading", "");
-    set(head, "No disponible", FLEX_C_MUTE);
+    p->head = watch_theme_info_row(list, "Heading", "");
+    set(p->head, "No disponible", FLEX_C_MUTE);
     p->pitch = watch_theme_info_row(list, "Pitch", "");
     p->roll = watch_theme_info_row(list, "Roll", "");
 
     watch_imu_set_active(true);
+    p->imu_on = true;
+    watch_imu_heading_reset(); /* referencia: hacia donde apunta al abrir */
     refresh(p);
     lv_obj_add_event_cb(page, delete_cb, LV_EVENT_DELETE, p);
+    lv_obj_add_event_cb(page, suspend_cb, (lv_event_code_t)ui_nav_event_suspend(), p);
+    lv_obj_add_event_cb(page, suspend_cb, (lv_event_code_t)ui_nav_event_resume(), p);
     ui_page_timer(page, tick_cb, CMP_TICK_MS, p);
     return page;
 }

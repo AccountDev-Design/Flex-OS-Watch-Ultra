@@ -9,6 +9,9 @@
  *     táctil, la batería, el RTC y la sonda de flash.
  *  2. Cuando la interfaz está lista, el texto se apaga en 200 ms (o menos si
  *     aún no había terminado de aparecer) y se carga la esfera.
+ *  3. El logotipo se ve como mínimo SPLASH_MIN_MS desde que aparece. En el
+ *     reloj el arranque tarda bastante menos y el logotipo era solo un
+ *     destello; si el arranque tarda más, no se añade ninguna espera.
  */
 #include "watch_ui.h"
 
@@ -16,6 +19,7 @@
 #include "watch_theme.h"
 
 #define SPLASH_OUT_MS (FLEX_ANIM_BOOT_FADE_MS / 3)
+#define SPLASH_MIN_MS 3000u
 
 static watch_ui_boot_info_t s_boot;
 
@@ -24,6 +28,8 @@ static struct {
     lv_obj_t *title;
     lv_obj_t *sub;
     lv_obj_t *next; /* pantalla que se carga al terminar */
+    uint32_t shown_at;
+    lv_timer_t *hold; /* espera hasta SPLASH_MIN_MS */
 } s_splash;
 
 const watch_ui_boot_info_t *ui_boot_info(void)
@@ -85,6 +91,7 @@ void watch_ui_boot_splash(void)
     s_splash.sub = watch_theme_label(scr, FLEX_FONT_SMALL, FLEX_C_TXT2, "Watch Ultra");
     lv_obj_align_to(s_splash.sub, s_splash.title, LV_ALIGN_OUT_BOTTOM_MID, 0, 6);
     s_splash.scr = scr;
+    s_splash.shown_at = lv_tick_get();
     set_text_opa(LV_OPA_TRANSP);
     lv_screen_load(scr);
 
@@ -98,6 +105,15 @@ void watch_ui_boot_splash(void)
     lv_anim_start(&a);
 }
 
+static void fade_out(void);
+
+static void hold_done_cb(lv_timer_t *t)
+{
+    lv_timer_delete(t);
+    s_splash.hold = NULL;
+    fade_out();
+}
+
 static void leave_splash(lv_obj_t *next)
 {
     if (!s_splash.scr) {
@@ -105,6 +121,18 @@ static void leave_splash(lv_obj_t *next)
         return;
     }
     s_splash.next = next;
+    const uint32_t shown = lv_tick_elaps(s_splash.shown_at);
+    const uint32_t out = SPLASH_OUT_MS;
+    if (shown + out < SPLASH_MIN_MS) {
+        /* La interfaz ya está lista debajo; solo falta el tiempo mínimo. */
+        s_splash.hold = lv_timer_create(hold_done_cb, SPLASH_MIN_MS - out - shown, NULL);
+        return;
+    }
+    fade_out();
+}
+
+static void fade_out(void)
+{
     lv_anim_delete(&s_splash, opa_in_cb);
     const int32_t from = lv_obj_get_style_text_opa(s_splash.title, 0);
     uint32_t ms = (uint32_t)(SPLASH_OUT_MS * from / LV_OPA_COVER);

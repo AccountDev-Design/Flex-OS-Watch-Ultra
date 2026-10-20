@@ -6,8 +6,17 @@
  *    Apagado (5-60 s, 15 por defecto): los últimos segundos se atenúa (un
  *    tercio del brillo del usuario, sin cambiarlo) y después se apaga
  *    (brillo 0 + DISPOFF; watch_display_set_power).
- *  - Al apagarse vuelve a la esfera (bloqueo por inactividad; sin código, D16)
- *    y cierra el panel rápido.
+ *  - Atenuación PROGRESIVA y configurable (Ajustes > Pantalla y Device Care:
+ *    desactivada, suave, media o fuerte): el brillo físico del panel (DCS
+ *    0x51, no la opacidad de LVGL) baja poco a poco durante la fase atenuada.
+ *  - Al apagarse vuelve a la esfera SIN cerrar la app abierta (queda
+ *    suspendida, ui_nav_suspend; sin código, D16) y cierra el panel rápido.
+ *  - Con AOD activado (y sin Flex Ultra Power Saving), en vez de apagarse
+ *    pasa a la pantalla siempre activa (ui_aod.c): negro, hora atenuada,
+ *    brillo físico bajo y Pixel Shift cada minuto. Un toque o el botón la
+ *    encienden. La elevación de muñeca NO la enciende: el controlador del
+ *    QMI8658 no usa sus interrupciones de movimiento (sin GPIO verificado) y
+ *    medir sin parar gastaría más que el propio AOD.
  *  - Se enciende con un toque, el botón lateral, una alarma o el
  *    temporizador, al enchufar el USB o con un aviso de batería. El toque que
  *    la enciende (o que la saca de la atenuación) no llega a la interfaz: lo
@@ -25,8 +34,12 @@
 #include "watch_settings.h"
 #include "watch_theme.h"
 
+#define AOD_LEVEL 8 /* % de brillo físico en AOD */
+
 static struct {
     scr_state_t st;
+    uint32_t dim_at;  /* inicio de la fase atenuada */
+    int dim_last;     /* último brillo enviado durante la rampa */
     lv_obj_t *shield;
     btn_t btn;
     bool enabled;
@@ -88,6 +101,7 @@ static void apply(scr_state_t to)
     const watch_ui_boot_info_t *b = bi();
     switch (to) {
     case SCR_ON:
+        ui_aod_hide();
         if (from == SCR_OFF && b->display_power) {
             b->display_power(true);
         } else if (b->display_level) {
@@ -97,19 +111,31 @@ static void apply(scr_state_t to)
         shield_off_if_idle();
         break;
     case SCR_DIM:
-        if (b->display_level && b->brightness_get) {
-            b->display_level(scr_dim_level(b->brightness_get()));
-        }
+        s_scr.dim_at = lv_tick_get();
+        s_scr.dim_last = -1;
         shield_on();
         break;
+    case SCR_AOD:
     case SCR_OFF:
         shield_on();
         if (ui_qp_active()) {
             ui_qp_close();
         }
-        ui_nav_home(); /* al volver, la esfera */
-        if (b->display_power) {
-            b->display_power(false);
+        ui_nav_suspend(false); /* al volver, la esfera; la app sigue suspendida */
+        if (to == SCR_AOD) {
+            if (from == SCR_OFF && b->display_power) {
+                b->display_power(true);
+            }
+            ui_aod_show();
+            if (b->display_level) {
+                const int user = b->brightness_get ? b->brightness_get() : AOD_LEVEL;
+                b->display_level(user >= 0 && user < AOD_LEVEL ? user : AOD_LEVEL);
+            }
+        } else {
+            ui_aod_hide();
+            if (b->display_power) {
+                b->display_power(false);
+            }
         }
         s_scr.offs++;
         break;
@@ -139,12 +165,13 @@ void ui_screen_enable(bool on)
 void ui_screen_tick(void)
 {
     const watch_ui_boot_info_t *b = bi();
-    /* Botón lateral: una pulsación corta apaga o enciende. */
+    const bool aod = ui_aod_enabled();
+    /* Botón lateral: una pulsación corta apaga (o pasa al AOD) o enciende. */
     if (b->button_level) {
         const int lv = b->button_level();
         if (lv >= 0 && btn_update(&s_scr.btn, lv, lv_tick_get())) {
-            if (s_scr.st == SCR_ON && s_scr.enabled && !held()) {
-                apply(SCR_OFF);
+            if ((s_scr.st == SCR_ON || s_scr.st == SCR_DIM) && s_scr.enabled && !held()) {
+                apply(aod ? SCR_AOD : SCR_OFF);
             } else {
                 ui_screen_wake();
             }
@@ -154,10 +181,28 @@ void ui_screen_tick(void)
     if (!s_scr.enabled) {
         return;
     }
+    /* El AOD se desactivó (o entró el ahorro) con la pantalla en AOD: apagar. */
+    if (s_scr.st == SCR_AOD && !aod) {
+        apply(SCR_OFF);
+        return;
+    }
     watch_settings_t ws;
     watch_settings_get(&ws);
-    const uint32_t timeout = (uint32_t)ws.screen_to_s * 1000u;
-    apply(scr_next(s_scr.st, lv_display_get_inactive_time(NULL), timeout, held()));
+    uint32_t timeout = (uint32_t)ws.screen_to_s * 1000u;
+    if (ui_psave_active() && timeout > UI_PSAVE_SCREEN_TO_MS) {
+        timeout = UI_PSAVE_SCREEN_TO_MS;
+    }
+    apply(scr_next_ex(s_scr.st, lv_display_get_inactive_time(NULL), timeout, held(), aod, ws.dim != WS_DIM_OFF));
+    if (s_scr.st == SCR_DIM && b->display_level && b->brightness_get) {
+        /* Rampa del brillo físico hasta el nivel atenuado. */
+        const int user = b->brightness_get();
+        const int lvl = scr_dim_ramp(user, ws_dim_level(ws.dim, user), lv_tick_elaps(s_scr.dim_at),
+                                     scr_dim_ms(timeout));
+        if (lvl != s_scr.dim_last) {
+            s_scr.dim_last = lvl;
+            b->display_level(lvl);
+        }
+    }
 }
 
 void ui_screen_wake(void)
@@ -168,7 +213,7 @@ void ui_screen_wake(void)
 
 bool ui_screen_is_on(void)
 {
-    return s_scr.st != SCR_OFF;
+    return s_scr.st != SCR_OFF && s_scr.st != SCR_AOD;
 }
 
 int ui_screen_state(void)

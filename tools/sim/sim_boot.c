@@ -1,7 +1,8 @@
 /*
  * Pruebas del arranque (B3-3) en la vista previa: el splash aparece animado
- * mientras "arrancan" los servicios, la esfera lo sustituye sin esperas
- * artificiales y no quedan animaciones ni pantallas sueltas.
+ * mientras "arrancan" los servicios, el logotipo se ve al menos 3 s (no un
+ * destello) y la esfera lo sustituye sin más espera; no quedan animaciones
+ * ni pantallas sueltas.
  */
 #include <stdio.h>
 
@@ -50,8 +51,12 @@ void sim_suite_boot(const char *out)
      * lo prueba sim_screen.c, que lo activa. */
     ui_screen_enable(false);
     EXPECT(lv_screen_active() == splash, "la esfera corto el splash sin transicion");
+    /* Arranque rápido (300 ms): el logotipo sigue hasta los 3 s. */
+    sim_run(2400);
+    EXPECT(ui_splash_active() && lv_screen_active() == splash, "el logotipo desaparecio antes de 3 s");
+    sim_run(3000 - 2700);
     sim_run(SIM_SPLASH_OUT_MAX_MS);
-    EXPECT(!ui_splash_active(), "el splash sigue activo a los %u ms", (unsigned)SIM_SPLASH_OUT_MAX_MS);
+    EXPECT(!ui_splash_active(), "el splash sigue activo a los 3 s + %u ms", (unsigned)SIM_SPLASH_OUT_MAX_MS);
     EXPECT(lv_screen_active() == ui_nav_screen(), "no se cargo la pantalla de navegacion");
     EXPECT(ui_nav_depth() == 1, "profundidad %d al arrancar", ui_nav_depth());
     sim_run(100);

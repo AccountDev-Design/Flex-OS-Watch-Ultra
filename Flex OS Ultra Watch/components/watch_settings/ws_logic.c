@@ -17,6 +17,38 @@ void ws_defaults(ws_settings_t *s)
     s->tz_min = WS_TZ_DEF;
     s->wallpaper = 0;
     s->face = 0;
+    s->aod = false;
+    s->pshift = true;
+    s->dim = WS_DIM_MED; /* un tercio, como hasta ahora */
+    s->psave = false;
+    s->psave_radio = WS_PS_RADIO_WIFI;
+    s->ps_bright = 0;
+    s->ps_flags = 0;
+}
+
+int ws_dim_level(uint8_t dim, int user_percent)
+{
+    if (user_percent < 0) {
+        user_percent = WS_BRIGHT_DEF;
+    }
+    int v;
+    switch (dim) {
+    case WS_DIM_SOFT:
+        v = user_percent / 2;
+        break;
+    case WS_DIM_MED:
+        v = user_percent / 3;
+        break;
+    case WS_DIM_STRONG:
+        v = user_percent * 15 / 100;
+        break;
+    default:
+        return user_percent;
+    }
+    if (v < 5) {
+        v = 5;
+    }
+    return v > user_percent ? user_percent : v;
 }
 
 bool ws_normalize(ws_settings_t *s)
@@ -57,13 +89,28 @@ bool ws_normalize(ws_settings_t *s)
     if (s->face >= WS_FACE_COUNT) {
         s->face = 0;
     }
+    s->aod = s->aod ? true : false;
+    s->pshift = s->pshift ? true : false;
+    s->psave = s->psave ? true : false;
+    if (s->dim >= WS_DIM_COUNT) {
+        s->dim = WS_DIM_MED;
+    }
+    if (s->psave_radio >= WS_PS_RADIO_COUNT) {
+        s->psave_radio = WS_PS_RADIO_WIFI;
+    }
+    if (s->ps_bright > WS_BRIGHT_MAX || (s->ps_bright && s->ps_bright < WS_BRIGHT_MIN)) {
+        s->ps_bright = 0;
+    }
+    s->ps_flags &= (uint8_t)(WS_PS_PREV_VALID | WS_PS_PREV_AOD | WS_PS_PREV_WIFI | WS_PS_PREV_BT);
     return !ws_equal(&before, s);
 }
 
 bool ws_equal(const ws_settings_t *a, const ws_settings_t *b)
 {
     return a->brightness == b->brightness && a->screen_to_s == b->screen_to_s && a->h24 == b->h24 &&
-           a->tz_min == b->tz_min && a->wallpaper == b->wallpaper && a->face == b->face;
+           a->tz_min == b->tz_min && a->wallpaper == b->wallpaper && a->face == b->face && a->aod == b->aod &&
+           a->pshift == b->pshift && a->dim == b->dim && a->psave == b->psave &&
+           a->psave_radio == b->psave_radio && a->ps_bright == b->ps_bright && a->ps_flags == b->ps_flags;
 }
 
 int64_t ws_commit_deadline(int64_t first_dirty_ms, int64_t last_change_ms)

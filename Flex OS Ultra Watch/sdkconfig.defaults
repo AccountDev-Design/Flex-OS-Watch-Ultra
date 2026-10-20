@@ -49,10 +49,14 @@ CONFIG_LV_DEF_REFR_PERIOD=16
 CONFIG_LV_GRADIENT_MAX_STOPS=4
 CONFIG_LV_USE_LOG=y
 CONFIG_LV_LOG_LEVEL_WARN=y
-# Medidor de FPS/CPU en pantalla: solo para medir en B1 (se retirará)
-CONFIG_LV_USE_SYSMON=y
-CONFIG_LV_USE_PERF_MONITOR=y
-CONFIG_LV_PERF_MONITOR_ALIGN_BOTTOM_MID=y
+# Medidor de FPS/CPU en pantalla: retirado (era solo para medir en B1 y
+# ocupaba una franja negra abajo). watch_display lo oculta además en tiempo de
+# ejecución por si un sdkconfig antiguo lo sigue activando.
+# CONFIG_LV_USE_SYSMON is not set
+# CONFIG_LV_USE_PERF_MONITOR is not set
+# Vistas previas del selector de esferas (lv_snapshot). También se fuerza en
+# CMakeLists.txt para los sdkconfig ya generados.
+CONFIG_LV_USE_SNAPSHOT=y
 CONFIG_LV_BUILD_EXAMPLES=n
 
 # ---------------------------------------------------------------------------

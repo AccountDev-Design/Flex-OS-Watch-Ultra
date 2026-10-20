@@ -42,6 +42,7 @@ typedef struct {
     int32_t pitch, roll;  /* décimas de grado */
     bool have_tilt;
     uint32_t gen;
+    bool imu_on;
 } sen_t;
 
 static void back_cb(lv_event_t *e)
@@ -193,8 +194,22 @@ static void tick_cb(lv_timer_t *t)
 
 static void delete_cb(lv_event_t *e)
 {
-    watch_imu_set_active(false);
+    sen_t *sp = lv_event_get_user_data(e);
+    if (sp->imu_on) {
+        watch_imu_set_active(false);
+    }
     lv_free(lv_event_get_user_data(e));
+}
+
+/* App suspendida: el IMU se suelta; al retomarla, se vuelve a pedir. */
+static void suspend_cb(lv_event_t *e)
+{
+    sen_t *sp = lv_event_get_user_data(e);
+    const bool on = lv_event_get_code(e) == (lv_event_code_t)ui_nav_event_resume();
+    if (on != sp->imu_on) {
+        sp->imu_on = on;
+        watch_imu_set_active(on);
+    }
 }
 
 lv_obj_t *ui_sensors_create(lv_obj_t *parent)
@@ -246,9 +261,12 @@ lv_obj_t *ui_sensors_create(lv_obj_t *parent)
     s->st_errors = watch_theme_info_row(list, "Errores I2C", "--");
 
     watch_imu_set_active(true);
+    s->imu_on = true;
     s->gen = (uint32_t)-1;
     refresh(s);
     lv_obj_add_event_cb(page, delete_cb, LV_EVENT_DELETE, s);
+    lv_obj_add_event_cb(page, suspend_cb, (lv_event_code_t)ui_nav_event_suspend(), s);
+    lv_obj_add_event_cb(page, suspend_cb, (lv_event_code_t)ui_nav_event_resume(), s);
     ui_page_timer(page, tick_cb, SEN_TICK_MS, s);
     return page;
 }

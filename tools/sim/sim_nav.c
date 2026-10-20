@@ -1,7 +1,9 @@
 /*
  * Pruebas de la navegación (B3-3) en la vista previa, con el dedo simulado:
- * abrir y volver con sus tiempos, botón "volver", gesto desde el borde
- * (completo, cancelado, vertical y toque), doble toque, volver durante una
+ * abrir y volver con sus tiempos, botón "volver", los cuatro gestos de borde
+ * (derecho = atrás, izquierdo = al cajón, inferior = a la esfera
+ * suspendiendo la app y retomarla, superior = panel rápido), gesto cancelado,
+ * vertical y toque, cambios sin guardar, doble toque, volver durante una
  * apertura, volver a la raíz, límite de la pila y fugas.
  */
 #include <stdio.h>
@@ -27,6 +29,11 @@ static lv_obj_t *test_page(lv_obj_t *parent)
     snprintf(t, sizeof(t), "Prueba %d", ++s_created);
     watch_theme_header(p, t, back_cb, NULL);
     return p;
+}
+
+static void del_flag_cb(lv_event_t *e)
+{
+    *(bool *)lv_event_get_user_data(e) = true;
 }
 
 static bool hidden(lv_obj_t *o)
@@ -97,14 +104,14 @@ void sim_suite_nav(const char *out)
     EXPECT(sim_timer_count() == timers0, "el temporizador del diagnostico quedo vivo (%d -> %d)", timers0,
            sim_timer_count());
 
-    /* ---- Gesto volver desde el borde: completo ---- */
+    /* ---- Borde DERECHO hacia la izquierda: atrás, siguiendo al dedo ---- */
     ui_nav_push(test_page);
     sim_run(300);
     lv_obj_t *page = ui_nav_top();
-    sim_drag(4, 300, 200, 300, 10, 20); /* lento: 196 px en 220 ms */
+    sim_drag(FLEX_SCREEN_W - 4, 300, FLEX_SCREEN_W - 200, 300, 10, 20); /* lento: 196 px en 220 ms */
     EXPECT(ui_nav_busy(), "el arrastre no mueve la pagina");
     const int32_t px = lv_obj_get_x(page);
-    EXPECT(px > 170 && px <= 200, "la pagina no sigue al dedo (x = %d)", (int)px);
+    EXPECT(px < -170 && px >= -200, "la pagina no sigue al dedo (x = %d)", (int)px);
     EXPECT(!hidden(face), "la esfera no asoma durante el gesto");
     sim_save(out, "f3_nav_gesto");
     sim_release();
@@ -115,22 +122,105 @@ void sim_suite_nav(const char *out)
     ui_nav_push(test_page);
     sim_run(300);
     page = ui_nav_top();
-    sim_drag(4, 300, 70, 300, 10, 30);
+    sim_drag(FLEX_SCREEN_W - 4, 300, FLEX_SCREEN_W - 70, 300, 10, 30);
     sim_release();
     sim_run(250);
     expect_rest(2, "tras el gesto cancelado");
     EXPECT(ui_nav_top() == page, "el gesto cancelado cambio de pagina");
 
-    /* ---- Gesto vertical desde el borde: no navega ---- */
-    sim_drag(6, 200, 10, 420, 10, 20);
+    /* ---- Gesto vertical desde un borde lateral: no navega ---- */
+    sim_drag(FLEX_SCREEN_W - 6, 200, FLEX_SCREEN_W - 10, 420, 10, 20);
     sim_release();
     sim_run(250);
     expect_rest(2, "tras arrastre vertical en el borde");
 
-    /* ---- Toque en el borde: nada ---- */
+    /* ---- Toque en los bordes: nada ---- */
     sim_tap(6, 300);
+    sim_tap(FLEX_SCREEN_W - 6, 300);
     sim_run(250);
     expect_rest(2, "tras tocar el borde");
+
+    /* ---- Cambios sin guardar: el primer "atrás" avisa y no descarta ---- */
+    ui_nav_set_dirty(page, true);
+    sim_drag(FLEX_SCREEN_W - 4, 300, FLEX_SCREEN_W - 260, 300, 8, 20);
+    sim_release();
+    sim_run(300);
+    EXPECT(!ui_nav_busy() && ui_nav_depth() == 2 && ui_nav_top() == page && lv_obj_get_x(page) == 0,
+           "con cambios sin guardar el gesto descarto la pagina");
+    EXPECT(ui_banner_active(), "no se aviso de los cambios sin guardar");
+    sim_drag(FLEX_SCREEN_W - 4, 300, FLEX_SCREEN_W - 260, 300, 8, 20);
+    sim_release();
+    sim_run(300);
+    EXPECT(!ui_nav_busy() && ui_nav_depth() == 1, "repetir el gesto no descarto la pagina con cambios");
+    sim_run(5000); /* el aviso se va */
+    expect_rest(1, "tras repetir el gesto con cambios sin guardar");
+
+    /* ---- Borde IZQUIERDO hacia la derecha: sale al cajón ---- */
+    ui_nav_push(test_page);
+    sim_run(300);
+    ui_nav_push(test_page);
+    sim_run(300);
+    sim_drag(4, 300, 200, 300, 10, 20);
+    EXPECT(ui_nav_busy(), "salir al cajon no sigue al dedo");
+    sim_save(out, "f3_nav_al_cajon");
+    sim_release();
+    sim_run(300);
+    expect_rest(2, "tras salir al cajon");
+    EXPECT(ui_nav_page(1) && lv_obj_get_child_count(ui_nav_page(1)) > 0 && !sim_find_label(ui_nav_top(), "Prueba"),
+           "salir al cajon no dejo el cajon arriba");
+    /* En el propio cajón, el borde izquierdo vuelve a la esfera. */
+    sim_drag(4, 300, 260, 300, 8, 20);
+    sim_release();
+    sim_run(300);
+    expect_rest(1, "tras salir del cajon");
+
+    /* ---- Borde INFERIOR hacia arriba: a la esfera sin cerrar la app ---- */
+    ui_nav_push(test_page);
+    sim_run(300);
+    page = ui_nav_top();
+    lv_obj_t *mark = lv_label_create(page); /* "estado" de la app */
+    lv_label_set_text(mark, "estado conservado");
+    sim_drag(200, FLEX_SCREEN_H - 6, 200, 200, 10, 20);
+    EXPECT(ui_nav_busy() && lv_obj_get_y(page) < 0, "la pagina no sube con el dedo");
+    EXPECT(!hidden(face), "la esfera no asoma al subir");
+    sim_release();
+    sim_run(300);
+    EXPECT(ui_nav_depth() == 1 && ui_nav_top() == face, "el gesto hacia arriba no llevo a la esfera");
+    EXPECT(ui_nav_suspended_app() == test_page, "la app no quedo suspendida");
+    EXPECT(lv_obj_is_valid(page) && hidden(page), "la app suspendida se borro o se ve");
+    /* Retomarla desde el cajón: la MISMA página, con su estado. */
+    EXPECT(ui_nav_open_app(test_page), "no se pudo retomar la app");
+    sim_run(300);
+    expect_rest(2, "tras retomar la app");
+    EXPECT(ui_nav_top() == page && sim_find_label(page, "estado conservado"), "la app no se retomo con su estado");
+    EXPECT(ui_nav_suspended_app() == NULL, "quedo una app suspendida tras retomarla");
+    /* Suspender y abrir OTRA app: la suspendida se cierra. */
+    static bool deleted;
+    deleted = false;
+    lv_obj_add_event_cb(page, del_flag_cb, LV_EVENT_DELETE, &deleted);
+    ui_nav_suspend(true);
+    sim_run(300);
+    ui_nav_open_app(ui_diag_create);
+    sim_run(300);
+    EXPECT(deleted && ui_nav_suspended_app() == NULL, "la app suspendida no se cerro al abrir otra");
+    expect_rest(2, "tras abrir otra app");
+
+    /* ---- Borde SUPERIOR hacia abajo: panel rápido sobre la app ---- */
+    lv_obj_t *app = ui_nav_top();
+    sim_drag(200, 4, 200, 360, 12, 20);
+    sim_release();
+    sim_run(400);
+    EXPECT(ui_qp_is_open(), "el borde superior no abrio el panel rapido desde una app");
+    EXPECT(ui_nav_top() == app && ui_nav_depth() == 2, "abrir el panel cambio la app de debajo");
+    sim_save(out, "f3_panel_sobre_app");
+    ui_qp_close();
+    sim_run(400);
+    expect_rest(2, "tras cerrar el panel sobre la app");
+    ui_nav_back();
+    sim_run(300);
+    expect_rest(1, "tras cerrar la app");
+    ui_nav_push(test_page);
+    sim_run(300);
 
     /* ---- Volver durante una apertura: termina la apertura y vuelve ---- */
     ui_nav_push(test_page);
@@ -170,7 +260,7 @@ void sim_suite_nav(const char *out)
         ui_nav_push(i % 2 ? test_page : ui_diag_create);
         sim_run(300);
         if (i % 2) {
-            sim_drag(4, 300, 260, 300, 8, 20);
+            sim_drag(FLEX_SCREEN_W - 4, 300, FLEX_SCREEN_W - 260, 300, 8, 20);
             sim_release();
         } else {
             sim_tap(FLEX_HDR_X + FLEX_HDR_ZONE / 2, FLEX_SAFE_TOP + FLEX_HDR_ZONE / 2);

@@ -86,16 +86,17 @@ static void check_rest(int step)
         visible += !lv_obj_has_flag(ui_nav_page(i), LV_OBJ_FLAG_HIDDEN);
     }
     EXPECT(visible == 1, "%s: %d paginas visibles", where, visible);
-    const int overlays = ui_qp_active() + ui_charge_anim_active();
-    EXPECT((int)lv_obj_get_child_count(scr) == depth + overlays, "%s: %u hijos para profundidad %d", where,
-           (unsigned)lv_obj_get_child_count(scr), depth);
+    const int overlays = ui_qp_active() + ui_charge_anim_active() + ui_aod_active();
+    EXPECT((int)lv_obj_get_child_count(scr) == depth + overlays + ui_nav_suspended_count(),
+           "%s: %u hijos para profundidad %d (%d suspendidas)", where, (unsigned)lv_obj_get_child_count(scr), depth,
+           ui_nav_suspended_count());
     /* las capas globales siempre encima de las páginas */
     for (int i = 0; i < depth; i++) {
         EXPECT(lv_obj_get_index(ui_nav_page(i)) == i, "%s: la pagina %d no esta en su sitio", where, i);
     }
     EXPECT(lv_obj_get_x(ui_nav_top()) == 0, "%s: pagina desplazada (x = %d)", where, (int)lv_obj_get_x(ui_nav_top()));
     EXPECT(!ui_qp_active() || ui_qp_is_open(), "%s: panel rapido a medias", where);
-    EXPECT(!ui_qp_active() || depth == 1, "%s: panel rapido sobre la profundidad %d", where, depth);
+    EXPECT(!ui_qp_active() || lv_obj_get_index(ui_qp_obj()) >= depth, "%s: panel rapido debajo de una pagina", where);
     if (!ui_banner_active() && !ui_charge_anim_active()) {
         EXPECT(lv_anim_count_running() == 0, "%s: %u animaciones vivas", where, (unsigned)lv_anim_count_running());
     }
@@ -204,17 +205,23 @@ void sim_suite_monkey(const char *out)
         if (a < 25) { /* toque en cualquier punto */
             counts[0]++;
             sim_tap((int32_t)rnd(SIM_W), (int32_t)rnd(SIM_H));
-        } else if (a < 30) { /* deslizar hacia la izquierda (en la esfera abre las apps) */
+        } else if (a < 30) { /* deslizar hacia abajo en el centro (en la esfera abre el cajón) */
             counts[8]++;
-            const int32_t y = 90 + (int32_t)rnd(300);
-            const int32_t x0 = 200 + (int32_t)rnd(200);
-            sim_drag(x0, y, x0 - 60 - (int32_t)rnd(150), y + (int32_t)rnd(30) - 15, 2 + (int)rnd(8), 10 + rnd(30));
+            const int32_t x = 90 + (int32_t)rnd(230);
+            const int32_t y0 = 90 + (int32_t)rnd(200);
+            sim_drag(x, y0, x + (int32_t)rnd(30) - 15, y0 + 60 + (int32_t)rnd(150), 2 + (int)rnd(8), 10 + rnd(30));
             sim_release();
-        } else if (a < 44) { /* gesto volver desde el borde, rápido o lento */
+        } else if (a < 44) { /* bordes laterales: derecho = atrás, izquierdo = al cajón */
             counts[1]++;
-            const int32_t y = FLEX_HDR_H + 10 + (int32_t)rnd(SIM_H - FLEX_HDR_H - 20);
-            sim_drag((int32_t)rnd(18), y, 30 + (int32_t)rnd(370), y + (int32_t)rnd(40) - 20, 2 + (int)rnd(10),
-                     10 + rnd(30));
+            const int32_t y = FLEX_HDR_H + 10 + (int32_t)rnd(SIM_H - FLEX_HDR_H - 50);
+            if (rnd(2)) {
+                sim_drag((int32_t)rnd(18), y, 30 + (int32_t)rnd(370), y + (int32_t)rnd(40) - 20, 2 + (int)rnd(10),
+                         10 + rnd(30));
+            } else {
+                const int32_t x0 = SIM_W - 1 - (int32_t)rnd(18);
+                sim_drag(x0, y, x0 - 30 - (int32_t)rnd(370), y + (int32_t)rnd(40) - 20, 2 + (int)rnd(10),
+                         10 + rnd(30));
+            }
             sim_release();
         } else if (a < 58) { /* desde arriba hacia abajo (panel rápido) */
             counts[2]++;
@@ -222,10 +229,10 @@ void sim_suite_monkey(const char *out)
             sim_drag(x, (int32_t)rnd(50), x + (int32_t)rnd(60) - 30, 40 + (int32_t)rnd(440), 2 + (int)rnd(10),
                      10 + rnd(30));
             sim_release();
-        } else if (a < 70) { /* hacia arriba desde cualquier altura */
+        } else if (a < 70) { /* hacia arriba desde cualquier altura (desde abajo: a la esfera) */
             counts[3]++;
             const int32_t x = 20 + (int32_t)rnd(370);
-            const int32_t y0 = 100 + (int32_t)rnd(400);
+            const int32_t y0 = rnd(2) ? SIM_H - 1 - (int32_t)rnd(25) : 100 + (int32_t)rnd(400);
             sim_drag(x, y0, x, (int32_t)rnd((uint32_t)y0), 2 + (int)rnd(10), 10 + rnd(30));
             sim_release();
         } else if (a < 80) { /* botón volver de la cabecera */
@@ -246,6 +253,7 @@ void sim_suite_monkey(const char *out)
                     ui_file_rename_create, ui_paint_create,     ui_paint_canvas_create,
                     ui_weather_create,  ui_wx_locs_create,      ui_wx_search_create,    ui_browser_create,
                     ui_ota_create,      ui_ota_install_create,  ui_phone_relay_create,
+                    ui_face_editor_create, ui_sensors_create,
                 };
                 ui_nav_push(pages[rnd(sizeof(pages) / sizeof(pages[0]))]);
             }
@@ -293,6 +301,11 @@ void sim_suite_monkey(const char *out)
     ui_alarms_set(&none);
     ui_nav_home();
     sim_run(400);
+    ui_nav_discard_suspended(); /* la app que quedara suspendida con el gesto hacia arriba */
+    if (ui_psave_active()) {
+        ui_psave_set(false); /* un toque en el panel pudo activar el ahorro */
+        sim_run(400);
+    }
     /* Los toques pueden haber cambiado el fondo (Ajustes > Pantalla): se
      * vuelve al inicial para comparar la memoria con la misma esfera. */
     watch_settings_t ws;

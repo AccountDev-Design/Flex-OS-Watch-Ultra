@@ -20,6 +20,7 @@
 #include <stdint.h>
 #include "driver/i2c_master.h"
 #include "esp_err.h"
+#include "imu_heading.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,6 +46,7 @@ typedef struct {
     uint32_t reads;      /**< ráfagas I2C */
     uint32_t errors;     /**< transacciones I2C fallidas */
     int64_t last_us;     /**< esp_timer de la última muestra */
+    imu_heading_t heading; /**< rumbo RELATIVO integrado en cada muestra (sin Norte) */
 } watch_imu_snapshot_t;
 
 /** Arranca la tarea del IMU (bus = bsp_i2c_get_handle()). */
@@ -55,6 +57,8 @@ bool watch_imu_get(watch_imu_snapshot_t *out);
 uint32_t watch_imu_generation(void);
 /** Pide (true) o suelta (false) medidas; cuenta las peticiones. */
 void watch_imu_set_active(bool on);
+/** Fija la referencia del rumbo relativo (0° = hacia donde apunta ahora). */
+void watch_imu_heading_reset(void);
 
 #ifdef __cplusplus
 }

@@ -119,6 +119,14 @@ esp_err_t watch_display_start(lv_display_t **out_disp)
     lv_display_t *disp = lvgl_port_add_disp(&disp_cfg);
     ESP_RETURN_ON_FALSE(disp, ESP_FAIL, TAG, "lvgl_port_add_disp");
     lv_display_add_event_cb(disp, rounder_cb, LV_EVENT_INVALIDATE_AREA, NULL);
+#if LV_USE_PERF_MONITOR && !defined(FLEX_PERF_MONITOR)
+    /* Defensa por si LV_USE_PERF_MONITOR llegara activo sin pedirlo
+     * (CMakeLists.txt lo fuerza a 0): nunca en la interfaz normal. */
+    if (lvgl_port_lock(0)) {
+        lv_sysmon_hide_performance(disp);
+        lvgl_port_unlock();
+    }
+#endif
 
     /* La pantalla por defecto del tema claro de LVGL es blanca: se pone en
      * negro antes de encender el brillo para que el arranque no destelle. */

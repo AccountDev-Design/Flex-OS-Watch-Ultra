@@ -122,7 +122,7 @@ Estado de cada bloque de F4 (pesos de `ROADMAP.md`). Las referencias son la audi
 **Avisos solo visuales (D13).** El motor necesita escribir en el AXP2101 (ALDO3), y este firmware no escribe ese chip; además no se sabe si la placa lleva motor. El altavoz necesita ES8311/I2S. Las páginas lo dicen.
 
 **Lanzador.**
-- Se abre **deslizando la esfera hacia la izquierda**. Se vuelve con el gesto desde el borde izquierdo o con la cabecera.
+- Se abre **deslizando la esfera hacia la izquierda**. Se vuelve con el gesto desde el borde izquierdo o con la cabecera. **Actualizado en F10:** el cajón se abre hacia abajo y los gestos de borde cambian (`docs/F10-EXPERIENCIA.md` §2).
 - Mosaicos de vidrio con el estado real de cada app: cronómetro en marcha, tiempo restante del temporizador y próxima alarma.
 - Mosaicos de Sensores (F4.4, "Pendiente" en esta versión) y Ajustes.
 

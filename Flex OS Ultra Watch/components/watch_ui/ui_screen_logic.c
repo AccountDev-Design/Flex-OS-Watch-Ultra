@@ -11,19 +11,49 @@ uint32_t scr_dim_ms(uint32_t timeout_ms)
 
 scr_state_t scr_next(scr_state_t cur, uint32_t inactive_ms, uint32_t timeout_ms, bool hold)
 {
+    return scr_next_ex(cur, inactive_ms, timeout_ms, hold, false, true);
+}
+
+scr_state_t scr_next_ex(scr_state_t cur, uint32_t inactive_ms, uint32_t timeout_ms, bool hold, bool aod, bool dim)
+{
     if (hold) {
         return SCR_ON;
     }
-    if (cur == SCR_OFF) {
-        return SCR_OFF;
+    if (cur == SCR_OFF || cur == SCR_AOD) {
+        return cur;
     }
     if (inactive_ms >= timeout_ms) {
-        return SCR_OFF;
+        return aod ? SCR_AOD : SCR_OFF;
     }
-    if (inactive_ms >= timeout_ms - scr_dim_ms(timeout_ms)) {
+    if (dim && inactive_ms >= timeout_ms - scr_dim_ms(timeout_ms)) {
         return SCR_DIM;
     }
     return SCR_ON;
+}
+
+int scr_dim_ramp(int user, int target, uint32_t elapsed_ms, uint32_t dim_ms)
+{
+    if (target >= user || dim_ms == 0 || elapsed_ms >= dim_ms) {
+        return target < user ? target : user;
+    }
+    return user - (int)((int64_t)(user - target) * (int64_t)elapsed_ms / (int64_t)dim_ms);
+}
+
+void scr_pixel_shift(uint32_t step, int max, int *dx, int *dy)
+{
+    /* Recorrido en dos anillos (mitad y entero), alternando lados para que
+     * dos pasos seguidos no estén juntos: cada píxel pasa el mismo tiempo en
+     * cada posición a lo largo del ciclo. Unidades de max/2. */
+    static const int8_t kPat[SCR_SHIFT_STEPS][2] = {
+        {0, 0},   {2, 0},  {-2, 1}, {1, -2}, {-1, 2}, {2, 2},  {-2, -1}, {0, -2},
+        {1, 1},   {-2, 2}, {2, -1}, {-1, -1}, {0, 2},  {2, -2}, {-2, 0},  {-1, 1},
+    };
+    if (max < 0) {
+        max = 0;
+    }
+    const int i = (int)(step % SCR_SHIFT_STEPS);
+    *dx = kPat[i][0] * max / 2;
+    *dy = kPat[i][1] * max / 2;
 }
 
 int scr_dim_level(int user_percent)

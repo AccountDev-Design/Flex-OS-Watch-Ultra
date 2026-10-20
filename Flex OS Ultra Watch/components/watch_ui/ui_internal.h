@@ -44,6 +44,8 @@ void ui_banner_show_battery(batt_alert_t alert, int percent);
 void ui_banner_show_notif(const char *app, const char *text, uint32_t notif_id);
 /** Aviso del sistema de actualizaciones (F7); open: tocarlo abre Ajustes > Actualizaciones. */
 void ui_banner_show_ota(const char *title, const char *text, uint32_t title_rgb, bool open);
+/** Aviso informativo del sistema (icono de información, título en ámbar). */
+void ui_banner_show_info(const char *title, const char *text);
 bool ui_banner_active(void);
 
 /* ---- Navegación (ui_nav) ----
@@ -62,8 +64,31 @@ bool ui_nav_push(ui_page_create_t create);
 bool ui_nav_push_opts(ui_page_create_t create, bool edge_gesture);
 /** Vuelve a la página anterior (190 ms). false en la raíz. */
 bool ui_nav_back(void);
-/** Vuelve a la raíz (la esfera) con una sola animación. */
+/** Vuelve a la raíz (la esfera) con una sola animación; cierra las páginas. */
 void ui_nav_home(void);
+/** El cajón de aplicaciones baja desde arriba (gesto hacia abajo en la esfera). */
+bool ui_nav_push_from_top(ui_page_create_t create);
+/** A la esfera SIN cerrar la app: sus páginas quedan suspendidas (ocultas,
+ * con su estado) hasta que se vuelve a abrir esa app (ui_nav_open_app). */
+bool ui_nav_suspend(bool animated);
+/** Retoma la app suspendida si es app (su página raíz). false si no lo es. */
+bool ui_nav_resume(ui_page_create_t app);
+/** Abre una app desde el cajón: la retoma si estaba suspendida; si no, cierra
+ * la suspendida (si había otra) y la abre nueva. */
+bool ui_nav_open_app(ui_page_create_t app);
+/** Página raíz de la app suspendida, o NULL. */
+ui_page_create_t ui_nav_suspended_app(void);
+/** Páginas suspendidas (hijas ocultas de la pantalla de navegación). */
+int ui_nav_suspended_count(void);
+/** Cierra la app suspendida (libera sus páginas). */
+void ui_nav_discard_suspended(void);
+/** Códigos de evento que reciben las páginas de una app al suspenderse y al
+ * retomarse (p. ej. para soltar o volver a pedir el IMU). */
+uint32_t ui_nav_event_suspend(void);
+uint32_t ui_nav_event_resume(void);
+/** Marca una página con cambios sin guardar: atrás y salir al cajón avisan
+ * y hay que repetir el gesto para descartarlos. */
+void ui_nav_set_dirty(lv_obj_t *page, bool dirty);
 /** Rehace la página raíz (la esfera) debajo de las páginas abiertas: para
  * cambios de ajustes que afectan a su construcción (fondo, estilo). */
 bool ui_nav_replace_root(ui_page_create_t root);
@@ -170,7 +195,9 @@ void ui_phone_text(const char *in, char *out, size_t n, const lv_font_t *font);
 void ui_phone_when(uint32_t when_s, char *b, size_t n);
 /** Estado corto del enlace ("Conectado", "Buscando"...) y su color. */
 const char *ui_phone_chip(const watch_phone_status_t *s, uint32_t *rgb);
-void ui_apps_attach(lv_obj_t *face_page); /**< deslizar la esfera a la izquierda abre las apps */
+void ui_apps_attach(lv_obj_t *face_page); /**< deslizar la esfera hacia abajo abre el cajón */
+/** Icono de la app con ese nombre en el cajón (o NULL): accesibilidad y pruebas. */
+lv_obj_t *ui_apps_find(lv_obj_t *drawer, const char *name);
 lv_obj_t *ui_stopwatch_create(lv_obj_t *parent);
 lv_obj_t *ui_timer_create(lv_obj_t *parent);
 lv_obj_t *ui_alarms_create(lv_obj_t *parent);
@@ -204,7 +231,56 @@ lv_obj_t *ui_bright_create(lv_obj_t *parent, int32_t x, int32_t y, int32_t w);
 /** Temporizador ligado a una página: se borra con ella. */
 lv_timer_t *ui_page_timer(lv_obj_t *page, lv_timer_cb_t cb, uint32_t period_ms, void *user_data);
 
+/* ---- Flex Ultra Power Saving (ui_psave.c) ---- */
+#define UI_PSAVE_BRIGHT       30      /* % de brillo máximo en ahorro */
+#define UI_PSAVE_SCREEN_TO_MS 10000u  /* apagado de pantalla máximo en ahorro */
+/** Aplica al arrancar el modo guardado (si quedó activo). */
+void ui_psave_init(void);
+bool ui_psave_active(void);
+/** Activa o desactiva el ahorro: guarda y restaura el estado real anterior. */
+void ui_psave_set(bool on);
+/** Texto de la política de radios ("Conservar", "Apagar Wi-Fi"...). */
+const char *ui_psave_radio_text(uint8_t policy);
+
+/* ---- AOD y protección AMOLED (ui_aod.c) ---- */
+/** AOD efectivo: activado en Ajustes y sin ahorro de energía. */
+bool ui_aod_enabled(void);
+void ui_aod_show(void);
+void ui_aod_hide(void);
+bool ui_aod_active(void);
+/** Desplazamiento de Pixel Shift de ±max px para el paso step (quien lo usa
+ * avanza el paso con cada cambio de minuto, que ya redibuja); (0,0) si Pixel
+ * Shift está desactivado. */
+void ui_pixel_shift(int max, uint32_t step, int32_t *dx, int32_t *dy);
+/** Texto de un modo de atenuación (WS_DIM_*). */
+const char *ui_dim_text(uint8_t dim);
+
+/* ---- Esferas (ui_face.c, ui_face_editor.c) ---- */
+typedef enum {
+    UI_FACE_DIGITAL = 0,
+    UI_FACE_ANALOG,
+    UI_FACE_MODULAR,
+    UI_FACE_GLASS,
+    UI_FACE_PARALLAX,
+    UI_FACE_COUNT_
+} ui_face_style_t;
+/** Nombre de una esfera. */
+const char *ui_face_name(int style);
+/** Esfera de un estilo concreto (sin gestos: para las vistas previas). */
+lv_obj_t *ui_face_create_style(lv_obj_t *parent, int style, bool interactive);
+/** Esfera analógica (marcas y agujas con líneas de LVGL) de d px; aod: gris
+ * atenuado y sin segundero. */
+lv_obj_t *ui_analog_create(lv_obj_t *parent, int32_t d, bool aod);
+/** hour < 0: sin hora (agujas ocultas); second < 0: sin segundero. */
+void ui_analog_set(lv_obj_t *dial, int hour, int minute, int second);
+/** Selector de esferas (mantener pulsada la esfera o Ajustes > Pantalla). */
+lv_obj_t *ui_face_editor_create(lv_obj_t *parent);
+/** Abre el selector; from_settings: al aplicar vuelve a la esfera. */
+void ui_face_editor_open(bool from_settings);
+
 /* ---- Panel rápido (ui_qp) ---- */
+/** Arrastre hacia abajo que abre el panel (franja superior de cualquier página). */
+void ui_qp_pull_cb(lv_event_t *e);
 
 /** Añade a la esfera la franja superior que abre el panel al arrastrar. */
 void ui_qp_attach(lv_obj_t *face_page);

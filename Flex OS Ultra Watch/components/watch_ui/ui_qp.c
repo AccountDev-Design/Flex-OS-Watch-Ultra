@@ -12,11 +12,15 @@
  *    (watch_net, F5.1). Activo (acento) con el Wi-Fi encendido.
  *  - Bluetooth: enciende o apaga el enlace con Flex Phone (watch_phone,
  *    F5.5); debajo, el teléfono conectado o el estado real del enlace.
+ *  - Ahorro: Flex Ultra Power Saving (ui_psave.c), con su estado real.
+ *  - AOD: pantalla siempre activa (ui_aod.c); no disponible con el ahorro.
  *
  * Gestos (ui_gesture.c): arrastrar hacia abajo desde la franja superior de
- * la esfera abre; arrastrar hacia arriba en el panel o tocar el asa inferior
- * cierra. Al soltar, la cortina termina de abrirse o vuelve, con la
- * duración que corresponde a lo que falta (base 210/190 ms).
+ * la esfera, o desde el borde superior de CUALQUIER página (ui_nav), abre;
+ * arrastrar hacia arriba en el panel o tocar el asa inferior cierra. La
+ * página de debajo no se toca: al cerrar sigue igual. Al soltar, la cortina
+ * termina de abrirse o vuelve, con la duración que corresponde a lo que
+ * falta (base 210/190 ms).
  *
  * El panel es hijo de la pantalla de navegación, encima de las páginas
  * (ui_overlay_parent: así LVGL no dibuja la parte de la esfera que tapa), y
@@ -31,6 +35,7 @@
 #include "ui_gesture.h"
 #include "ui_logic.h"
 #include "watch_net.h"
+#include "watch_phone.h"
 #include "watch_settings.h"
 #include "watch_theme.h"
 #include "watch_time.h"
@@ -45,10 +50,11 @@
 #define TILE_X0     16
 #define TILE_GAP    12
 #define TILE_W      ((QP_W - 2 * TILE_X0 - TILE_GAP) / 2)
-#define TILE_H      104
-#define TILE_Y0     72
+#define TILE_H      88
+#define TILE_Y0     70
 #define TILE_Y1     (TILE_Y0 + TILE_H + TILE_GAP)
-#define SLIDER_Y    (TILE_Y1 + TILE_H + 16)
+#define TILE_Y2     (TILE_Y1 + TILE_H + TILE_GAP)
+#define SLIDER_Y    (TILE_Y2 + TILE_H + 14)
 #define HANDLE_H    56          /* zona táctil del asa inferior */
 
 typedef enum {
@@ -77,6 +83,10 @@ static struct {
     lv_obj_t *wifi_sub;
     lv_obj_t *bt_tile;
     lv_obj_t *bt_sub;
+    lv_obj_t *ps_tile;
+    lv_obj_t *ps_sub;
+    lv_obj_t *aod_tile;
+    lv_obj_t *aod_sub;
     lv_timer_t *timer;
     ui_drag_t drag;
     ui_page_create_t after_close; /* página que se abre al terminar de cerrar */
@@ -142,6 +152,36 @@ static void update(void)
             } else {
                 lv_obj_remove_state(s_qp.wifi_tile, LV_STATE_CHECKED);
             }
+        }
+    }
+    if (s_qp.ps_tile) {
+        const bool on = ui_psave_active();
+        if (on != lv_obj_has_state(s_qp.ps_tile, LV_STATE_CHECKED)) {
+            if (on) {
+                lv_obj_add_state(s_qp.ps_tile, LV_STATE_CHECKED);
+            } else {
+                lv_obj_remove_state(s_qp.ps_tile, LV_STATE_CHECKED);
+            }
+            lv_label_set_text(s_qp.ps_sub, on ? "Activado" : "Desactivado");
+        }
+        watch_settings_t ws;
+        watch_settings_get(&ws);
+        const bool aod = ui_aod_enabled();
+        if (aod != lv_obj_has_state(s_qp.aod_tile, LV_STATE_CHECKED)) {
+            if (aod) {
+                lv_obj_add_state(s_qp.aod_tile, LV_STATE_CHECKED);
+            } else {
+                lv_obj_remove_state(s_qp.aod_tile, LV_STATE_CHECKED);
+            }
+        }
+        const char *asub = on ? "No con ahorro" : (ws.aod ? "Activada" : "Desactivada");
+        if (strcmp(lv_label_get_text(s_qp.aod_sub), asub) != 0) {
+            lv_label_set_text(s_qp.aod_sub, asub);
+        }
+        if (on) {
+            lv_obj_add_state(s_qp.aod_tile, LV_STATE_DISABLED);
+        } else {
+            lv_obj_remove_state(s_qp.aod_tile, LV_STATE_DISABLED);
         }
     }
     if (s_qp.bt_tile) {
@@ -265,6 +305,28 @@ static void bt_cb(lv_event_t *e)
     }
 }
 
+/* Flex Ultra Power Saving: el estado real lo pone update() en el mismo toque. */
+static void psave_cb(lv_event_t *e)
+{
+    (void)e;
+    ui_psave_set(!ui_psave_active());
+    update();
+}
+
+/* AOD: se guarda en los ajustes; ui_screen lo usa al apagarse la pantalla. */
+static void aod_cb(lv_event_t *e)
+{
+    (void)e;
+    if (ui_psave_active()) {
+        return;
+    }
+    watch_settings_t ws;
+    watch_settings_get(&ws);
+    ws.aod = !ws.aod;
+    watch_settings_update(&ws);
+    update();
+}
+
 /* ---- Animación de la cortina ---- */
 
 static void destroy(void)
@@ -277,6 +339,10 @@ static void destroy(void)
     s_qp.wifi_sub = NULL;
     s_qp.bt_tile = NULL;
     s_qp.bt_sub = NULL;
+    s_qp.ps_tile = NULL;
+    s_qp.ps_sub = NULL;
+    s_qp.aod_tile = NULL;
+    s_qp.aod_sub = NULL;
     if (s_qp.root) {
         lv_obj_delete_async(s_qp.root);
         s_qp.root = NULL;
@@ -407,16 +473,22 @@ static void build(void)
     lv_obj_t *set = tile(root, TILE_X0 + TILE_W + TILE_GAP, TILE_Y1, FLEX_ICON_GEAR, FLEX_C_CAT_BLUE,
                          "Ajustes", "Pantalla, batería", NULL);
     lv_obj_add_event_cb(set, settings_cb, LV_EVENT_CLICKED, NULL);
+    s_qp.ps_tile = tile(root, TILE_X0, TILE_Y2, FLEX_ICON_BOLT, FLEX_C_WARN, "Ahorro", "", &s_qp.ps_sub);
+    lv_obj_add_event_cb(s_qp.ps_tile, psave_cb, LV_EVENT_CLICKED, NULL);
+    s_qp.aod_tile = tile(root, TILE_X0 + TILE_W + TILE_GAP, TILE_Y2, FLEX_ICON_MOON, FLEX_C_CAT_SUN,
+                         "AOD", "", &s_qp.aod_sub);
+    lv_obj_add_event_cb(s_qp.aod_tile, aod_cb, LV_EVENT_CLICKED, NULL);
 
     ui_bright_create(root, TILE_X0, SLIDER_Y, QP_W - 2 * TILE_X0);
 
-    /* Asa inferior: tocarla cierra el panel */
+    /* Asa inferior: tocarla cierra el panel; arrastrar desde ella hacia
+     * arriba también (los eventos suben a la cortina). */
     lv_obj_t *handle = lv_obj_create(root);
     lv_obj_remove_style_all(handle);
     lv_obj_set_size(handle, QP_W, HANDLE_H);
     lv_obj_align(handle, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_remove_flag(handle, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(handle, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(handle, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_PRESS_LOCK);
     lv_obj_add_event_cb(handle, handle_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t *pill = lv_obj_create(handle);
     lv_obj_remove_style_all(pill);
@@ -465,7 +537,7 @@ static void close_drag_cb(lv_event_t *e)
     }
 }
 
-static void open_drag_cb(lv_event_t *e)
+void ui_qp_pull_cb(lv_event_t *e)
 {
     const lv_event_code_t code = lv_event_get_code(e);
     lv_indev_t *indev = lv_indev_active();
@@ -476,7 +548,7 @@ static void open_drag_cb(lv_event_t *e)
     lv_indev_get_point(indev, &p);
     const uint32_t now = lv_tick_get();
     if (code == LV_EVENT_PRESSED) {
-        if (s_qp.st == QP_CLOSED && !ui_nav_busy() && ui_nav_depth() == 1) {
+        if (s_qp.st == QP_CLOSED && !ui_nav_busy()) {
             ui_drag_init(&s_qp.drag, UI_AXIS_Y, +1, QP_H);
             ui_drag_press(&s_qp.drag, p.x, p.y, now);
         }
@@ -535,10 +607,10 @@ void ui_qp_attach(lv_obj_t *face_page)
     lv_obj_set_pos(strip, 0, 0);
     lv_obj_remove_flag(strip, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(strip, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK);
-    lv_obj_add_event_cb(strip, open_drag_cb, LV_EVENT_PRESSED, NULL);
-    lv_obj_add_event_cb(strip, open_drag_cb, LV_EVENT_PRESSING, NULL);
-    lv_obj_add_event_cb(strip, open_drag_cb, LV_EVENT_RELEASED, NULL);
-    lv_obj_add_event_cb(strip, open_drag_cb, LV_EVENT_PRESS_LOST, NULL);
+    lv_obj_add_event_cb(strip, ui_qp_pull_cb, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(strip, ui_qp_pull_cb, LV_EVENT_PRESSING, NULL);
+    lv_obj_add_event_cb(strip, ui_qp_pull_cb, LV_EVENT_RELEASED, NULL);
+    lv_obj_add_event_cb(strip, ui_qp_pull_cb, LV_EVENT_PRESS_LOST, NULL);
 
     /* Indicio visual: una pequeña asa arriba */
     lv_obj_t *pill = lv_obj_create(strip);
@@ -553,7 +625,7 @@ void ui_qp_attach(lv_obj_t *face_page)
 
 void ui_qp_open(void)
 {
-    if (s_qp.st != QP_CLOSED || ui_nav_busy() || ui_nav_depth() != 1) {
+    if (s_qp.st != QP_CLOSED || ui_nav_busy()) {
         return;
     }
     build();

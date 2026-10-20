@@ -1,8 +1,9 @@
 /*
  * Apps de tiempo (F4.3) en la vista previa:
- *  - deslizar la esfera a la izquierda abre el lanzador (F3.5): rejilla con
- *    los iconos originales; Reloj agrupa alarmas, cronómetro y temporizador
- *    con su estado, y su icono lleva un punto mientras algo cuenta;
+ *  - deslizar la esfera hacia abajo abre el cajón (F3.5): panal de iconos
+ *    originales circulares, sin nombres; Reloj agrupa alarmas, cronómetro y
+ *    temporizador con su estado, y su icono lleva un punto mientras algo
+ *    cuenta; Sensores ya no está en el cajón (sí en Device Care);
  *  - cronómetro: iniciar, vueltas, pausa, seguir, reiniciar; sigue contando
  *    fuera de su página;
  *  - temporizador: atajo, iniciar, pausa, aviso "Tiempo agotado" en
@@ -21,6 +22,7 @@
 #include "watch_time.h"
 
 int sim_lint(const char *where);
+extern int sim_imu_heading_resets;
 int sim_check_residue(const char *where);
 
 static lv_obj_t *clickable_of(lv_obj_t *o)
@@ -35,6 +37,9 @@ static lv_obj_t *clickable_of(lv_obj_t *o)
 static bool tap_text(lv_obj_t *root, const char *text)
 {
     lv_obj_t *o = clickable_of(sim_find_label(root, text));
+    if (!o) {
+        o = ui_apps_find(root, text); /* iconos del cajón (sin nombre) */
+    }
     if (!o || lv_obj_has_state(o, LV_STATE_DISABLED)) {
         return false;
     }
@@ -111,27 +116,28 @@ void sim_suite_apps(const char *out)
     const uint32_t blocks0 = sim_mem_blocks();
     const int timers0 = sim_timer_count();
 
-    /* ---- Lanzador: deslizar la esfera hacia la izquierda ---- */
-    sim_drag(330, 260, 120, 262, 6, 16);
+    /* ---- Cajón: deslizar la esfera hacia abajo ---- */
+    sim_drag(205, 200, 207, 420, 6, 16);
     sim_release();
     sim_run(400);
-    EXPECT(ui_nav_depth() == 2 && sim_find_label(ui_nav_top(), "Aplicaciones"), "deslizar no abrio las apps");
-    /* Cada app del lanzador muestra su icono original (imagen RGB565A8 de
-     * 104 px) y su nombre. */
+    EXPECT(ui_nav_depth() == 2 && ui_apps_find(ui_nav_top(), "Reloj"), "deslizar hacia abajo no abrio el cajon");
+    /* Cada app del cajón muestra su icono original circular (RGB565A8 de
+     * 92 px), sin nombre debajo. */
     static const char *const names[] = {"Reloj",    "Calendario", "Calculadora",    "Clima",   "Navegador", "Flex Compass",
-                                        "Device Care", "Sensores", "Almacenamiento", "Ajustes"};
+                                        "Device Care", "Almacenamiento", "Ajustes"};
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
-        lv_obj_t *c = clickable_of(sim_find_label(ui_nav_top(), names[i]));
-        lv_obj_t *img = c ? lv_obj_get_child(c, 0) : NULL;
-        const lv_image_dsc_t *d = img && lv_obj_check_type(img, &lv_image_class) ? lv_image_get_src(img) : NULL;
+        lv_obj_t *img = ui_apps_find(ui_nav_top(), names[i]);
+        const lv_image_dsc_t *d = img ? lv_image_get_src(img) : NULL;
         EXPECT(d && d->header.cf == LV_COLOR_FORMAT_RGB565A8 && d->header.w == FLEX_APP_ICON_SIZE &&
                    ((uintptr_t)d->data & 3) == 0,
-               "lanzador: %s sin icono original alineado", names[i]);
+               "cajon: %s sin icono original alineado", names[i]);
+        EXPECT(!sim_find_label(ui_nav_top(), names[i]), "cajon: %s tiene nombre debajo", names[i]);
     }
-    EXPECT(sim_find_label(ui_nav_top(), "Flex Store") == NULL,
-           "lanzador: aparece una app sin funcion");
-    lv_obj_t *reloj_cell = clickable_of(sim_find_label(ui_nav_top(), "Reloj"));
-    lv_obj_t *reloj_badge = reloj_cell ? lv_obj_get_child(reloj_cell, 2) : NULL;
+    EXPECT(!ui_apps_find(ui_nav_top(), "Flex Store"), "cajon: aparece una app sin funcion");
+    EXPECT(!ui_apps_find(ui_nav_top(), "Sensores"), "cajon: Sensores sigue en el cajon");
+    lv_obj_t *reloj_cell = ui_apps_find(ui_nav_top(), "Reloj");
+    lv_obj_t *reloj_badge =
+        reloj_cell ? lv_obj_get_child(lv_obj_get_parent(reloj_cell), lv_obj_get_index(reloj_cell) + 1) : NULL;
     EXPECT(reloj_badge && lv_obj_has_flag(reloj_badge, LV_OBJ_FLAG_HIDDEN), "lanzador: punto de Reloj sin nada en marcha");
     lint_page("aplicaciones", out, "f4_apps");
     sim_check_residue("aplicaciones");
@@ -175,8 +181,8 @@ void sim_suite_apps(const char *out)
     EXPECT(swt && !sim_find_label(swt, "Parado"), "Reloj no muestra el cronometro en marcha");
     ui_nav_back();
     sim_run(700);
-    reloj_cell = clickable_of(sim_find_label(ui_nav_top(), "Reloj"));
-    reloj_badge = reloj_cell ? lv_obj_get_child(reloj_cell, 2) : NULL;
+    reloj_cell = ui_apps_find(ui_nav_top(), "Reloj");
+    reloj_badge = reloj_cell ? lv_obj_get_child(lv_obj_get_parent(reloj_cell), lv_obj_get_index(reloj_cell) + 1) : NULL;
     EXPECT(reloj_badge && !lv_obj_has_flag(reloj_badge, LV_OBJ_FLAG_HIDDEN),
            "lanzador: sin punto en Reloj con el cronometro en marcha");
     sim_save(out, "f3_apps_punto");
@@ -296,7 +302,7 @@ void sim_suite_apps(const char *out)
     sim_run(400);
     memset(&sim_imu, 0, sizeof(sim_imu));
     sim_imu.state = IMU_ABSENT;
-    ui_nav_push(ui_apps_create);
+    ui_nav_push(ui_devcare_create); /* Sensores ya no está en el cajón: Device Care > Pruebas */
     sim_run(400);
     EXPECT(tap_text(ui_nav_top(), "Sensores"), "no se abrio Sensores");
     EXPECT(sim_imu_users == 1, "Sensores no pidio medidas al IMU (%d)", sim_imu_users);
@@ -413,11 +419,24 @@ void sim_suite_apps(const char *out)
     EXPECT(tap_text(ui_nav_top(), "Flex Compass"), "no se abrio Flex Compass");
     EXPECT(sim_imu_users == 1, "Flex Compass no pidio medidas al IMU");
     sim_run(400);
-    EXPECT(sim_find_label(ui_nav_top(), "Requiere magnetómetro") && sim_find_label(ui_nav_top(), "No presente"),
+    EXPECT(sim_find_label(ui_nav_top(), "Norte: requiere magnetómetro") && sim_find_label(ui_nav_top(), "No presente"),
            "compass: no dice que falta el magnetometro");
     lv_obj_t *hd = sim_find_label(ui_nav_top(), "Heading");
-    EXPECT(hd && sim_find_label(lv_obj_get_parent(hd), "No disponible"), "compass: muestra un rumbo sin magnetometro");
+    EXPECT(hd && sim_find_label(lv_obj_get_parent(hd), "No disponible"),
+           "compass: muestra un rumbo sin integracion valida del giroscopio");
     EXPECT(sim_find_label(ui_nav_top(), "Conectado"), "compass: el estado del IMU no es real");
+    EXPECT(sim_imu_heading_resets == 1, "compass: no fijo la referencia al abrir");
+    /* Rumbo RELATIVO del giroscopio: grados, incertidumbre y nunca "Norte". */
+    sim_imu.heading.valid = true;
+    sim_imu.heading.yaw = 90.4f;
+    sim_imu.heading.drift = 3.2f;
+    sim_imu.heading.bias_ok = true;
+    sim_run(300);
+    EXPECT(sim_find_label(ui_nav_top(), "90°"), "compass: no muestra el rumbo relativo");
+    EXPECT(sim_find_label(ui_nav_top(), "± 3° · giroscopio calibrado"), "compass: no muestra la incertidumbre");
+    EXPECT(hd && sim_find_label(lv_obj_get_parent(hd), "Relativo (sin Norte)"), "compass: el rumbo no se marca relativo");
+    EXPECT(tap_text(ui_nav_top(), "Fijar referencia") && sim_imu_heading_resets == 2,
+           "compass: Fijar referencia no reinicia el rumbo");
     lint_page("flex compass", out, "f9_compass");
     ui_nav_back();
     sim_run(500);

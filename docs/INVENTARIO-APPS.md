@@ -35,16 +35,17 @@ No hay más apps nativas. Las apps instalables de Flex Store (`FlexOS_AppVM`, by
 | 18 | **Música** (`IC_MUSICA`) | dos corcheas (Icons.h:259) | Biblioteca local y reproductor (AppMusic.h, Audio.cpp) | I2S + códec | — | Control de la música del **teléfono** (T_MEDIA_STATE/T_MEDIA_CMD de Flex Link, `MediaBridge.kt`). Altavoz local ❓ D13 | 🟡 F9.10 |
 
 Apps propias del reloj sin equivalente directo en el registro (se conservan): **Sensores** (nivel y movimiento,
-F4.4), que pasa a ser parte de Device Care / Flex Compass.
+F4.4). Desde F10 no está en el cajón: se abre desde Device Care > Pruebas (su página, el servicio y el controlador del
+IMU siguen igual).
 
 ## 2. Superficies del sistema (no son apps del registro)
 
 | Superficie | Origen | En el reloj | Estado |
 |---|---|---|---|
-| Esfera / pantalla de bloqueo | `Lock.h`, `Clock.h` | Esfera con hora del RTC, fecha y batería real | 🟡 |
+| Esfera / pantalla de bloqueo | `Lock.h`, `Clock.h` | 5 esferas (digital, analógica, modular, Liquid Glass, Parallax) con selector y persistencia; AOD opcional (F10) | 🟡 |
 | Escritorio (Inicio) y dock | `Home.h`, `HomeCfg.h` (rejilla 4×N, iconos de 72 px) | La esfera hace de Inicio; el escritorio de 4 columnas no cabe en 410 px | ⚠️ |
-| Caja de aplicaciones | `AppDrawer.h` (4 columnas, iconos de 72 px, etiqueta debajo, buscador) | **Lanzador en rejilla de 3 columnas con los iconos originales** (mismo tamaño físico) | 🟡 (F3.5) |
-| Panel rápido | `QuickPanel*.h` (22 mosaicos: Wi-Fi, BLE, brillo, ahorro, No molestar...) | Cortina con Wi-Fi (funcional), Bluetooth, batería, Ajustes y brillo | 🟡 (Wi-Fi y Bluetooth funcionales) |
+| Caja de aplicaciones | `AppDrawer.h` (4 columnas, iconos de 72 px, etiqueta debajo, buscador) | **Cajón en panal** (F10): los iconos originales con base circular de 92 px, sin nombres, filas de 3 y 4 | 🟡 (F3.5, F10.1) |
+| Panel rápido | `QuickPanel*.h` (22 mosaicos: Wi-Fi, BLE, brillo, ahorro, No molestar...) | Cortina desde cualquier página con Wi-Fi, Bluetooth, batería, Ajustes, Flex Ultra Power Saving, AOD y brillo, todos reales (F10) | 🟡 |
 | Notificaciones | `Notif.h`, `FlexPhone_Overlay.h` | Lista, detalle con acciones de Android, respuestas rápidas y aviso emergente (F5.3) | 🟡 |
 | Recientes | `AppSwitcher.h` | Pila de navegación + gesto volver | ⚠️ (no se replica la multitarea) |
 | Teclado | `Keyboard.h` (QWERTY completo, 480 px) | Teclado compacto por páginas para 410 px | ⬜ |

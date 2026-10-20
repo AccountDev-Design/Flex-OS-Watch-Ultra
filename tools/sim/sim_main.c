@@ -297,6 +297,14 @@ void watch_imu_set_active(bool on)
     sim_imu_users += on ? 1 : -1;
 }
 
+int sim_imu_heading_resets;
+
+void watch_imu_heading_reset(void)
+{
+    sim_imu_heading_resets++;
+    imu_heading_reset(&sim_imu.heading);
+}
+
 /* Almacenamiento de la vista previa: la misma máquina de estados, sin flash.
  * sim_stg.gate decide si se permite escribir; sim_stg_fail hace fallar la
  * prueba del sector. */
@@ -460,7 +468,7 @@ int main(int argc, char **argv)
         void (*run)(const char *);
     } suites[] = {
         {"tema", sim_suite_theme},       {"arranque", sim_suite_boot}, {"energia", sim_suite_power},
-        {"esfera", sim_suite_face},      {"nav", sim_suite_nav},       {"panel", sim_suite_qp},
+        {"esfera", sim_suite_face},      {"esferas", sim_suite_faces}, {"nav", sim_suite_nav},       {"panel", sim_suite_qp},
         {"ajustes", sim_suite_settings}, {"hora", sim_suite_datetime}, {"apps", sim_suite_apps},
         {"pantalla", sim_suite_screen},  {"wifi", sim_suite_wifi},       {"telefono", sim_suite_phone}, {"notas", sim_suite_notes},
         {"clima", sim_suite_weather},

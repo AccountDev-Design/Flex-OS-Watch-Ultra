@@ -19,7 +19,18 @@ Detalles, archivos generados y avisos: [`Flex OS Ultra Watch/README.md`](Flex%20
 
 ## Estado
 
-**Progreso global: 50,8 %** (49,2 % pendiente), del que un 8,1 % está verificado en el reloj. El alcance se amplió el 2026-10-16 (iconos y fondos originales, todas las apps del inventario, BLE) y el 2026-10-20 (integración con Flex Phone): ver el historial de [docs/ROADMAP.md](docs/ROADMAP.md).
+**Progreso global: 50,7 %** (49,3 % pendiente), del que un 7,6 % está verificado en el reloj. El alcance se amplió el 2026-10-16 (iconos y fondos originales, todas las apps del inventario, BLE) y el 2026-10-20 (integración con Flex Phone y experiencia Watch Ultra, F10): ver el historial de [docs/ROADMAP.md](docs/ROADMAP.md).
+
+**Novedades de F10** ([docs/F10-EXPERIENCIA.md](docs/F10-EXPERIENCIA.md)), compiladas y probadas en el PC, pendientes
+de probar en el reloj (T124-T141):
+
+- Gestos: hacia abajo en la esfera, el cajón; desde el borde inferior, a la esfera sin cerrar la app; borde derecho,
+  atrás; borde izquierdo, al cajón; borde superior, el panel rápido desde cualquier página.
+- Cajón en panal con iconos circulares sin nombres.
+- Cinco esferas y selector (mantener pulsada la esfera o Ajustes > Pantalla).
+- AOD, Pixel Shift, atenuación progresiva y Flex Ultra Power Saving, en el panel rápido y en Device Care.
+- Rumbo relativo en Flex Compass.
+- Splash de 3 s, sin medidor de FPS y cinco causas de fallo del Wi-Fi corregidas.
 
 - Referencia única: **[docs/ROADMAP.md](docs/ROADMAP.md)**. Ahí están el plan completo, los pesos, las decisiones pendientes y el historial.
 - F2 (batería y energía), F3 (interfaz, tema y navegación) y F4 (servicios) están hechas en software: compilan y pasan las pruebas de PC y de la vista previa.
@@ -66,7 +77,7 @@ tools/sim/build/sim tools/sim/out && python3 tools/sim/to_png.py tools/sim/out
 # La misma vista previa con ASan + UBSan, y otra semilla para la prueba mono
 make -C tools/sim LVGL_DIR=/ruta/a/lvgl-9.5.0 SAN=1
 SIM_SEED=7 tools/sim/build-san/sim tools/sim/out
-# Solo una batería (tras el arranque): tema, energia, esfera, nav, panel,
+# Solo una batería (tras el arranque): tema, energia, esfera, esferas, nav, panel,
 # ajustes, hora, apps, pantalla, wifi, telefono, notas, clima, navegador,
 # relay, ota, mono, visual, banco
 SIM_ONLY=apps tools/sim/build/sim tools/sim/out
@@ -78,6 +89,7 @@ simulados**: sirven para probar la interfaz, no el hardware.
 ## Documentación
 
 - [docs/ROADMAP.md](docs/ROADMAP.md): hoja de ruta y progreso global
+- [docs/F10-EXPERIENCIA.md](docs/F10-EXPERIENCIA.md): gestos, cajón en panal, esferas, AOD, ahorro de energía, rumbo relativo y estabilidad del Wi-Fi
 - [docs/FLEX-PHONE-INTEGRACION.md](docs/FLEX-PHONE-INTEGRACION.md): Flex Phone ↔ reloj: dispositivos, BLE v2 y navegador por el teléfono
 - [docs/F6-NAVEGADOR.md](docs/F6-NAVEGADOR.md): navegador por renderizado remoto (FBP/1)
 - [docs/F7-OTA.md](docs/F7-OTA.md): actualizaciones por Wi-Fi firmadas, con reversión automática

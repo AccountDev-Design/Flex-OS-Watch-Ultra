@@ -36,6 +36,7 @@ static watch_imu_snapshot_t s_snap;
 static uint32_t s_gen;
 static int s_users;
 static bool s_started;
+static bool s_hdg_reset;
 
 static void set_state(imu_state_t st)
 {
@@ -147,6 +148,9 @@ static void imu_task(void *arg)
             set_state(IMU_STARTING);
             running = sensors_on();
             have_ts = false;
+            xSemaphoreTake(s_lock, portMAX_DELAY);
+            s_snap.last_us = 0; /* la integración empieza de nuevo (sin hueco) */
+            xSemaphoreGive(s_lock);
             set_state(running ? IMU_RUNNING : IMU_IDLE);
             ESP_LOGI(TAG, "sensores %s", running ? "en marcha" : "NO arrancaron");
         } else if (!want && running) {
@@ -178,7 +182,18 @@ static void imu_task(void *arg)
                 }
                 s_snap.temp_c100 = qmi_temp_c100(smp.temp);
                 s_snap.samples++;
-                s_snap.last_us = esp_timer_get_time();
+                const int64_t now = esp_timer_get_time();
+                if (s_hdg_reset) {
+                    s_hdg_reset = false;
+                    imu_heading_reset(&s_snap.heading);
+                }
+                /* Rumbo relativo: cada muestra se integra (la interfaz solo
+                 * copia instantáneas y perdería giros entre ellas). */
+                if (s_snap.last_us > 0 && s_snap.samples > 1) {
+                    imu_heading_update(&s_snap.heading, s_snap.acc_mg, s_snap.gyro_mdps,
+                                       (uint32_t)((now - s_snap.last_us) / 1000));
+                }
+                s_snap.last_us = now;
                 __atomic_add_fetch(&s_gen, 1, __ATOMIC_RELEASE);
             }
             xSemaphoreGive(s_lock);
@@ -245,6 +260,16 @@ bool watch_imu_get(watch_imu_snapshot_t *out)
     *out = s_snap;
     xSemaphoreGive(s_lock);
     return true;
+}
+
+void watch_imu_heading_reset(void)
+{
+    if (!s_started) {
+        return;
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    s_hdg_reset = true;
+    xSemaphoreGive(s_lock);
 }
 
 uint32_t watch_imu_generation(void)

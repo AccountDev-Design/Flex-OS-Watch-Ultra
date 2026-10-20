@@ -251,3 +251,9 @@ En el reloj (pendiente; necesita la app Android con el servidor v2, [FLEX-PHONE-
   a extremo.
 - F5.6 (cifrado de aplicación v3) sigue pendiente de D7/D8. Hoy la carga va cifrada por el enlace BLE (emparejamiento
   Just Works, que no protege frente a un atacante presente durante ese primer emparejamiento) y autenticada por v2.
+
+## Actualización F10: fallo al activar el Wi-Fi
+
+Auditoría de `watch_net.c` con cinco causas corregidas (la principal: `esp_netif_create_default_wifi_sta()` repetida
+tras un intento fallido, que hace `assert` y reinicia el reloj al segundo toque del interruptor). Detalle, evidencias y
+pruebas pendientes en el reloj (T124-T128): [`docs/F10-EXPERIENCIA.md`](F10-EXPERIENCIA.md) §7.1.

@@ -97,6 +97,29 @@ static void load(void)
     if (nvs_get_u8(h, "face", &u8) == ESP_OK) {
         s_cur.face = u8;
     }
+    /* Claves añadidas después (AOD, protección AMOLED, ahorro): si faltan,
+     * quedan los valores por defecto; el esquema no cambia. */
+    if (nvs_get_u8(h, "aod", &u8) == ESP_OK) {
+        s_cur.aod = u8 != 0;
+    }
+    if (nvs_get_u8(h, "pshift", &u8) == ESP_OK) {
+        s_cur.pshift = u8 != 0;
+    }
+    if (nvs_get_u8(h, "dim", &u8) == ESP_OK) {
+        s_cur.dim = u8;
+    }
+    if (nvs_get_u8(h, "psave", &u8) == ESP_OK) {
+        s_cur.psave = u8 != 0;
+    }
+    if (nvs_get_u8(h, "ps_radio", &u8) == ESP_OK) {
+        s_cur.psave_radio = u8;
+    }
+    if (nvs_get_u8(h, "ps_bright", &u8) == ESP_OK) {
+        s_cur.ps_bright = u8;
+    }
+    if (nvs_get_u8(h, "ps_flags", &u8) == ESP_OK) {
+        s_cur.ps_flags = u8;
+    }
     s_saved = s_cur; /* lo que hay guardado, antes de normalizar */
     if (ws_normalize(&s_cur)) {
         ESP_LOGW(TAG, "valores guardados fuera de rango: corregidos");
@@ -132,6 +155,13 @@ static esp_err_t write_changed(nvs_handle_t h, const watch_settings_t *n, const 
     SET(n->tz_min != o->tz_min, nvs_set_i16(h, "tz_min", n->tz_min));
     SET(n->wallpaper != o->wallpaper, nvs_set_u8(h, "wall", n->wallpaper));
     SET(n->face != o->face, nvs_set_u8(h, "face", n->face));
+    SET(n->aod != o->aod, nvs_set_u8(h, "aod", n->aod ? 1 : 0));
+    SET(n->pshift != o->pshift, nvs_set_u8(h, "pshift", n->pshift ? 1 : 0));
+    SET(n->dim != o->dim, nvs_set_u8(h, "dim", n->dim));
+    SET(n->psave != o->psave, nvs_set_u8(h, "psave", n->psave ? 1 : 0));
+    SET(n->psave_radio != o->psave_radio, nvs_set_u8(h, "ps_radio", n->psave_radio));
+    SET(n->ps_bright != o->ps_bright, nvs_set_u8(h, "ps_bright", n->ps_bright));
+    SET(n->ps_flags != o->ps_flags, nvs_set_u8(h, "ps_flags", n->ps_flags));
 #undef SET
     return err;
 }

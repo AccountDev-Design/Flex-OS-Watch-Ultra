@@ -241,6 +241,7 @@ void sim_suite_ota(const char *out)
     EXPECT(!sim_display_on, "instalar: tras «Entendido» la pantalla ya no se apaga");
     ui_screen_wake();
     ui_screen_enable(false);
+    ui_nav_discard_suspended(); /* Ajustes quedó suspendida al apagarse la pantalla */
     sim_run(1500);
 
     /* 8) Errores que se ven igual: sin clave, firma mala, batería baja */

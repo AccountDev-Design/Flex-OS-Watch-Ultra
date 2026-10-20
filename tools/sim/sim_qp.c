@@ -12,9 +12,11 @@
 
 /* Geometría del panel (ui_qp.c) usada para tocar sus controles */
 #define T_W    ((FLEX_SCREEN_W - 32 - 12) / 2)
-#define T_Y0   72
-#define T_Y1   (T_Y0 + 104 + 12)
-#define SL_Y   (T_Y1 + 104 + 16)
+#define T_H    88
+#define T_Y0   70
+#define T_Y1   (T_Y0 + T_H + 12)
+#define T_Y2   (T_Y1 + T_H + 12)
+#define SL_Y   (T_Y2 + T_H + 14)
 
 static void expect_closed(const char *when)
 {
@@ -64,8 +66,8 @@ void sim_suite_qp(const char *out)
     EXPECT(sim_find_label(qp, "70 %"), "el panel no muestra el brillo actual");
 
     /* ---- Wi-Fi y Bluetooth: pendientes, sin función ---- */
-    sim_tap(16 + T_W / 2, T_Y0 + 52);
-    sim_tap(16 + T_W + 12 + T_W / 2, T_Y0 + 52);
+    sim_tap(16 + T_W / 2, T_Y0 + 44);
+    sim_tap(16 + T_W + 12 + T_W / 2, T_Y0 + 44);
     sim_run(300);
     EXPECT(ui_qp_is_open() && ui_nav_depth() == 1, "un mosaico pendiente hizo algo");
 
@@ -90,8 +92,27 @@ void sim_suite_qp(const char *out)
     EXPECT(sim_brightness_calls == calls, "se reenvio el mismo brillo");
     sim_brightness_set(70);
 
-    /* ---- Cerrar arrastrando hacia arriba en una zona vacía ---- */
-    sim_drag(205, 420, 205, 120, 12, 20);
+    /* ---- Ahorro de energía y AOD: estado real de sus servicios ---- */
+    sim_tap(16 + T_W / 2, T_Y2 + 44);
+    sim_run(300);
+    EXPECT(ui_psave_active(), "el mosaico Ahorro no activo Flex Ultra Power Saving");
+    EXPECT(sim_brightness <= UI_PSAVE_BRIGHT, "en ahorro el brillo fisico no bajo (%d)", sim_brightness);
+    EXPECT(sim_find_label(ui_qp_obj(), "No con ahorro"), "el AOD no se marca no disponible con el ahorro");
+    sim_save(out, "f3_panel_ahorro");
+    sim_tap(16 + T_W / 2, T_Y2 + 44);
+    sim_run(300);
+    EXPECT(!ui_psave_active() && sim_brightness == 70, "al salir del ahorro no se restauro el brillo (%d)",
+           sim_brightness);
+    sim_tap(16 + T_W + 12 + T_W / 2, T_Y2 + 44);
+    sim_run(300);
+    EXPECT(ui_aod_enabled(), "el mosaico AOD no lo activo");
+    sim_tap(16 + T_W + 12 + T_W / 2, T_Y2 + 44);
+    sim_run(300);
+    EXPECT(!ui_aod_enabled(), "el mosaico AOD no lo desactivo");
+    sim_brightness_set(70);
+
+    /* ---- Cerrar arrastrando hacia arriba desde el asa ---- */
+    sim_drag(205, FLEX_SCREEN_H - 20, 205, 150, 12, 20);
     sim_release();
     sim_run(300);
     expect_closed("tras cerrar arrastrando");
@@ -113,7 +134,7 @@ void sim_suite_qp(const char *out)
     /* ---- Ajustes: cierra el panel y abre la página ---- */
     ui_qp_open();
     sim_run(300);
-    sim_tap(16 + T_W + 12 + T_W / 2, T_Y1 + 52);
+    sim_tap(16 + T_W + 12 + T_W / 2, T_Y1 + 44);
     sim_run(600);
     expect_closed("tras abrir Ajustes");
     EXPECT(ui_nav_depth() == 2 && !ui_nav_busy(), "Ajustes no se abrio (profundidad %d)", ui_nav_depth());
@@ -128,7 +149,7 @@ void sim_suite_qp(const char *out)
     /* ---- Mosaico de batería: abre Ajustes > Batería ---- */
     ui_qp_open();
     sim_run(300);
-    sim_tap(16 + T_W / 2, T_Y1 + 52);
+    sim_tap(16 + T_W / 2, T_Y1 + 44);
     sim_run(600);
     expect_closed("tras abrir Bateria");
     EXPECT(ui_nav_depth() == 2 && sim_find_label(ui_nav_top(), "Batería"), "el mosaico no abrio Bateria");
@@ -145,7 +166,7 @@ void sim_suite_qp(const char *out)
         if (i % 2) {
             sim_tap(205, FLEX_SCREEN_H - 20);
         } else {
-            sim_drag(205, 420, 205, 100, 8, 20);
+            sim_drag(205, FLEX_SCREEN_H - 20, 205, 100, 8, 20);
             sim_release();
         }
         sim_run(300);

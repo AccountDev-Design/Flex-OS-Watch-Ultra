@@ -13,6 +13,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include "esp_event.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_netif_sntp.h"
@@ -32,6 +33,17 @@ static const char *TAG = "watch_net";
 #define CREDS_VER     1
 #define RSSI_EVERY_MS 10000
 #define TIME_MIN_UTC  1735689600LL /* 2025-01-01: una hora anterior es de un SNTP sin respuesta */
+/* Pila de la tarea: esp_wifi_init/esp_wifi_start (calibración del PHY con su
+ * lectura de NVS) y nvs_set_blob se ejecutan en ella. Con 4 KB y los búferes
+ * de las credenciales en la pila quedaba un margen de pocos cientos de bytes
+ * (ver persist()/load()): ahora los búferes son estáticos y la pila, 6 KB. */
+#define NET_TASK_STACK 6144
+/* RAM interna mínima para intentar encender el Wi-Fi. esp_wifi_init/start
+ * reservan en RAM interna los búferes estáticos de recepción (16 x 1,6 KB),
+ * las tareas del Wi-Fi y estructuras del PHY; por debajo de esto, mejor
+ * decirlo en la interfaz que dejar que una reserva interna falle a medias. */
+#define NET_MIN_INTERNAL (48 * 1024)
+#define CREDS_RAW_MAX (1 + NET_MAX_SAVED * (2 + NET_SSID_MAX + NET_PASS_MAX))
 
 typedef enum {
     M_ENABLE, M_DISABLE, M_SCAN, M_CONNECT, M_FORGET,                 /* de la interfaz */
@@ -55,6 +67,17 @@ static net_creds_t s_creds;
 
 /* Solo los toca la tarea */
 static bool s_wifi_ready;      /* esp_wifi_init hecho */
+/* Pasos de wifi_init_once que NO se pueden repetir: esp_netif_create_default_wifi_sta()
+ * hace assert() si ya existe la interfaz "WIFI_STA_DEF". Antes, si esp_wifi_init
+ * fallaba (p. ej. sin RAM interna con el BLE encendido), el siguiente intento de
+ * encender el Wi-Fi volvía a crearla y el reloj se reiniciaba. */
+static bool s_netif_ready;
+static esp_netif_t *s_sta_netif;
+static bool s_handlers_ready;
+/* Búferes de NVS y del escaneo: solo los usa la tarea (fuera de su pila). */
+static uint8_t s_raw[CREDS_RAW_MAX + WS_BLOB_HDR];
+static uint8_t s_blob[CREDS_RAW_MAX + WS_BLOB_HDR];
+static net_ap_t s_scan_tmp[NET_SCAN_MAX * 2];
 static bool s_sntp_on;
 static int s_expect_disc;      /* desconexiones pedidas por nosotros: no son fallos */
 static int s_attempt;
@@ -93,16 +116,14 @@ static void persist(void)
         ESP_LOGW(TAG, "NVS no disponible: el Wi-Fi no se guarda");
         return;
     }
-    uint8_t raw[1 + NET_MAX_SAVED * (2 + NET_SSID_MAX + NET_PASS_MAX)];
-    uint8_t blob[sizeof(raw) + WS_BLOB_HDR];
     lock();
-    const size_t n = net_creds_encode(&s_creds, raw, sizeof(raw));
+    const size_t n = net_creds_encode(&s_creds, s_raw, CREDS_RAW_MAX);
     const bool on = s_st.enabled;
     unlock();
-    const size_t bn = ws_blob_pack(CREDS_VER, raw, n, blob, sizeof(blob));
+    const size_t bn = ws_blob_pack(CREDS_VER, s_raw, n, s_blob, sizeof(s_blob));
     esp_err_t e = nvs_set_u8(h, "on", on ? 1 : 0);
     if (e == ESP_OK && bn) {
-        e = nvs_set_blob(h, "creds", blob, bn);
+        e = nvs_set_blob(h, "creds", s_blob, bn);
     }
     if (e == ESP_OK) {
         e = nvs_commit(h);
@@ -124,14 +145,12 @@ static bool load(void)
     if (nvs_get_u8(h, "on", &u8) == ESP_OK) {
         on = u8 != 0;
     }
-    uint8_t blob[1 + NET_MAX_SAVED * (2 + NET_SSID_MAX + NET_PASS_MAX) + WS_BLOB_HDR];
-    uint8_t raw[sizeof(blob)];
-    size_t bn = sizeof(blob), rn = 0;
+    size_t bn = sizeof(s_blob), rn = 0;
     uint8_t ver = 0;
-    if (nvs_get_blob(h, "creds", blob, &bn) == ESP_OK &&
-        ws_blob_unpack(blob, bn, &ver, raw, sizeof(raw), &rn) && ver == CREDS_VER) {
+    if (nvs_get_blob(h, "creds", s_blob, &bn) == ESP_OK &&
+        ws_blob_unpack(s_blob, bn, &ver, s_raw, sizeof(s_raw), &rn) && ver == CREDS_VER) {
         lock();
-        if (!net_creds_decode(&s_creds, raw, rn)) {
+        if (!net_creds_decode(&s_creds, s_raw, rn)) {
             ESP_LOGW(TAG, "redes guardadas dañadas: se ignoran");
         }
         unlock();
@@ -175,15 +194,34 @@ static bool wifi_init_once(void)
     if (s_wifi_ready) {
         return true;
     }
-    esp_err_t e = esp_netif_init();
-    if (e == ESP_OK) {
-        e = esp_event_loop_create_default();
-        if (e == ESP_ERR_INVALID_STATE) {
-            e = ESP_OK; /* ya existía */
+    const size_t internal = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    ESP_LOGI(TAG, "iniciando Wi-Fi: RAM interna libre %u B (bloque mayor %u B)", (unsigned)internal,
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    if (internal < NET_MIN_INTERNAL) {
+        ESP_LOGE(TAG, "RAM interna insuficiente para el Wi-Fi (%u B < %u B)", (unsigned)internal,
+                 (unsigned)NET_MIN_INTERNAL);
+        return false;
+    }
+    esp_err_t e = ESP_OK;
+    /* Cada paso se hace una sola vez aunque un intento anterior fallara más
+     * adelante: la interfaz y los manejadores no se pueden crear dos veces. */
+    if (!s_netif_ready) {
+        e = esp_netif_init();
+        if (e == ESP_OK) {
+            e = esp_event_loop_create_default();
+            if (e == ESP_ERR_INVALID_STATE) {
+                e = ESP_OK; /* ya existía */
+            }
+        }
+        if (e == ESP_OK) {
+            s_netif_ready = true;
         }
     }
-    if (e == ESP_OK && !esp_netif_create_default_wifi_sta()) {
-        e = ESP_FAIL;
+    if (e == ESP_OK && !s_sta_netif) {
+        s_sta_netif = esp_netif_create_default_wifi_sta();
+        if (!s_sta_netif) {
+            e = ESP_FAIL;
+        }
     }
     if (e == ESP_OK) {
         wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -191,21 +229,31 @@ static bool wifi_init_once(void)
     }
     if (e == ESP_OK) {
         e = esp_wifi_set_storage(WIFI_STORAGE_RAM); /* las redes las guarda watch_net */
+        if (e == ESP_OK) {
+            e = esp_wifi_set_mode(WIFI_MODE_STA);
+        }
+        if (e != ESP_OK) {
+            esp_wifi_deinit(); /* el siguiente intento empieza limpio */
+        }
     }
-    if (e == ESP_OK) {
-        e = esp_wifi_set_mode(WIFI_MODE_STA);
-    }
-    if (e == ESP_OK) {
+    if (e == ESP_OK && !s_handlers_ready) {
         e = esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, on_event, NULL, NULL);
-    }
-    if (e == ESP_OK) {
-        e = esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_event, NULL, NULL);
+        if (e == ESP_OK) {
+            e = esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_event, NULL, NULL);
+        }
+        if (e == ESP_OK) {
+            s_handlers_ready = true;
+        } else {
+            esp_wifi_deinit();
+        }
     }
     if (e != ESP_OK) {
         ESP_LOGE(TAG, "no se pudo iniciar el Wi-Fi: %s", esp_err_to_name(e));
         return false;
     }
     s_wifi_ready = true;
+    ESP_LOGI(TAG, "Wi-Fi iniciado: RAM interna libre %u B",
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     return true;
 }
 
@@ -297,15 +345,26 @@ static void enable(bool on)
     unlock();
     if (on) {
         if (!wifi_init_once()) {
+            /* Queda apagado y con el motivo a la vista: nunca a medio iniciar. */
             lock();
             s_st.enabled = false;
             s_st.state = NET_FAILED;
+            s_st.reason = 0;
+            s_st.retry_in_s = 0;
             unlock();
             return;
         }
         if (!was || s_st.state == NET_OFF) {
             set_state(NET_IDLE);
-            esp_wifi_start(); /* WIFI_EVENT_STA_START -> escaneo */
+            const esp_err_t e = esp_wifi_start(); /* WIFI_EVENT_STA_START -> escaneo */
+            if (e != ESP_OK) {
+                ESP_LOGE(TAG, "esp_wifi_start: %s", esp_err_to_name(e));
+                lock();
+                s_st.enabled = false;
+                s_st.state = NET_FAILED;
+                unlock();
+                return;
+            }
         }
     } else if (s_wifi_ready) {
         sntp_stop();
@@ -334,6 +393,9 @@ static void enable(bool on)
 static void scan_done(void)
 {
     s_scanning = false;
+    if (!s_st.enabled) {
+        return; /* llegó después de apagar */
+    }
     uint16_t n = 0;
     esp_wifi_scan_get_ap_num(&n);
     if (n > NET_SCAN_MAX * 2) {
@@ -347,9 +409,9 @@ static void scan_done(void)
     if (rec) {
         esp_wifi_scan_get_ap_records(&n, rec);
     }
-    net_ap_t aps[NET_SCAN_MAX * 2];
+    net_ap_t *aps = s_scan_tmp;
     int k = 0;
-    for (int i = 0; i < n && k < (int)(sizeof(aps) / sizeof(aps[0])); i++) {
+    for (int i = 0; i < n && k < (int)(sizeof(s_scan_tmp) / sizeof(s_scan_tmp[0])); i++) {
         snprintf(aps[k].ssid, sizeof(aps[k].ssid), "%s", (const char *)rec[i].ssid);
         aps[k].rssi = rec[i].rssi;
         aps[k].secure = rec[i].authmode != WIFI_AUTH_OPEN;
@@ -387,6 +449,9 @@ static void disconnected(int reason)
         s_expect_disc--;
         return;
     }
+    if (!s_st.enabled) {
+        return; /* desconexión propia de esp_wifi_stop(): no es un fallo */
+    }
     lock();
     const bool enabled = s_st.enabled;
     s_st.reason = reason;
@@ -412,6 +477,9 @@ static void disconnected(int reason)
 
 static void got_ip(const char *ip)
 {
+    if (!s_st.enabled) {
+        return; /* IP de una conexión que ya se apagó */
+    }
     wifi_ap_record_t ap;
     const bool ok = esp_wifi_sta_get_ap_info(&ap) == ESP_OK;
     lock();
@@ -502,7 +570,9 @@ static void handle(const msg_t *m)
         persist();
     } break;
     case M_STA_START:
-        start_scan();
+        if (s_st.enabled) {
+            start_scan();
+        }
         break;
     case M_SCAN_DONE:
         scan_done();
@@ -580,7 +650,7 @@ esp_err_t watch_net_start(void)
     }
     net_creds_init(&s_creds);
     s_st.state = NET_OFF;
-    if (xTaskCreate(net_task, "watch_net", 4096, NULL, 4, NULL) != pdPASS) {
+    if (xTaskCreate(net_task, "watch_net", NET_TASK_STACK, NULL, 4, NULL) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
     return ESP_OK;

@@ -84,7 +84,8 @@ void sim_suite_phone(const char *out)
     /* Lanzador: la app Flex Phone y Música con sus iconos originales */
     ui_nav_push(ui_apps_create);
     sim_run(300);
-    EXPECT(has("Flex Phone") && has("Música"), "lanzador: faltan Flex Phone o Música");
+    EXPECT(ui_apps_find(ui_nav_top(), "Flex Phone") && ui_apps_find(ui_nav_top(), "Música"),
+           "cajon: faltan Flex Phone o Musica");
     ui_nav_back();
     sim_run(300);
 

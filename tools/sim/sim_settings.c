@@ -77,7 +77,7 @@ void sim_suite_settings(const char *out)
     EXPECT(ui_nav_push(ui_settings_create), "no se abrio Ajustes");
     sim_run(1300);
     lv_obj_t *set = ui_nav_top();
-    EXPECT(sim_find_label(set, "Brillo 70 %"), "Ajustes no muestra el brillo");
+    EXPECT(sim_find_label(set, "Brillo 70 %"), "Ajustes no muestra el brillo (%d)", sim_brightness);
     EXPECT(sim_find_label(set, "84 %"), "Ajustes no muestra la bateria");
     EXPECT(!sim_find_label(set, "Pendiente"), "quedan filas pendientes en Ajustes");
     sim_check_glyphs(set, "ajustes");

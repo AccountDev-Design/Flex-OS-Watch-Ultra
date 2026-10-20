@@ -24,7 +24,10 @@
 extern "C" {
 #endif
 
-typedef enum { SCR_ON = 0, SCR_DIM, SCR_OFF } scr_state_t;
+/* SCR_AOD: pantalla siempre activa (fondo negro, hora atenuada, brillo bajo
+ * del panel). Se trata como "apagada" para la interacción: solo un evento la
+ * enciende del todo. */
+typedef enum { SCR_ON = 0, SCR_DIM, SCR_OFF, SCR_AOD } scr_state_t;
 
 #define SCR_DIM_MAX_MS 3000u
 
@@ -32,6 +35,19 @@ typedef enum { SCR_ON = 0, SCR_DIM, SCR_OFF } scr_state_t;
 uint32_t scr_dim_ms(uint32_t timeout_ms);
 /** Estado siguiente según la inactividad (no enciende una pantalla apagada). */
 scr_state_t scr_next(scr_state_t cur, uint32_t inactive_ms, uint32_t timeout_ms, bool hold);
+/** Igual, con AOD: al agotarse el tiempo pasa a SCR_AOD en vez de SCR_OFF.
+ * Con dim = false no hay fase atenuada (se pasa directamente al final). */
+scr_state_t scr_next_ex(scr_state_t cur, uint32_t inactive_ms, uint32_t timeout_ms, bool hold, bool aod, bool dim);
+/** Atenuación progresiva: brillo a los elapsed_ms de una fase de dim_ms que
+ * baja linealmente de user a target (nunca por debajo de target). */
+int scr_dim_ramp(int user, int target, uint32_t elapsed_ms, uint32_t dim_ms);
+
+/* Pixel Shift: desplazamiento periódico de los elementos estáticos para
+ * repartir el desgaste de los píxeles del AMOLED. Reduce el riesgo de
+ * marcas; no lo elimina ni detecta el quemado. */
+#define SCR_SHIFT_STEPS 16
+/** Desplazamiento del paso step (cíclico) dentro de ±max px. El paso 0 es (0,0). */
+void scr_pixel_shift(uint32_t step, int max, int *dx, int *dy);
 /** Brillo atenuado (un tercio del del usuario, mínimo 5 %; nunca más que el del usuario). */
 int scr_dim_level(int user_percent);
 

@@ -16,6 +16,7 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | T104-T108 | [F6-NAVEGADOR.md](F6-NAVEGADOR.md) |
 | T109-T115 | [F7-OTA.md](F7-OTA.md) (actualizaciones) |
 | T116-T123 | [FLEX-PHONE-INTEGRACION.md](FLEX-PHONE-INTEGRACION.md) (dispositivos en Flex Phone y navegador por el teléfono) |
+| **T124-T141** | [F10-EXPERIENCIA.md](F10-EXPERIENCIA.md) §9 (Wi-Fi, splash, gestos, cajón, esferas, AOD, ahorro, Device Care, rumbo relativo). **Empieza por T124-T125 (Wi-Fi)** |
 | Flash de 32 MB | [FLASH-32MB.md](FLASH-32MB.md) |
 
 **Verificado en el reloj hasta ahora** (fotos y vídeo del 2026-10-15): pantalla, táctil, LVGL y la sonda de 32 MB (T10). Lo demás no. Compilar y pasar las pruebas de PC no prueba el reloj: cada resultado que me envíes es lo que convierte una tarea del 50 % al 100 %.
@@ -43,7 +44,7 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | 1 | T1, T30 | Sin destello blanco. "Flex OS" aparece sobre negro y la esfera entra sola; sin reinicios en el registro |
 | 2 | T26, T10, T11, T14 | Copia del registro: las líneas `watch_time: RTC …` (o `sin hora fiable`) y `registros 00h-0Ah`; las líneas `watch_diag` (flash y memoria) y las 3 de configuración del AXP2101 |
 | 3 | T28 | La hora y la fecha de la esfera coinciden con la línea del RTC (o "--:--" y "Hora sin configurar"); el día de la semana es correcto |
-| 4 | T9 | FPS y % de CPU del medidor de LVGL (abajo), en reposo y moviendo el dedo |
+| 4 | T9 | FPS y % de CPU: el medidor ya no sale en la interfaz. Para medir, compila a propósito con `idf.py -DFLEX_PERF_MONITOR=1 build` y `CONFIG_LV_USE_PERF_MONITOR=y` (F10 §7.3) |
 
 ## 2. Interfaz (USB conectado)
 
@@ -55,7 +56,7 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | 8 | T37, T38 | Ajustes > Batería: desplaza hasta el final y compara con el registro de `watch_power` |
 | 9 | T39 | Ajustes > Diagnóstico |
 | 10 | T40 (= T2 y T3) | Diagnóstico > Prueba de pantalla: marco azul en los 4 bordes; toca las 4 esquinas y el centro y anota las coordenadas |
-| 11 | T32 | En cualquier página de Ajustes: el gesto desde el borde izquierdo, corto y lento, largo y rápido; desplaza una lista en vertical |
+| 11 | T32 | En cualquier página de Ajustes: el gesto desde el borde **derecho** hacia la izquierda (atrás, F10), corto y lento, largo y rápido; desplaza una lista en vertical |
 | 12 | T23-T25, T13 | Legibilidad de iconos y textos, respuesta al toque, filas "Pendiente" |
 
 ## 3. Batería (USB y sin USB)
@@ -94,16 +95,16 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | T49 | Tras RESET y tras apagar y encender, la hora se conserva |
 | T50 | Diferencia con el móvil a los 15 min y a las 24 h |
 | T51 | Cambiar zona y formato 12/24 h: la hora se ve bien y el RTC no cambia |
-| T52-T55 | Apps (desliza la esfera a la izquierda): cronómetro, temporizador con aviso, alarma que suena y se conserva tras reiniciar |
+| T52-T55 | Apps (desliza la esfera **hacia abajo**, F10): cronómetro, temporizador con aviso, alarma que suena y se conserva tras reiniciar |
 | T56-T59 | Apagado de pantalla: atenuada y apagada sin tocar, botón lateral (anota "reposo N" en Diagnóstico; **no** lo mantengas 4 s), despertar con USB y temporizador, imagen correcta tras encender |
-| T60-T62 | IMU: línea `QMI8658 ... configurado` en el registro; Aplicaciones > Sensores plano (Z ≈ 1 g, punto verde) y hacia dónde va el punto al inclinar |
+| T60-T62 | IMU: línea `QMI8658 ... configurado` en el registro; Device Care > Pruebas > Sensores (F10: ya no está en el cajón) plano (Z ≈ 1 g, punto verde) y hacia dónde va el punto al inclinar |
 | T63-T66 | Ajustes > Almacenamiento: registro al arrancar (no formatea solo), Probar escritura ("Superada"), Formatear con dos toques, Probar archivo antes y después de reiniciar |
 
 ## 7. Identidad original: iconos, lanzador y fondos (`F3-IDENTIDAD-ORIGINAL.md`)
 
 | Pruebas | Qué mirar |
 |---|---|
-| T67-T70 | Deslizar la esfera a la izquierda: iconos nítidos y sin bordes raros; "Almacenamiento" entero; punto en Reloj con el cronómetro en marcha; FPS al desplazar. En el registro, ningún `LoadStoreAlignment` |
+| T67-T70 | Deslizar la esfera hacia abajo: iconos circulares nítidos y sin bordes raros (sin nombres desde F10); punto en Reloj con el cronómetro en marcha. En el registro, ningún `LoadStoreAlignment` |
 | T71-T73 | Ajustes > Pantalla > Fondo: tiempo de generación en el registro, degradados sin escalones, hora legible sobre Aurora y Naturaleza |
 
 ## 8. Apps (`F9-APPS.md`)

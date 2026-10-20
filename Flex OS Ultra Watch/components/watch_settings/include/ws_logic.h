@@ -24,7 +24,17 @@ extern "C" {
 #define WS_TZ_STEP         15
 #define WS_TZ_DEF          (-300)  /* Lima, UTC-5 sin horario de verano (referencia) */
 #define WS_SCREEN_TO_DEF   15      /* s */
-#define WS_FACE_COUNT      3
+#define WS_FACE_COUNT      5       /* ui_face_style_t: digital, analógica, modular, Liquid Glass, Parallax */
+
+/* Atenuación progresiva antes de apagar la pantalla (F4.5 ampliado) */
+enum { WS_DIM_OFF = 0, WS_DIM_SOFT, WS_DIM_MED, WS_DIM_STRONG, WS_DIM_COUNT };
+/* Política de radios de Flex Ultra Power Saving */
+enum { WS_PS_RADIO_KEEP = 0, WS_PS_RADIO_WIFI, WS_PS_RADIO_ALL, WS_PS_RADIO_COUNT };
+/* Estado anterior al ahorro (ps_flags) */
+#define WS_PS_PREV_VALID 0x80u
+#define WS_PS_PREV_AOD   0x01u
+#define WS_PS_PREV_WIFI  0x02u
+#define WS_PS_PREV_BT    0x04u
 
 /** Opciones de apagado de pantalla (s), en orden. */
 extern const uint8_t ws_screen_timeouts[];
@@ -37,12 +47,24 @@ typedef struct {
     int16_t tz_min;      /**< desfase de la zona horaria respecto a UTC, en min (D17) */
     uint8_t wallpaper;   /**< flex_wall_t: 0 = negro AMOLED, 1 = Onyx, 2..8 = resto de fondos de Flex OS Ultra */
     uint8_t face;        /**< estilo de esfera (0..WS_FACE_COUNT-1) */
+    /* Pantalla y protección AMOLED */
+    bool aod;            /**< pantalla siempre activa (AOD) en vez de apagarse */
+    bool pshift;         /**< Pixel Shift de la esfera y del AOD */
+    uint8_t dim;         /**< atenuación antes de apagar (WS_DIM_*) */
+    /* Flex Ultra Power Saving */
+    bool psave;          /**< activo (sobrevive al reinicio) */
+    uint8_t psave_radio; /**< WS_PS_RADIO_* */
+    uint8_t ps_bright;   /**< brillo del usuario antes de activarlo */
+    uint8_t ps_flags;    /**< WS_PS_PREV_*: AOD y radios antes de activarlo */
 } ws_settings_t;
 
 /** Número de fondos (= FLEX_WALL_COUNT_ de watch_theme; lo comprueba ui_wallpaper.c). */
 #define WS_WALLPAPER_COUNT 9
 
 void ws_defaults(ws_settings_t *s);
+/** Nivel atenuado (% de brillo) para un modo WS_DIM_* y el brillo del usuario;
+ * nunca más que el del usuario ni menos de 5 %. WS_DIM_OFF devuelve el del usuario. */
+int ws_dim_level(uint8_t dim, int user_percent);
 /** Lleva cada campo a un valor válido (el más cercano). true si cambió algo. */
 bool ws_normalize(ws_settings_t *s);
 bool ws_equal(const ws_settings_t *a, const ws_settings_t *b);

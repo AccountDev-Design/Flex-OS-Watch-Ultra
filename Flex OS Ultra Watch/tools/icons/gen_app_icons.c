@@ -51,6 +51,9 @@
 
 #define DESIGN_S 72      /* tamaño de diseño de la referencia */
 static int SS = 8;       /* muestras por píxel de salida y eje (1 con "p4") */
+/* "round": base circular (cajón en panal del reloj, estilo Apple Watch / One
+ * UI Watch). El glifo es el mismo; solo cambia el radio de iconBase. */
+static int g_round;
 
 /* Color de la referencia: rgb565(r, g, b) recibía bytes de 8 bits; aquí se
  * guardan los 8 bits (la cuantización a RGB565 se hace una vez al final). */
@@ -317,6 +320,15 @@ enum {
 /* iconBase, estilo "Plano" (Icons.h:77-86) */
 static void iconBase(int x, int y, int S, col_t bg, int rf100)
 {
+    if (g_round) {
+        /* Disco del mismo tamaño y brillo en su mitad superior (el rectángulo
+         * redondeado de media altura dejaba esquinas fuera del círculo). */
+        const float c0x = (float)x + S / 2.0f - 0.5f, c0y = (float)y + S / 2.0f - 0.5f;
+        const float p[4] = {c0x, c0y, -1.0f, S / 2.0f};
+        fill_shape(c0x - p[3], c0y - p[3], c0x + p[3], c0y + p[3], in_ring, p, bg, 1.0f);
+        fill_shape(c0x - p[3], c0y - p[3], c0x + p[3], c0y, in_ring, p, rgb565(255, 255, 255), 22.0f / 255.0f);
+        return;
+    }
     const int r = S * rf100 / 100;
     fillRoundRect(x, y, S, S, r, bg);
     fillRoundRectA(x, y, S, S / 2, r, rgb565(255, 255, 255), 22); /* sutil brillo superior */
@@ -569,12 +581,15 @@ static uint8_t q8(float v)
 int main(int argc, char **argv)
 {
     if (argc < 2) {
-        fprintf(stderr, "uso: %s <carpeta_salida> [tamaño=104] [p4]\n", argv[0]);
+        fprintf(stderr, "uso: %s <carpeta_salida> [tamaño=104] [p4|round]\n", argv[0]);
         return 2;
     }
     g_out = argc > 2 ? atoi(argv[2]) : 104;
     if (argc > 3 && strcmp(argv[3], "p4") == 0) {
         SS = 1;
+    }
+    if (argc > 3 && strcmp(argv[3], "round") == 0) {
+        g_round = 1;
     }
     if (g_out < 16 || g_out > 256) {
         fprintf(stderr, "tamaño fuera de rango (16..256)\n");

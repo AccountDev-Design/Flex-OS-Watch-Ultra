@@ -13,6 +13,12 @@
  * tiempo encendido), servicios, errores de bus I2C, almacenamiento y
  * batería. Las del P4 sin equivalente aquí (ritmo del bucle de Arduino,
  * contador persistente de reinicios, BNO085) no se inventan.
+ *
+ * Centro de configuración de la protección y la energía (los servicios
+ * viven fuera de la app y siguen activos con ella cerrada): Flex Ultra Power
+ * Saving y su política de radios (ui_psave.c), AOD, Pixel Shift y
+ * atenuación progresiva (ui_screen.c, ui_aod.c), con el estado real del
+ * Wi-Fi y del Bluetooth. Sin contadores de FPS ni de CPU.
  */
 #include "ui_internal.h"
 
@@ -22,6 +28,8 @@
 #include "esp_timer.h"
 #include "watch_diag.h"
 #include "watch_imu.h"
+#include "watch_net.h"
+#include "watch_phone.h"
 #include "watch_settings.h"
 #include "watch_storage.h"
 #include "watch_theme.h"
@@ -41,6 +49,8 @@ typedef struct {
     lv_obj_t *word;
     lv_obj_t *dot[M_N];
     lv_obj_t *val[M_N];
+    lv_obj_t *r_psave, *r_radio, *r_aod, *r_shift, *r_dim;
+    lv_obj_t *i_wifi, *i_bt;
 } dc_page_t;
 
 static void back_cb(lv_event_t *e)
@@ -188,9 +198,84 @@ static void refresh(dc_page_t *p)
     }
 }
 
+static const char *onoff(bool on)
+{
+    return on ? "Activado" : "Desactivado";
+}
+
+/* Estado real de la protección, la energía y las radios. */
+static void refresh_care(dc_page_t *p)
+{
+    watch_settings_t ws;
+    watch_settings_get(&ws);
+    const bool ps = ui_psave_active();
+    watch_theme_row_set_value(p->r_psave, onoff(ps));
+    watch_theme_row_set_value(p->r_radio, ui_psave_radio_text(ws.psave_radio));
+    watch_theme_row_set_value(p->r_aod, ps ? "No con ahorro" : onoff(ws.aod));
+    watch_theme_row_set_value(p->r_shift, onoff(ws.pshift));
+    watch_theme_row_set_value(p->r_dim, ui_dim_text(ws.dim));
+    watch_net_status_t ns;
+    watch_net_get(&ns);
+    watch_theme_info_set(p->i_wifi, ns.state == NET_CONNECTED ? ns.ssid : watch_net_state_text(&ns));
+    watch_phone_status_t ph;
+    watch_phone_get(&ph);
+    watch_theme_info_set(p->i_bt, ph.enabled ? ui_phone_chip(&ph, NULL) : "Apagado");
+}
+
 static void tick_cb(lv_timer_t *t)
 {
     refresh(lv_timer_get_user_data(t));
+    refresh_care(lv_timer_get_user_data(t));
+}
+
+static void psave_cb(lv_event_t *e)
+{
+    ui_psave_set(!ui_psave_active());
+    refresh_care(lv_event_get_user_data(e));
+}
+
+static void radio_cb(lv_event_t *e)
+{
+    watch_settings_t ws;
+    watch_settings_get(&ws);
+    ws.psave_radio = (uint8_t)((ws.psave_radio + 1) % WS_PS_RADIO_COUNT);
+    watch_settings_update(&ws);
+    refresh_care(lv_event_get_user_data(e));
+}
+
+static void aod_cb(lv_event_t *e)
+{
+    watch_settings_t ws;
+    watch_settings_get(&ws);
+    ws.aod = !ws.aod;
+    watch_settings_update(&ws);
+    refresh_care(lv_event_get_user_data(e));
+}
+
+static void shift_cb(lv_event_t *e)
+{
+    watch_settings_t ws;
+    watch_settings_get(&ws);
+    ws.pshift = !ws.pshift;
+    watch_settings_update(&ws);
+    refresh_care(lv_event_get_user_data(e));
+}
+
+static void dim_cb(lv_event_t *e)
+{
+    watch_settings_t ws;
+    watch_settings_get(&ws);
+    ws.dim = (uint8_t)((ws.dim + 1) % WS_DIM_COUNT);
+    watch_settings_update(&ws);
+    refresh_care(lv_event_get_user_data(e));
+}
+
+static lv_obj_t *care_row(lv_obj_t *list, flex_icon_t icon, uint32_t accent, const char *title, lv_event_cb_t cb,
+                          dc_page_t *p)
+{
+    lv_obj_t *r = watch_theme_list_row(list, icon, accent, title, "", false);
+    lv_obj_add_event_cb(r, cb, LV_EVENT_CLICKED, p);
+    return r;
 }
 
 static void free_cb(lv_event_t *e)
@@ -263,6 +348,25 @@ lv_obj_t *ui_devcare_create(lv_obj_t *parent)
         led_row(list, kNames[i], &p->dot[i], &p->val[i]);
     }
 
+    watch_theme_section(list, "Flex Ultra Power Saving");
+    p->r_psave = care_row(list, FLEX_ICON_BOLT, FLEX_C_WARN, "Ahorro", psave_cb, p);
+    p->r_radio = care_row(list, FLEX_ICON_WIFI, FLEX_C_CAT_NET, "Radios", radio_cb, p);
+
+    watch_theme_section(list, "Protección de pantalla");
+    p->r_aod = care_row(list, FLEX_ICON_MOON, FLEX_C_CAT_BLUE, "AOD", aod_cb, p);
+    p->r_shift = care_row(list, FLEX_ICON_GRID, FLEX_C_CAT_BLUE, "Pixel Shift", shift_cb, p);
+    p->r_dim = care_row(list, FLEX_ICON_SUN, FLEX_C_CAT_SUN, "Atenuación", dim_cb, p);
+    lv_obj_t *note = watch_theme_label(list, FLEX_FONT_SMALL, FLEX_C_MUTE,
+                                       "Reducen el riesgo de marcas en el AMOLED, pero no lo eliminan. El reloj no "
+                                       "puede detectar el quemado.");
+    lv_label_set_long_mode(note, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_width(note, LV_PCT(100));
+    lv_obj_set_style_pad_left(note, 16, 0);
+
+    watch_theme_section(list, "Conectividad");
+    p->i_wifi = watch_theme_info_row(list, "Wi-Fi", "");
+    p->i_bt = watch_theme_info_row(list, "Bluetooth", "");
+
     watch_theme_section(list, "Pruebas");
     static const struct {
         flex_icon_t icon;
@@ -279,6 +383,7 @@ lv_obj_t *ui_devcare_create(lv_obj_t *parent)
     }
 
     refresh(p);
+    refresh_care(p);
     lv_obj_add_event_cb(page, free_cb, LV_EVENT_DELETE, p);
     ui_page_timer(page, tick_cb, DC_TICK_MS, p);
     return page;

@@ -59,19 +59,23 @@ void sim_suite_power(const char *out)
     sim_run(4000);
     EXPECT(!ui_banner_active(), "el aviso critico no se oculto");
 
-    /* Respuesta: un cambio del servicio llega a la esfera sin tocar el panel
+    /* Respuesta: un cambio del servicio llega al panel rápido (donde está la
+     * batería; la esfera ya no la lleva bajo la hora) sin tocar la pantalla
      * en <= 110 ms (ui_system mira la generación cada 100 ms). */
     sim_scenario(70, 3950, BATT_STATE_DISCHARGING, BATT_LEVEL_NORMAL, false);
+    ui_qp_open();
     sim_run(1000);
     sim_release();
     sim_scenario(70, 3950, BATT_STATE_EXTERNAL_IDLE, BATT_LEVEL_NORMAL, true);
     int waited = 0;
-    while (waited <= 500 && !sim_find_label(ui_nav_top(), "Externa sin carga")) {
+    while (waited <= 500 && !sim_find_label(ui_qp_obj(), "Externa sin carga")) {
         sim_run(5);
         waited += 5;
     }
-    EXPECT(waited <= 110, "la esfera tardo %d ms en mostrar el cambio (sin tocar el panel)", waited);
-    printf("respuesta de la esfera a un cambio de bateria: %d ms (simulado)\n", waited);
+    EXPECT(waited <= 110, "el panel tardo %d ms en mostrar el cambio (sin tocar la pantalla)", waited);
+    printf("respuesta del panel a un cambio de bateria: %d ms (simulado)\n", waited);
+    ui_qp_close();
+    sim_run(300);
 
     /* B2-4: enchufar desde descarga -> una animación, que se borra sola. */
     sim_scenario(62, 4012, BATT_STATE_CHARGING, BATT_LEVEL_NORMAL, true);
