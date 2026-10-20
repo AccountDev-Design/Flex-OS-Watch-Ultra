@@ -12,9 +12,10 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | T67-T73 | [F3-IDENTIDAD-ORIGINAL.md](F3-IDENTIDAD-ORIGINAL.md) (iconos, lanzador, Reloj y fondos) |
 | T74-T77, T94-T99 | [F9-APPS.md](F9-APPS.md) (Calculadora, Calendario, Flex Compass, Device Care, Notas, Archivos, Paint) |
 | T78-T83 | [F5-CONECTIVIDAD.md](F5-CONECTIVIDAD.md) (Wi-Fi) |
-| T84-T93 | [F5-CONECTIVIDAD.md](F5-CONECTIVIDAD.md) §3.6 (Flex Phone por Bluetooth; T86-T93 necesitan la app Android con el servidor v2, [FLEX-PHONE-ANDROID.md](FLEX-PHONE-ANDROID.md)) |
+| T84-T93 | [F5-CONECTIVIDAD.md](F5-CONECTIVIDAD.md) §3.6 (Flex Phone por Bluetooth; T86-T93 con la app de `FlexPhone/`, [FLEX-PHONE-INTEGRACION.md](FLEX-PHONE-INTEGRACION.md)) |
 | T104-T108 | [F6-NAVEGADOR.md](F6-NAVEGADOR.md) |
 | T109-T115 | [F7-OTA.md](F7-OTA.md) (actualizaciones) |
+| T116-T123 | [FLEX-PHONE-INTEGRACION.md](FLEX-PHONE-INTEGRACION.md) (dispositivos en Flex Phone y navegador por el teléfono) |
 | Flash de 32 MB | [FLASH-32MB.md](FLASH-32MB.md) |
 
 **Verificado en el reloj hasta ahora** (fotos y vídeo del 2026-10-15): pantalla, táctil, LVGL y la sonda de 32 MB (T10). Lo demás no. Compilar y pasar las pruebas de PC no prueba el reloj: cada resultado que me envíes es lo que convierte una tarea del 50 % al 100 %.
@@ -123,8 +124,8 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 
 | Pruebas | Qué mirar |
 |---|---|
-| T84-T85 | Con la app de hoy: el reloj encuentra el teléfono, empareja por BLE, abre el canal (MTU 247) y explica que el teléfono no contesta al saludo v2. Copiar las líneas `ble_link` y `watch_phone` (incluida la RAM interna del BLE) |
-| T86-T93 | Solo con la app Android actualizada: emparejar con código, código equivocado, aviso con la pantalla apagada, responder, descartar, reconexión sola, sin Wi-Fi, Música |
+| T84-T85 | Con Flex Phone instalada desde `FlexPhone/` de este repositorio: el reloj encuentra el teléfono, empareja por BLE y abre el canal (MTU 247). Con una app antigua, explica que el teléfono no contesta al saludo v2. Copiar las líneas `ble_link` y `watch_phone` (incluida la RAM interna del BLE) |
+| T86-T93 | Con la app de `FlexPhone/`: emparejar con código, código equivocado, aviso con la pantalla apagada, responder, descartar, reconexión sola, sin Wi-Fi, Música |
 
 ## 11. Navegador (`F6-NAVEGADOR.md`)
 
@@ -140,6 +141,22 @@ Grabar **por USB** el firmware de esta versión: lleva el cargador de arranque c
 |---|---|
 | T109 | Ajustes > Actualizaciones > «Buscar actualización» con Wi-Fi: hoy «Archivo no encontrado» (el manifiesto no está publicado). Copiar las líneas `watch_ota` |
 | T110-T115 | Con un firmware de prueba con clave y un servidor `https://` propio: instalar una versión mayor (tiempo y velocidad), tocar y usar el BLE durante la descarga, cancelar, Wi-Fi que se va, una imagen que falla antes de 60 s (vuelve a la anterior), batería baja y la pila mínima del registro |
+
+## 13. Flex Phone ↔ reloj: dispositivos y navegador por el teléfono (`FLEX-PHONE-INTEGRACION.md`)
+
+Primero hay que construir e instalar la app: `cd FlexPhone && ./gradlew assembleDebug`, en un equipo con Android
+Studio. Después, reloj y teléfono en la **misma red Wi-Fi**, y el reloj emparejado (T86).
+
+| Prueba | Qué hacer | Qué mirar |
+|---|---|---|
+| T116 | Abrir Flex Phone en el teléfono con el reloj y el P4 emparejados | Una entrada por dispositivo, con su icono (reloj y Flex OS Ultra) y sin duplicados, aunque el P4 se vea por Wi-Fi y por su canal |
+| T117 | Tocar el reloj en la lista | Su pantalla: Bluetooth, sesión, navegador. Tocar el P4: Wi-Fi, relay, nube. «Olvidar» pide confirmación |
+| T118 | En el reloj: Flex Phone > «Web del teléfono» | Icono del teléfono, «Parado» y el botón. Pulsarlo: «Arrancando…» y luego «En marcha» con `ip:puerto` real. La notificación del relay aparece en el teléfono |
+| T119 | Abrir el Navegador del reloj (origen Automático) e ir a una web | La sesión va al teléfono («Flex Phone · ip:puerto» en el panel). La página se ve y desplazar y tocar funcionan. Anotar la latencia |
+| T120 | Abrir una web que cambie sola (un reloj en línea, un marcador) y no tocar nada durante 2 min | Se actualiza sola en el reloj, sin tirones ni cortes |
+| T121 | Parar el relay desde el teléfono | El reloj dice «Servidor del navegador detenido en el teléfono» y no lo vuelve a encender solo. Con «Solo Flex Phone» no se conecta a otro servidor |
+| T122 | Apagar el Wi-Fi del teléfono con el relay encendido | El motivo real aparece en el reloj. Al volver, la sesión se rehace sola |
+| T123 | 30 min navegando por el teléfono y luego cerrar y abrir el navegador 10 veces | Sin reinicios. La PSRAM libre en `flex://about` (telemetría) vuelve al mismo valor. Copiar las líneas `watch_browser` y `watch_phone` |
 
 ## Qué enviarme
 

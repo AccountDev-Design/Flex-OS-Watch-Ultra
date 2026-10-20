@@ -167,7 +167,7 @@ medirá en el reloj (T81, Device Care > Memoria).
 |---|---|
 | Capacidad = BLE del propio chip (`FLP_LINK_CAP_BLE_LOCAL`) | La referencia es un P4 sin Bluetooth y usaba TCP 47820. En el reloj el canal es BLE (D5) |
 | Al caer la sesión se borra el estado instantáneo, NO el historial de notificaciones si `keepHistory` | Es lo que dice el ajuste "conservar historial al desconectar" de la referencia, que su enlace no aplicaba: un reloj que pierde todas las notificaciones en cada corte BLE no sirve |
-| Saludo sin respuesta: tras 10 s se explica el motivo y se vuelve a saludar a los 10, 20, 40 y 60 s | Por TCP el teléfono siempre contesta; el `GattServer.kt` de hoy no implementa v2 y el reloj se quedaría "conectando" sin decir por qué |
+| Saludo sin respuesta: tras 10 s se explica el motivo y se vuelve a saludar a los 10, 20, 40 y 60 s | Por TCP el teléfono siempre contesta. Una app Flex Phone antigua (sin v2 por BLE) no contesta, y el reloj se quedaría "conectando" sin decir por qué |
 | `room` en el transporte | Un mensaje de varios fragmentos no se empieza si no caben todos |
 | Emparejar bien borra el motivo de un intento fallido anterior | En la referencia el "no coincide" del primer intento seguía en pantalla con la sesión ya abierta (visto en la vista previa) |
 | Códecs `flexPhoneEncNotifRemove` y `flexPhoneEncAction` | No existían en el firmware C de referencia (`flexphone-messages.md` §8) |
@@ -243,11 +243,11 @@ En el reloj (pendiente; necesita la app Android con el servidor v2, [FLEX-PHONE-
 
 ### 3.7 Lo que no se puede probar todavía
 
-- La app Flex Phone de hoy **no** sirve v2 por BLE: `FlexLinkService` solo arranca `WifiLinkServer` y `GattServer.kt`
-  no hace el apretón de manos (`GattServer.kt:20-47`). El reloj conecta por BLE, cifra y saluda, y luego explica que
-  el teléfono no contesta. Los cambios necesarios están en [FLEX-PHONE-ANDROID.md](FLEX-PHONE-ANDROID.md) y son del
-  repositorio de Flex Phone, que este proyecto no modifica.
-- Por eso F5.2, F5.3 y F5.5 quedan al 50 %: compilan y pasan las pruebas de PC contra un teléfono simulado que sigue
-  el lado Android de v2, pero no hay prueba física de extremo a extremo.
+- **Actualizado el 2026-10-20:** la app Flex Phone ya sirve v2 por BLE. Está en [`FlexPhone/`](../FlexPhone), dentro
+  de este repositorio; detalle en [FLEX-PHONE-INTEGRACION.md](FLEX-PHONE-INTEGRACION.md). El motor C del reloj y el
+  motor Kotlin del teléfono se prueban juntos en el PC (`WatchPeerInteropTest`). Falta la prueba física con el reloj
+  y un teléfono, y construir el APK fuera de este entorno.
+- Por eso F5.2, F5.3 y F5.5 siguen al 50 %: compilan y pasan las pruebas de PC, pero no hay prueba física de extremo
+  a extremo.
 - F5.6 (cifrado de aplicación v3) sigue pendiente de D7/D8. Hoy la carga va cifrada por el enlace BLE (emparejamiento
   Just Works, que no protege frente a un atacante presente durante ese primer emparejamiento) y autenticada por v2.

@@ -175,7 +175,12 @@ tarea y el bucle gráfico solo pasan tramas completas por dos colas de tamaño
 fijo con un mutex corto. El hilo gráfico **nunca** llama a `connect()`,
 `read()` ni `write()`.
 
-### BLE — preparado, hoy no se usa
+### BLE — en uso con Flex OS Watch Ultra (2026-10-20)
+
+> **Actualización:** el reloj Flex OS Watch Ultra (ESP32-S3) sí tiene radio BLE, y `GattServer.kt` ya habla Flex
+> Link v2 completo con él a través del motor `PhoneLinkPeer.kt`. `FlexLinkService` lo arranca junto al servidor
+> Wi-Fi. Detalle: `../../docs/FLEX-PHONE-INTEGRACION.md` de este repositorio. Lo que sigue sobre el P4 sigue siendo
+> cierto: el P4 continúa por Wi-Fi.
 
 El ESP32‑P4 **no tiene radio Bluetooth**: `soc_caps.h` del SDK no define
 `SOC_BLE_SUPPORTED` para ese chip. Mientras siga así, el otro extremo de un
@@ -196,7 +201,7 @@ actual, pierdes también el Wi‑Fi. Haz copia antes.
 
 En el manifiesto de Android, BLE está declarado con `required="false"`. Con
 `"true"` quedaban fuera de Google Play teléfonos donde la app funciona
-perfectamente. Sus permisos **no se piden en tiempo de ejecución**.
+perfectamente. Sus permisos se piden desde la portada (botón «Permitir Bluetooth») solo cuando hace falta para el reloj.
 
 ---
 

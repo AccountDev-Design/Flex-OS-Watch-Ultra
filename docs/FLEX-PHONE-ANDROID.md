@@ -1,5 +1,12 @@
 # Cambios que necesita la app Flex Phone (Android) para servir al reloj por BLE
 
+> **Estado (2026-10-20): hechos.** La app está ahora en [`FlexPhone/`](../FlexPhone), dentro de este repositorio
+> (importada sin cambios de Flex-OS-Ecosistema@5dbc949). Los puntos 1-22 y los dos opcionales están implementados
+> encima. El motor v2 sin transporte está en `PhoneLinkPeer.kt`, `GattServer.kt` está reescrito,
+> `FlexLinkService.kt` atiende Wi-Fi y BLE a la vez, y los permisos de Bluetooth se piden con un botón de la portada. Detalle, pruebas y
+> límites: [FLEX-PHONE-INTEGRACION.md](FLEX-PHONE-INTEGRACION.md). Lo que sigue es la lista original, que se
+> conserva como especificación. Las rutas que cita son las del repositorio de origen.
+
 El reloj ya implementa su lado de Flex Link v2 sobre Bluetooth LE (`docs/F5-CONECTIVIDAD.md` §3). La app Android de
 hoy **no** lo sirve: `FlexLinkService` solo arranca `WifiLinkServer` (TCP 47820) y `GattServer.kt` está escrito pero
 apagado y sin el apretón de manos v2 (`GattServer.kt:20-47`). Este proyecto no modifica el repositorio de Flex Phone;

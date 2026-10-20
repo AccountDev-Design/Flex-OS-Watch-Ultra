@@ -9,6 +9,17 @@ el omnibox, las pestañas, el historial, los favoritos y las páginas internas `
 
 **Sin servicio no hay web.** Nunca habrá un motor HTML en el reloj.
 
+**Origen del servicio** (2026-10-20, `watch_browser/br_backend.c`). Se elige en `flex://settings` > «Origen de la
+web»:
+
+- **Automático:** Flex Phone si está conectado, si no la nube y por último el PC. Es el valor de fábrica.
+- **Flex Phone:** solo el teléfono.
+- **Nube** y **PC/Ubuntu:** solo esa fuente.
+
+Con el teléfono no hay nada que configurar. El reloj le pide su Browser Relay por BLE, se conecta por el Wi-Fi local
+con la credencial derivada del vínculo, y la página se actualiza sola porque el relay empuja las imágenes. Flujo,
+casos y pruebas: [FLEX-PHONE-INTEGRACION.md](FLEX-PHONE-INTEGRACION.md) §3.
+
 ## Piezas
 
 | Pieza | Qué es | Pruebas |

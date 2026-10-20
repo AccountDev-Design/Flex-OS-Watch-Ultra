@@ -1,12 +1,16 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 50,8 %   [██████████░░░░░░░░░░]   49,2 % pendiente   (verificado en el reloj: 8,6 %)
+PROGRESO GLOBAL: 50,8 %   [██████████░░░░░░░░░░]   49,2 % pendiente   (verificado en el reloj: 8,1 %)
 ```
 
-El 2026-10-16 el alcance creció con el prompt maestro de migración (iconos y fondos originales, todas las apps del
-inventario, BLE como canal principal con el teléfono): el peso total pasó de 100 a 122. Ningún trabajo hecho se perdió;
-el porcentaje baja porque ahora mide más trabajo. Detalle en el historial del final.
+El alcance ha crecido dos veces y ningún trabajo hecho se perdió. Cuando crece el alcance, el porcentaje baja porque
+mide más trabajo. Detalle en el historial del final.
+
+- **2026-10-16, prompt maestro de migración:** iconos y fondos originales, todas las apps del inventario y BLE como
+  canal principal con el teléfono. El peso total pasó de 100 a 122.
+- **2026-10-20, integración con Flex Phone:** la app Android entra en `FlexPhone/` y se añade el navegador del reloj
+  por el teléfono. Fase FP, con lo que el peso total pasa a 130.
 
 - **Completado:**
   - Auditoría y plan (F0).
@@ -31,19 +35,26 @@ el porcentaje baja porque ahora mide más trabajo. Detalle en el historial del f
   - Identidad original (iconos, lanzador, fondos), apps Reloj, Calculadora, Calendario, Flex Compass y Device Care.
   - Wi-Fi (F5.1) y Flex Phone por Bluetooth LE (F5.2-F5.5): núcleo Flex Link v2 portado con vectores dorados,
     central NimBLE, notificaciones, Música y estado del teléfono (`docs/F5-CONECTIVIDAD.md`).
+  - Integración con Flex Phone (fase FP, `docs/FLEX-PHONE-INTEGRACION.md`):
+    - la app Android en `FlexPhone/`, con Flex Link v2 por BLE para el reloj y por Wi-Fi para el P4;
+    - lista unificada de dispositivos con iconos de un único SVG;
+    - el navegador del reloj usa Internet a través del teléfono (Browser Relay pedido por BLE), con la página
+      actualizándose sola;
+    - interoperabilidad probada entre el motor C del reloj y el motor Kotlin del teléfono.
 - **En curso:** pruebas físicas de F2-F4.
 - **Falta:**
   - Pruebas físicas de F2-F4 sobre el firmware actual (T41-T66 y las T de F2/F3 aún sin resultado).
   - La calibración de umbrales (❓ D4).
-  - Prueba de extremo a extremo de Flex Phone: necesita la app Android con el servidor BLE v2
-    (`docs/FLEX-PHONE-ANDROID.md`).
+  - Prueba de extremo a extremo de Flex Phone con el reloj y un teléfono reales (T84-T93, T116-T123). Antes hay que
+    construir el APK de `FlexPhone/` en un equipo con Android Studio, porque este entorno no llega al Android Gradle
+    Plugin.
   - La seguridad y las pruebas finales; el navegador, probarlo en el reloj con el servicio; el OTA, probarlo en el
     reloj y publicar la clave y el manifiesto (`docs/F7-OTA.md`).
 - **Siguiente:** pruebas físicas de F2-F4 (`docs/PRUEBAS-RELOJ.md`); después F5 (Wi-Fi y Flex Phone).
 
 ## Cómo se calcula
 
-- Cada fase tiene un **peso fijo** desde la Fase 0 (suma 100). La ampliación del alcance del 2026-10-16 añadió 22 (total 122). El global es la suma de puntos dividida entre el peso total. Dentro de cada fase, las tareas reparten ese peso según su complejidad e importancia.
+- Cada fase tiene un **peso fijo** desde la Fase 0 (suma 100). La ampliación del alcance del 2026-10-16 añadió 22 (total 122) y la del 2026-10-20 (fase FP) otras 8 (total 130). El global es la suma de puntos dividida entre el peso total. Dentro de cada fase, las tareas reparten ese peso según su complejidad e importancia.
 - Una tarea vale:
   - **0 %** si solo está planificada o escrita sin compilar;
   - **50 %** si compila y pasa las pruebas de PC;
@@ -154,6 +165,13 @@ Limitación conocida: sin servidor de renderizado o sin el móvil, no hay web. N
 | F9.10 Música (control de la música del teléfono) | 1 | 🟡 falta T93 |
 | F9.11 Paint (lienzo reducido, formato FXP1 compatible) | 1 | 🟡 faltan T98-T99 |
 
+### FP · Integración Flex Phone ↔ reloj (`docs/FLEX-PHONE-INTEGRACION.md`) — 4 / 8
+| Tarea | Peso | Estado |
+|---|---|---|
+| FP.1 Android: motor v2 sin transporte (`PhoneLinkPeer`), `GattServer` v2, servicio Wi-Fi + BLE a la vez, vínculos por dispositivo y credencial de relay por vínculo | 3 | 🟡 faltan T84-T93 y construir el APK (el código compila contra el framework real con `:typecheck`) |
+| FP.2 Android: lista de dispositivos sin duplicados, icono de un único SVG (VectorDrawable en Android, RGB565A8 en el reloj) y pantalla por modelo | 2 | 🟡 faltan T116-T117 |
+| FP.3 Reloj: navegador por el Browser Relay del teléfono (`br_backend`, `RELAY_START` por BLE, origen en `flex://settings`, página «Web del teléfono», refresco continuo sin tocar) | 3 | 🟡 faltan T118-T123 |
+
 ### Acordado sin peso asignado
 
 Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y quedará anotado en el historial.
@@ -183,9 +201,9 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | D3 | ✅ Resuelta: en "carga completa" se muestra el valor real del gauge | — |
 | D4 | Calibrar los umbrales de batería baja y crítica (hoy provisionales: 15 % y 5 %, aislados en `battery_thresholds.h`) | calibración |
 | D5 | ✅ Resuelta (prompt maestro, 2026-10-16): BLE con el teléfono; Wi-Fi solo para Internet, encendido cuando una función lo necesita | — |
-| D6 | Topología prioritaria: misma red, hotspot del móvil o punto de acceso del reloj | F5.5 |
+| D6 | Topología prioritaria: misma red, hotspot del móvil o punto de acceso del reloj. El navegador por el teléfono necesita misma red o hotspot del móvil (el control va por BLE; las imágenes, por Wi-Fi) | F5.5 |
 | D7 | Protocolo: Flex Link v2 (en claro) o v3 cifrado | F5.6 |
-| D8 | Cambios en Flex Phone (Android): varios dispositivos y tipo "reloj" | F5.6 |
+| D8 | ✅ Resuelta (2026-10-20): la app vive en `FlexPhone/` de este repositorio, con varios dispositivos y el modelo «reloj» en el `HELLO` | — |
 | D9 | ¿Comunicación directa reloj ↔ Flex OS Ultra (P4)? | F5 |
 | D10 | ~~Funciones de Flex Phone en el reloj más allá de las notificaciones~~ Resuelta por el prompt maestro (2026-10-16): todo lo que el protocolo y la app ofrecen (estado, capacidades, multimedia, hacer sonar, respuestas) | F5.4 |
 | D11 | Flex Account / Flex Cloud en el reloj (modelo, servidor) | F8.1, F8.2 |
@@ -238,3 +256,4 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-17 | **44,7 %** | +1 | F9.8 Clima (50 % de 2): motor de `FlexOS_Weather` portado a C puro (`watch_weather`: parser, cadencia, ubicaciones; 225 comprobaciones con las respuestas reales de Open-Meteo de la referencia), servicio con `esp_http_client` sobre TLS verificado (paquete de CA, mbedTLS en PSRAM), NVS `flexwx` y app Clima con iconos procedurales; suite "clima" de la vista previa. Puntos 54,5 / 122 |
 | 2026-10-20 | **48,0 %** | +4 | F6 Navegador (50 % de 8): núcleo de `FlexOS_Browser` pasado a C con el perfil S3 (las comprobaciones de `test_browser.cpp` sin tocar un vector + vectores dorados), sesión FBP/1 con WebSocket propio probada contra un servicio a nivel de bytes, TLS verificado con el paquete de CA (la referencia no verificaba), JPEG con el TJpgDec de LVGL, app con omnibox anti-SSRF, páginas `flex://`, pestañas, historial, favoritos y teclado de página; suite "navegador". Puntos 58,5 / 122 |
 | 2026-10-20 | **50,8 %** | +3,5 | F7 OTA (50 % de 7): motor de `FlexOS_OTA` en C puro (`watch_ota/ota_core.c`: versiones con SemVer, manifiesto con JSON leído de verdad, instalación paso a paso sobre un transporte abstracto; 492 comprobaciones con los vectores de la especificación y el motor entero contra un servidor y una flash falsos), firma ECDSA P-256 obligatoria con el mbedTLS de IDF (la referencia no verificaba), comprobación de producto, chip y versión de la imagen, reversión automática con confirmación a los 60 s, reglas de batería, Ajustes > Actualizaciones, pantalla de instalación y avisos; `tools/ota/ota_sign.py` comprobado con la imagen real; suite "ota". Sin clave ni manifiesto publicados todavía: el reloj comprueba pero no instala. Puntos 62 / 122 |
+| 2026-10-20 | **50,8 %** | 0 (peso +8, puntos +4) | **Ampliación del alcance**: fase FP (integración con Flex Phone, peso 8). La app Android entra en `FlexPhone/`, importada sin cambios y modificada encima. Las tres tareas compilan y pasan las pruebas de PC, así que cuentan al 50 %: FP.1 (50 % de 3), FP.2 (50 % de 2) y FP.3 (50 % de 3). Pruebas que respaldan ese 50 %: 2756 comprobaciones de PC con ASan, vista previa completa y con sanitizadores (semillas 2, 9 y 13), 244 pruebas Kotlin, interoperabilidad con el motor C del reloj y el firmware compilado. El APK no se construyó aquí. Además se corrigió un fallo de navegación anterior (tocar un aviso con el panel rápido abierto dejaba la página debajo del panel). Puntos 66 / 130. Verificado en el reloj: 10,5 / 130 = 8,1 % |
