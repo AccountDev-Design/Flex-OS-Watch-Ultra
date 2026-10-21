@@ -86,6 +86,8 @@ typedef struct {
     uint32_t info_gen, err_gen, msgs, kb_in;
     BrStats stats;
     char info[BR_INFO_MAX];
+    bool need_retry;   /* sesión pendiente por falta de memoria (F11) */
+    uint32_t retry_ms;
     /* táctil de la página */
     bool pressed, dragging;
     lv_point_t p0, plast;
@@ -174,15 +176,44 @@ static void set_hidden(lv_obj_t *o, bool h)
     }
 }
 
-/* Con servidor configurado, la sesión abierta (se puede configurar con la app abierta) */
+/* Con servidor configurado, la sesión abierta (se puede configurar con la app abierta).
+ *
+ * Preparación de memoria (F11), antes de abrir: se sueltan las cachés de
+ * imagen de LVGL (lo único prescindible que es del propio navegador o del
+ * sistema; nada de otras apps) y se mide lo que la sesión necesita de verdad
+ * (watch_browser_mem_check). Si no cabe, el motivo con las cifras y un
+ * reintento solo cada SESSION_RETRY_MS: en cuanto se libera memoria (p. ej.
+ * al cerrar otra app), la sesión se abre sin que el usuario haga nada. Nunca
+ * se fuerza ni se reinicia el reloj. */
+#define SESSION_RETRY_MS 3000
+
 static void ensure_session(void)
 {
     /* Con el teléfono vinculado la sesión se abre aunque su relay aún no esté:
      * es la tarea de la sesión la que se lo pide y se conecta cuando aparece. */
     if (((U->caps & FLEXBR_CAP_REMOTE) || U->src.phone_possible) && !watch_browser_net()) {
-        if (watch_browser_open() != ESP_OK) {
-            show_err("Sin memoria para el navegador");
+        lv_image_cache_drop(NULL); /* caché de imágenes de LVGL (si la hay) */
+        char why[96];
+        char m[160];
+        bool ok = watch_browser_mem_check(why, sizeof(why));
+        if (!ok) {
+            snprintf(m, sizeof(m), "Memoria insuficiente. %s. Reintento automático.", why);
+        } else {
+            const esp_err_t r = watch_browser_open();
+            ok = r == ESP_OK;
+            if (r == ESP_ERR_INVALID_STATE) {
+                snprintf(m, sizeof(m), "Cerrando la sesión anterior…");
+            } else if (!ok) {
+                snprintf(m, sizeof(m), "Memoria insuficiente para la sesión. Reintento automático.");
+            }
         }
+        if (!ok) {
+            show_err(m);
+            U->retry_ms = lv_tick_get();
+            U->need_retry = true;
+            return;
+        }
+        U->need_retry = false;
         push_viewport();
     }
 }
@@ -1230,7 +1261,10 @@ static void page_touch_cb(lv_event_t *e)
     const lv_event_code_t code = lv_event_get_code(e);
     lv_indev_t *in = lv_indev_active();
     lv_point_t p;
-    if (!in) {
+    /* LV_EVENT_ALL: al borrar la página, delete_cb (en la página) libera U
+     * antes de que se borren los hijos, y el lienzo aún recibe PRESS_LOST /
+     * DELETE si el dedo seguía apoyado. */
+    if (!U || !in) {
         return;
     }
     lv_indev_get_point(in, &p);
@@ -1287,6 +1321,9 @@ static void tick_cb(lv_timer_t *tm)
     (void)tm;
     if (U->err_until && (int32_t)(lv_tick_get() - U->err_until) >= 0) {
         hide_err();
+    }
+    if (U->need_retry && lv_tick_elaps(U->retry_ms) >= SESSION_RETRY_MS) {
+        ensure_session();
     }
     if (U->probing) {
         char m[64];
@@ -1412,7 +1449,9 @@ static void tick_cb(lv_timer_t *tm)
     if (!br_net_frame_peek(n, &f, &ch, &seq)) {
         return;
     }
-    if (!on_page || U->menu || ch != ch_of(U->act) || !U->buf) {
+    /* Oculta (app suspendida con el gesto hacia arriba): no se decodifica;
+     * al volver se pide una imagen nueva (resume_cb). */
+    if (!on_page || U->menu || ch != ch_of(U->act) || !U->buf || lv_obj_has_flag(U->page, LV_OBJ_FLAG_HIDDEN)) {
         br_net_frame_done(n, BR_FR_SKIPPED);
         return;
     }
@@ -1451,6 +1490,16 @@ static void delete_cb(lv_event_t *e)
     }
     lv_free(U);
     U = NULL;
+}
+
+/* Al retomar la app suspendida: la imagen de la página puede ser vieja. */
+static void resume_cb(lv_event_t *e)
+{
+    (void)e;
+    br_net_t *n = net();
+    if (U && n) {
+        br_net_cmd(n, FBP_C_REQ_FRAME, ch_of(U->act));
+    }
 }
 
 lv_obj_t *ui_browser_create(lv_obj_t *parent)
@@ -1571,6 +1620,7 @@ lv_obj_t *ui_browser_create(lv_obj_t *parent)
         open_internal(BRP_NEWTAB);
     }
     lv_obj_add_event_cb(page, delete_cb, LV_EVENT_DELETE, NULL);
+    lv_obj_add_event_cb(page, resume_cb, (lv_event_code_t)ui_nav_event_resume(), NULL);
     ui_page_timer(page, tick_cb, TICK_MS, NULL);
     return page;
 }

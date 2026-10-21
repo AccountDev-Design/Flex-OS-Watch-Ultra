@@ -320,7 +320,7 @@ static void refresh(fp_page_t *p)
     set_text(p->name, s.peer_name[0] ? s.peer_name : (s.bonded ? "Teléfono vinculado" : "Sin teléfono vinculado"));
     uint32_t rgb;
     set_text(p->chip, ui_phone_chip(&s, &rgb));
-    lv_obj_set_style_text_color(p->chip, flex_color(rgb), 0);
+    watch_theme_set_text_color(p->chip, rgb);
     if (s.link == FLP_LS_READY) {
         snprintf(b, sizeof(b), "%s", s.caps.valid && s.caps.osver[0] ? s.caps.osver : "Sesión abierta y autenticada");
     } else if (s.link == FLP_LS_OFF) {
@@ -425,10 +425,10 @@ static void conn_refresh(conn_page_t *p)
     fmt_rtt(&s, b, sizeof(b));
     watch_theme_info_set(p->lat, b);
     if (s.err[0]) {
-        lv_obj_remove_flag(p->err_card, LV_OBJ_FLAG_HIDDEN);
+        watch_theme_set_visible(p->err_card, true);
         set_text(p->err, s.err);
     } else {
-        lv_obj_add_flag(p->err_card, LV_OBJ_FLAG_HIDDEN);
+        watch_theme_set_visible(p->err_card, false);
     }
     watch_theme_button_set(p->toggle, s.enabled ? "Apagar el enlace" : "Activar el enlace",
                            s.enabled ? FLEX_C_SURF2 : FLEX_C_PRIMARY);
@@ -640,7 +640,7 @@ static void relay_toggle_cb(lv_event_t *e)
     watch_phone_get(&s);
     const bool up = s.relay.state == FLP_RELAY_UP || s.relay.state == FLP_RELAY_STARTING;
     if (!watch_phone_relay(!up)) {
-        lv_obj_remove_flag(p->why_card, LV_OBJ_FLAG_HIDDEN);
+        watch_theme_set_visible(p->why_card, true);
         set_text(p->why, s.link == FLP_LS_READY ? "La app Flex Phone no ofrece el navegador" : "Conecta antes el teléfono");
     }
 }
@@ -664,10 +664,10 @@ static void relay_refresh(relay_page_t *p)
     watch_theme_info_set(p->src, src.src != BRSRC_NONE ? flexBrSourceName(src.src) : "Ninguno");
     const char *why = s.relay.err[0] && s.relay.state != FLP_RELAY_UP ? s.relay.err : src.src == BRSRC_NONE ? src.why : "";
     if (why[0]) {
-        lv_obj_remove_flag(p->why_card, LV_OBJ_FLAG_HIDDEN);
+        watch_theme_set_visible(p->why_card, true);
         set_text(p->why, why);
     } else {
-        lv_obj_add_flag(p->why_card, LV_OBJ_FLAG_HIDDEN);
+        watch_theme_set_visible(p->why_card, false);
     }
     const bool up = s.relay.state == FLP_RELAY_UP || s.relay.state == FLP_RELAY_STARTING;
     const uint8_t key = s.link != FLP_LS_READY ? 0xFE : up ? 1 : 0;

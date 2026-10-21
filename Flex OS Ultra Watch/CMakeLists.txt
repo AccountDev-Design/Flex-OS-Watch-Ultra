@@ -12,6 +12,10 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 #      idf.py -DFLEX_PERF_MONITOR=1 build   (con CONFIG_LV_USE_PERF_MONITOR=y)
 # lv_conf_internal.h respeta una definición previa (#ifndef).
 idf_build_set_property(COMPILE_DEFINITIONS "LV_USE_SNAPSHOT=1" APPEND)
+# Asignador de LVGL propio (components/watch_display/lv_mem_watch.c): objetos,
+# estilos y estado de las páginas en PSRAM, no en la RAM interna que necesitan
+# Wi-Fi, BLE, lwIP y las pilas de las tareas.
+idf_build_set_property(COMPILE_DEFINITIONS "LV_USE_STDLIB_MALLOC=LV_STDLIB_CUSTOM" APPEND)
 if(FLEX_PERF_MONITOR)
     idf_build_set_property(COMPILE_DEFINITIONS "FLEX_PERF_MONITOR=1" APPEND)
 else()

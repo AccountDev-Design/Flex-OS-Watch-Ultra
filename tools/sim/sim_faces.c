@@ -191,6 +191,47 @@ void sim_suite_faces(const char *out)
     ui_psave_set(false);
     sim_run(1100);
 
+    /* ---- Regresión (vídeo del 2026-10-20): con fondo de color y la esfera
+     * Parallax, salir del selector con el borde izquierdo reiniciaba el reloj. */
+    {
+        watch_settings_t ws;
+        watch_settings_get(&ws);
+        ws.wallpaper = FLEX_WALL_OCEANO;
+        watch_settings_update(&ws);
+        watch_theme_set_wallpaper(FLEX_WALL_OCEANO);
+    }
+    for (int round = 0; round < 6; round++) {
+        set_face(UI_FACE_PARALLAX);
+        sim_press(205, 300);
+        sim_run(700);
+        sim_release();
+        sim_run(round % 2 ? 60 : UI_FACE_COUNT_ * 40 + 200); /* a veces con las vistas previas a medias */
+        EXPECT(sim_find_label(ui_nav_top(), "Esferas"), "regresion %d: el selector no se abrio", round);
+        if (round % 3 == 0) {
+            sim_drag(4, 300, 300, 300, 12, 20); /* borde izquierdo: al cajón */
+        } else if (round % 3 == 1) {
+            sim_drag(FLEX_SCREEN_W - 4, 300, 100, 300, 12, 20); /* borde derecho: atrás */
+        } else {
+            sim_drag(200, FLEX_SCREEN_H - 6, 200, 120, 12, 20); /* borde inferior: a la esfera */
+        }
+        sim_release();
+        sim_run(600);
+        EXPECT(!ui_nav_busy() && !sim_find_label(ui_nav_top(), "Esferas"), "regresion %d: no se salio del selector",
+               round);
+        ui_nav_discard_suspended();
+        ui_nav_home();
+        sim_run(400);
+    }
+    {
+        watch_settings_t ws;
+        watch_settings_get(&ws);
+        ws.wallpaper = FLEX_WALL_BLACK;
+        watch_settings_update(&ws);
+        watch_theme_set_wallpaper(FLEX_WALL_BLACK);
+        ui_nav_replace_root(ui_face_create);
+        sim_run(600);
+    }
+
     set_face(UI_FACE_DIGITAL);
     sim_ws_reset(NULL);
     ui_nav_replace_root(ui_face_create);

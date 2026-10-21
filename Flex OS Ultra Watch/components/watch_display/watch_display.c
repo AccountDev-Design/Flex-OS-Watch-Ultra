@@ -7,6 +7,8 @@
 #include "esp_check.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_lvgl_port.h"
 #include "bsp/esp-bsp.h"
 #include "bsp/display.h"
@@ -23,8 +25,15 @@ static const char *TAG = "watch_display";
 
 /* Tarea de LVGL: en el núcleo 1; el núcleo 0 queda para radio y servicios. */
 #define LVGL_TASK_PRIO     4
-#define LVGL_TASK_STACK    (10 * 1024)
+/* 16 KB (antes 10 KB). Medido con -fstack-usage (Xtensa): el render de una
+ * imagen dentro de una capa (clip_corner, opacidad) anida un segundo
+ * despacho de dibujo; con lv_log_add (896 B), los glifos y los callbacks de
+ * temporizador de hasta 2,3 KB, 10 KB no dejaban margen y el decodificador
+ * TJpgDec (4272 B en cada imagen, ya retirado, watch_ui.c) lo desbordaba:
+ * docs/F11-ESTABILIDAD.md. El mínimo libre real se registra (stack_watch_cb). */
+#define LVGL_TASK_STACK    (16 * 1024)
 #define LVGL_TASK_CORE     1
+#define STACK_WATCH_MS     30000
 
 /* Brillo inicial: el BSP deja el panel al 100 % (0x51 = 0xFF). Un AMOLED a
  * pleno brillo consume más y no es necesario en interiores. */
@@ -45,6 +54,22 @@ static void rounder_cb(lv_event_t *e)
     a->y1 &= ~1;
     a->x2 |= 1;
     a->y2 |= 1;
+}
+
+/* Se ejecuta en la tarea de LVGL: registra el mínimo de pila libre que ha
+ * llegado a tener (solo cuando baja) para comprobarlo en el reloj. */
+static void stack_watch_cb(lv_timer_t *t)
+{
+    static UBaseType_t s_min = ~(UBaseType_t)0;
+    (void)t;
+    const UBaseType_t free_now = uxTaskGetStackHighWaterMark(NULL);
+    if (free_now < s_min) {
+        s_min = free_now;
+        uint32_t fb = 0, fail = 0;
+        watch_display_lv_mem_stats(&fb, &fail);
+        ESP_LOGI(TAG, "pila de LVGL: minimo libre %u de %u B | reservas de LVGL en RAM interna %lu, fallidas %lu",
+                 (unsigned)free_now, (unsigned)LVGL_TASK_STACK, (unsigned long)fb, (unsigned long)fail);
+    }
 }
 
 static void choose_buffers(watch_display_info_t *info)
@@ -131,6 +156,7 @@ esp_err_t watch_display_start(lv_display_t **out_disp)
     /* La pantalla por defecto del tema claro de LVGL es blanca: se pone en
      * negro antes de encender el brillo para que el arranque no destelle. */
     if (lvgl_port_lock(0)) {
+        lv_timer_create(stack_watch_cb, STACK_WATCH_MS, NULL);
         lv_obj_t *scr = lv_display_get_screen_active(disp);
         lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
         lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);

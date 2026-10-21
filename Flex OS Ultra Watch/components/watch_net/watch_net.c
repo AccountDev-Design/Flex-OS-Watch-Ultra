@@ -24,6 +24,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "nvs.h"
+#include "watch_diag.h"
 #include "watch_time.h"
 #include "ws_logic.h"
 
@@ -356,7 +357,9 @@ static void enable(bool on)
         }
         if (!was || s_st.state == NET_OFF) {
             set_state(NET_IDLE);
+            watch_diag_mem_event("wifi: antes de encender");
             const esp_err_t e = esp_wifi_start(); /* WIFI_EVENT_STA_START -> escaneo */
+            watch_diag_mem_event("wifi: encendido");
             if (e != ESP_OK) {
                 ESP_LOGE(TAG, "esp_wifi_start: %s", esp_err_to_name(e));
                 lock();
@@ -370,6 +373,7 @@ static void enable(bool on)
         sntp_stop();
         s_expect_disc = 0;
         esp_wifi_stop();
+        watch_diag_mem_event("wifi: apagado");
         s_scanning = false;
         s_retry_at_us = 0;
         lock();

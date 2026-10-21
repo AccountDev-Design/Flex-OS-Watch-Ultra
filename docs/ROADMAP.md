@@ -14,6 +14,10 @@ mide más trabajo. Detalle en el historial del final.
 - **2026-10-20, experiencia Watch Ultra (F10):** gestos globales, cajón en panal, 5 esferas con selector, AOD y
   protección AMOLED, Flex Ultra Power Saving, rumbo relativo y correcciones de estabilidad (Wi-Fi, splash). El peso
   total pasa a 138 (`docs/F10-EXPERIENCIA.md`).
+- **2026-10-21, estabilidad (F11):** causas raíz y correcciones del reinicio del editor de esferas (pila de LVGL), de la
+  falta de memoria del navegador (LVGL en PSRAM), de un puntero nulo al cerrar el navegador, diagnóstico de memoria,
+  cajón desde el borde inferior y redibujado solo de lo que cambia. Sin peso nuevo: corrigen tareas que ya contaban
+  (`docs/F11-ESTABILIDAD.md`, pruebas físicas T142-T150).
 
 - **Completado:**
   - Auditoría y plan (F0).
@@ -48,6 +52,9 @@ mide más trabajo. Detalle en el historial del final.
     bordes con apps suspendidas, cajón en panal, 5 esferas con selector y persistencia, panel rápido desde cualquier
     página, AOD, Pixel Shift, atenuación progresiva, Flex Ultra Power Saving, Device Care ampliada, rumbo relativo en
     Flex Compass, splash de 3 s, sin medidor de FPS y cinco causas de fallo del Wi-Fi corregidas.
+  - Estabilidad (F11, `docs/F11-ESTABILIDAD.md`), compilada y probada en el PC: tres fallos fatales con su causa raíz
+    y su prueba de regresión, LVGL fuera de la RAM interna, diagnóstico de memoria, cajón desde el borde inferior y
+    0 px redibujados en reposo.
 - **En curso:** pruebas físicas de F2-F4.
 - **Falta:**
   - Pruebas físicas de F2-F4 sobre el firmware actual (T41-T66 y las T de F2/F3 aún sin resultado).
@@ -57,7 +64,7 @@ mide más trabajo. Detalle en el historial del final.
     Plugin.
   - La seguridad y las pruebas finales; el navegador, probarlo en el reloj con el servicio; el OTA, probarlo en el
     reloj y publicar la clave y el manifiesto (`docs/F7-OTA.md`).
-- **Siguiente:** pruebas físicas de F2-F4 y de F10 (`docs/PRUEBAS-RELOJ.md`, T124-T141 con prioridad al Wi-Fi);
+- **Siguiente:** pruebas físicas de F11 y F10 (`docs/PRUEBAS-RELOJ.md`: primero T142-T150, después T124-T141) y de F2-F4;
   después F5 (Wi-Fi y Flex Phone).
 
 ## Cómo se calcula

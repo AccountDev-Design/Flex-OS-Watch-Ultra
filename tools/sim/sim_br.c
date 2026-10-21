@@ -167,6 +167,24 @@ void sim_br_progressive(bool on)
 
 /* ---- API de watch_browser ---- */
 
+/* Misma regla que el reloj (watch_browser.c), sobre la memoria simulada. */
+bool watch_browser_mem_check(char *why, size_t n)
+{
+    if (sim_mem_internal_free < 10240 + 20 * 1024) {
+        if (why && n) {
+            snprintf(why, n, "Falta RAM interna: %u KB libres", (unsigned)(sim_mem_internal_free / 1024));
+        }
+        return false;
+    }
+    if (sim_mem_psram_block < RX_CAP) {
+        if (why && n) {
+            snprintf(why, n, "Falta PSRAM: bloque %u KB", (unsigned)(sim_mem_psram_block / 1024));
+        }
+        return false;
+    }
+    return true;
+}
+
 esp_err_t watch_browser_open(void)
 {
     if (!s_fake) {
@@ -174,6 +192,9 @@ esp_err_t watch_browser_open(void)
     }
     if (s_open) {
         return ESP_OK;
+    }
+    if (!watch_browser_mem_check(NULL, 0)) {
+        return ESP_ERR_NO_MEM;
     }
     s_rx = malloc(RX_CAP);
     br_net_init(&s_net, &s_io, s_rx, RX_CAP);

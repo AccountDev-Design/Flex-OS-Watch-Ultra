@@ -117,6 +117,7 @@ void app_main(void)
 {
     const esp_app_desc_t *app = esp_app_get_description();
     ESP_LOGI(TAG, "Flex OS Watch Ultra %s (ESP-IDF %s)", app->version, esp_get_idf_version());
+    watch_diag_mem_start(); /* cuenta las reservas fallidas desde el arranque */
     watch_diag_log_mem("inicio");
 
     /* Sin NVS el reloj sigue: ajustes por defecto en RAM (la interfaz avisa). */

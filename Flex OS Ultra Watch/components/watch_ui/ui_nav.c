@@ -33,6 +33,7 @@
 #include "ui_internal.h"
 
 #include "ui_gesture.h"
+#include "watch_diag.h"
 #include "watch_theme.h"
 
 #define NAV_MAX_DEPTH    6
@@ -233,6 +234,13 @@ static void finish(void)
         break;
     default:
         break;
+    }
+    /* Evolución de la memoria al abrir y cerrar (registro; sin reservar nada). */
+    static const char *const kOpText[] = {
+        [NAV_PUSHING] = "abrir", [NAV_POPPING] = "volver", [NAV_EXITING] = "al cajon", [NAV_HOMING] = "a la esfera",
+    };
+    if (s_nav.op < (int)(sizeof(kOpText) / sizeof(kOpText[0])) && kOpText[s_nav.op]) {
+        watch_diag_mem_event(kOpText[s_nav.op]);
     }
     s_nav.op = NAV_IDLE;
     s_nav.reveal = NULL;
@@ -554,6 +562,53 @@ bool ui_nav_push(ui_page_create_t create)
 bool ui_nav_push_from_top(ui_page_create_t create)
 {
     return push(create, true, true);
+}
+
+/* ---- Abrir arrastrando desde el borde inferior (cajón desde la esfera) ----
+ * La página nueva sube siguiendo al dedo; al soltar se completa (PUSHING) o
+ * vuelve hacia abajo y se borra (POPPING en vertical): nunca queda a medias. */
+bool ui_nav_drag_open_begin(ui_page_create_t create)
+{
+    if (!s_nav.screen || s_nav.op != NAV_IDLE || s_nav.depth >= NAV_MAX_DEPTH) {
+        return false;
+    }
+    lv_obj_t *page = create(s_nav.screen);
+    if (!page) {
+        return false;
+    }
+    add_edges(page, create == ui_apps_create);
+    lv_obj_move_to_index(page, s_nav.depth);
+    s_nav.reveal = top_page();
+    s_nav.pages[s_nav.depth] = page;
+    s_nav.creates[s_nav.depth] = create;
+    s_nav.depth++;
+    s_nav.dir = 1;
+    s_nav.vertical = true;
+    s_nav.op = NAV_DRAGGING;
+    place(FLEX_SCREEN_H);
+    return true;
+}
+
+void ui_nav_drag_open_move(int32_t travel)
+{
+    if (s_nav.op == NAV_DRAGGING && s_nav.vertical) {
+        place(FLEX_SCREEN_H - LV_CLAMP(0, travel, FLEX_SCREEN_H));
+    }
+}
+
+void ui_nav_drag_open_end(bool commit, int32_t travel)
+{
+    if (s_nav.op != NAV_DRAGGING || !s_nav.vertical) {
+        return;
+    }
+    travel = LV_CLAMP(0, travel, FLEX_SCREEN_H);
+    if (commit) {
+        animate(NAV_PUSHING, FLEX_SCREEN_H - travel, 0,
+                ui_drag_remaining_ms(travel, FLEX_SCREEN_H, FLEX_ANIM_APP_OPEN_MS, true));
+    } else {
+        animate(NAV_POPPING, FLEX_SCREEN_H - travel, FLEX_SCREEN_H,
+                ui_drag_remaining_ms(travel, FLEX_SCREEN_H, FLEX_ANIM_APP_CLOSE_MS, false));
+    }
 }
 
 bool ui_nav_back(void)

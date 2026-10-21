@@ -183,7 +183,10 @@ extern "C" {
   #define FLEXBR_MAX_TABS       4
   #define FLEXBR_HIST_MAX       80
   #define FLEXBR_BM_MAX         40
-  #define FLEXBR_NET_STACK      8192
+  // RELOJ (F11): 10 KB como el P4. La tarea hace el saludo TLS (mbedTLS con
+  // el paquete de CA) y connect_phase ya ocupa 1,3 KB de marco propio
+  // (medido con -fstack-usage): con 8 KB no quedaba margen.
+  #define FLEXBR_NET_STACK      10240
   #define FLEXBR_OWN_INTERNAL   0u        // los buffers grandes van a PSRAM
 #else  /* ULTRA (P4) y HOST */
   #define FLEXBR_KEYFRAME_MAX   196608   // 192 KB en PSRAM

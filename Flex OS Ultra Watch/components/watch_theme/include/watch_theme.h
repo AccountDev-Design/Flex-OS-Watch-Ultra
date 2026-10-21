@@ -180,6 +180,13 @@ lv_obj_t *watch_theme_section(lv_obj_t *list, const char *text);
  */
 lv_obj_t *watch_theme_info_row(lv_obj_t *list, const char *title, const char *value);
 void watch_theme_info_set(lv_obj_t *row, const char *value);
+/* Cambios de color solo si cambian (F11): aplicar un estilo invalida y
+ * redibuja el objeto aunque el valor sea el mismo; los refrescos periódicos
+ * deben usar estas. */
+void watch_theme_set_text_color(lv_obj_t *obj, uint32_t rgb);
+void watch_theme_set_bg_color(lv_obj_t *obj, uint32_t rgb);
+/** Muestra u oculta solo si cambia (quitar HIDDEN invalida aunque ya se vea). */
+void watch_theme_set_visible(lv_obj_t *obj, bool visible);
 /** Marca la fila como no disponible: apagada, sin toque y con el valor "Pendiente". */
 void watch_theme_row_set_pending(lv_obj_t *row);
 

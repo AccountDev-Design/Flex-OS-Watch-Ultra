@@ -67,6 +67,10 @@ esp_err_t watch_display_set_power(bool on);
 
 void watch_display_get_info(watch_display_info_t *out);
 
+/** Asignador de LVGL (lv_mem_watch.c): reservas que tuvieron que ir a la RAM
+ * interna por no caber en PSRAM, y reservas que fallaron del todo. */
+void watch_display_lv_mem_stats(uint32_t *fallback, uint32_t *failed);
+
 #ifdef __cplusplus
 }
 #endif

@@ -115,10 +115,11 @@ static void collect(dc_metric_t m[M_N], char val[M_N][32])
     const unsigned long up = (unsigned long)(esp_timer_get_time() / 1000000);
     m[M_STAB].pct = -1;
     m[M_STAB].level = (bi && bi->reset_text) ? (bi->reset_ok ? DC_OK : DC_WARN) : DC_OK;
+    /* Al minuto: la fila no se redibuja cada 2 s solo por los segundos. */
     if (up >= 3600) {
         snprintf(val[M_STAB], 32, "%luh %lum", up / 3600, (up % 3600) / 60);
     } else {
-        snprintf(val[M_STAB], 32, "%lum %lus", up / 60, up % 60);
+        snprintf(val[M_STAB], 32, "%lu min", up / 60);
     }
 
     /* Servicios que el reloj sabe comprobar de verdad */
@@ -171,13 +172,21 @@ static void collect(dc_metric_t m[M_N], char val[M_N][32])
     }
 }
 
+/* Texto solo si cambia (F11: sin redibujos en reposo). */
+static void set_txt(lv_obj_t *l, const char *t)
+{
+    if (strcmp(lv_label_get_text(l), t) != 0) {
+        lv_label_set_text(l, t);
+    }
+}
+
 static void refresh(dc_page_t *p)
 {
     dc_metric_t m[M_N];
     char val[M_N][32];
     collect(m, val);
     for (int i = 0; i < M_N; i++) {
-        lv_obj_set_style_bg_color(p->dot[i], flex_color(level_rgb(m[i].level)), 0);
+        watch_theme_set_bg_color(p->dot[i], level_rgb(m[i].level));
         if (strcmp(lv_label_get_text(p->val[i]), val[i]) != 0) {
             lv_label_set_text(p->val[i], val[i]);
         }
@@ -186,15 +195,19 @@ static void refresh(dc_page_t *p)
     if (dc_score(m, M_N, &sc)) {
         const uint32_t c = level_rgb(dc_score_level(sc));
         lv_arc_set_value(p->arc, sc);
-        lv_obj_set_style_arc_color(p->arc, flex_color(c), LV_PART_INDICATOR);
-        lv_label_set_text_fmt(p->score, "%d", sc);
-        lv_label_set_text(p->word, dc_score_word(sc));
-        lv_obj_set_style_text_color(p->word, flex_color(c), 0);
+        if (!lv_color_eq(lv_obj_get_style_arc_color(p->arc, LV_PART_INDICATOR), flex_color(c))) {
+            lv_obj_set_style_arc_color(p->arc, flex_color(c), LV_PART_INDICATOR);
+        }
+        char sb[8];
+        snprintf(sb, sizeof(sb), "%d", sc);
+        set_txt(p->score, sb);
+        set_txt(p->word, dc_score_word(sc));
+        watch_theme_set_text_color(p->word, c);
     } else {
         lv_arc_set_value(p->arc, 0);
-        lv_label_set_text(p->score, "--");
-        lv_label_set_text(p->word, "Sin datos");
-        lv_obj_set_style_text_color(p->word, flex_color(FLEX_C_MUTE), 0);
+        set_txt(p->score, "--");
+        set_txt(p->word, "Sin datos");
+        watch_theme_set_text_color(p->word, FLEX_C_MUTE);
     }
 }
 

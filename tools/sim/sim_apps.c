@@ -116,11 +116,28 @@ void sim_suite_apps(const char *out)
     const uint32_t blocks0 = sim_mem_blocks();
     const int timers0 = sim_timer_count();
 
-    /* ---- Cajón: deslizar la esfera hacia abajo ---- */
-    sim_drag(205, 200, 207, 420, 6, 16);
+    /* ---- Cajón: SOLO desde el borde inferior de la esfera hacia arriba ---- */
+    sim_drag(205, 200, 207, 420, 6, 16); /* hacia abajo desde el centro: nada */
     sim_release();
     sim_run(400);
-    EXPECT(ui_nav_depth() == 2 && ui_apps_find(ui_nav_top(), "Reloj"), "deslizar hacia abajo no abrio el cajon");
+    EXPECT(ui_nav_depth() == 1, "deslizar hacia abajo en el centro abrio algo");
+    sim_drag(205, 300, 205, 60, 8, 16); /* hacia arriba desde el centro: nada */
+    sim_release();
+    sim_run(400);
+    EXPECT(ui_nav_depth() == 1, "deslizar hacia arriba desde el centro abrio el cajon");
+    sim_drag(205, FLEX_SCREEN_H - 20, 380, FLEX_SCREEN_H - 30, 8, 16); /* lateral en la franja: nada */
+    sim_release();
+    sim_run(400);
+    EXPECT(ui_nav_depth() == 1, "un arrastre lateral en la franja inferior abrio el cajon");
+    sim_drag(205, FLEX_SCREEN_H - 20, 205, FLEX_SCREEN_H - 70, 6, 40); /* corto y lento: se cancela */
+    EXPECT(ui_nav_busy() && ui_nav_depth() == 2, "el cajon no sigue al dedo desde abajo");
+    sim_release();
+    sim_run(500);
+    EXPECT(ui_nav_depth() == 1 && !ui_nav_busy(), "un gesto corto desde abajo no se cancelo");
+    sim_drag(205, FLEX_SCREEN_H - 20, 207, 120, 8, 16);
+    sim_release();
+    sim_run(400);
+    EXPECT(ui_nav_depth() == 2 && ui_apps_find(ui_nav_top(), "Reloj"), "deslizar desde abajo no abrio el cajon");
     /* Cada app del cajón muestra su icono original circular (RGB565A8 de
      * 92 px), sin nombre debajo. */
     static const char *const names[] = {"Reloj",    "Calendario", "Calculadora",    "Clima",   "Navegador", "Flex Compass",

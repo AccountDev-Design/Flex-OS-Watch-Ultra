@@ -63,6 +63,8 @@ void sim_set_time(watch_time_state_t st, int y, int mo, int d, int h, int mi, in
 
 /** Veces que LVGL ha enviado algo a la pantalla (para comprobar el reposo). */
 uint32_t sim_flush_count(void);
+/** Píxeles enviados a la pantalla desde el arranque (redibujado real). */
+uint64_t sim_flush_pixels(void);
 
 /** Busca en el árbol de obj una etiqueta con exactamente ese texto. */
 lv_obj_t *sim_find_label(lv_obj_t *obj, const char *text);
@@ -90,6 +92,11 @@ int sim_check_residue(const char *where);
 /* Almacenamiento simulado (sim_main.c) */
 extern watch_storage_info_t sim_stg;
 extern bool sim_stg_fail;
+
+/* Memoria simulada para las guardas (sim_main.c) */
+extern size_t sim_mem_psram_block;
+extern size_t sim_mem_internal_free;
+extern int sim_mem_events;
 
 /* IMU simulado (sim_main.c) */
 extern watch_imu_snapshot_t sim_imu;
@@ -130,6 +137,8 @@ void sim_suite_visual(const char *out);
 void sim_suite_theme(const char *out);
 void sim_suite_face(const char *out);
 void sim_suite_faces(const char *out);
+void sim_suite_redraw(const char *out);
+void sim_suite_mem(const char *out);
 void sim_suite_datetime(const char *out);
 void sim_suite_apps(const char *out);
 void sim_suite_wifi(const char *out);

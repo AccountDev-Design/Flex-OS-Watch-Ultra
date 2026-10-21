@@ -96,7 +96,7 @@ void sim_suite_screen(const char *out)
     sim_run(30000);
     EXPECT(!sim_display_on, "se encendio sola");
     /* un toque la enciende y no hace nada más */
-    sim_drag(330, 260, 120, 262, 6, 16); /* sería "abrir apps" con la pantalla encendida */
+    sim_drag(205, FLEX_SCREEN_H - 20, 205, 150, 6, 16); /* sería "abrir el cajón" con la pantalla encendida */
     sim_release();
     sim_run(400);
     EXPECT(sim_display_on && ui_screen_is_on(), "un toque no encendio la pantalla");

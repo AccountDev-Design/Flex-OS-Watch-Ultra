@@ -3,9 +3,9 @@
  * (FlexOS_Ultra_AppDrawer.h) en forma de panal, como Apple Watch / One UI
  * Watch, para 410x502.
  *
- * Se abre deslizando la esfera hacia abajo (baja desde arriba) y se vuelve a
- * la esfera deslizando hacia arriba desde el borde inferior (o desde
- * cualquiera de los bordes laterales).
+ * Se abre deslizando hacia arriba desde el borde inferior de la esfera (sube
+ * siguiendo al dedo) y se vuelve a la esfera deslizando hacia arriba desde el
+ * borde inferior del cajón (o desde cualquiera de los bordes laterales).
  *
  * De la referencia se conservan los ICONOS ORIGINALES de cada app
  * (flex_app_icons, el dibujo de drawAppIcon) y el punto de estado sobre el
@@ -237,14 +237,23 @@ lv_obj_t *ui_apps_find(lv_obj_t *drawer, const char *name)
     return NULL;
 }
 
-/* ---- Gesto en la esfera: deslizar hacia abajo abre el cajón ---- */
+/* ---- Gesto en la esfera: desde el borde inferior hacia arriba, el cajón ----
+ *
+ * Solo desde la franja inferior (FACE_PULL_H): un deslizamiento que empieza en
+ * el centro no abre nada. El reconocedor (ui_gesture) exige superar el umbral
+ * de movimiento con dirección dominante hacia arriba (si el primer movimiento
+ * claro es lateral o hacia abajo, se descarta) y al soltar decide con el
+ * recorrido (35 %) o la velocidad; si no, el cajón vuelve hacia abajo. Una
+ * franja propia con PRESS_LOCK: el mismo movimiento no lo ve ningún otro gesto
+ * (panel rápido, pulsación larga del selector). */
+#define FACE_PULL_H 56
 
 static struct {
     ui_drag_t drag;
-    bool opened;
-} s_swipe;
+    bool opening;
+} s_pull;
 
-static void face_swipe_cb(lv_event_t *e)
+static void face_pull_cb(lv_event_t *e)
 {
     const lv_event_code_t code = lv_event_get_code(e);
     lv_indev_t *indev = lv_indev_active();
@@ -255,29 +264,53 @@ static void face_swipe_cb(lv_event_t *e)
     lv_indev_get_point(indev, &p);
     const uint32_t now = lv_tick_get();
     if (code == LV_EVENT_PRESSED) {
-        ui_drag_init(&s_swipe.drag, UI_AXIS_Y, +1, FLEX_SCREEN_H);
-        ui_drag_press(&s_swipe.drag, p.x, p.y, now);
-        s_swipe.opened = false;
+        ui_drag_init(&s_pull.drag, UI_AXIS_Y, -1, FLEX_SCREEN_H);
+        ui_drag_press(&s_pull.drag, p.x, p.y, now);
+        s_pull.opening = false;
     } else if (code == LV_EVENT_PRESSING) {
-        /* En cuanto el gesto es claro se abre (sin esperar a soltar). */
-        if (!s_swipe.opened && ui_drag_move(&s_swipe.drag, p.x, p.y, now) == UI_DRAG_ACTIVE &&
-            ui_nav_depth() == 1 && !ui_nav_busy() && !ui_qp_active()) {
-            s_swipe.opened = ui_nav_push_from_top(ui_apps_create);
-            if (s_swipe.opened) {
-                /* que no cuente además como pulsación larga (selector) */
-                lv_indev_wait_release(indev);
+        if (ui_drag_move(&s_pull.drag, p.x, p.y, now) != UI_DRAG_ACTIVE) {
+            return;
+        }
+        if (!s_pull.opening) {
+            if (ui_nav_depth() != 1 || ui_nav_busy() || ui_qp_active()) {
+                s_pull.drag.state = UI_DRAG_REJECTED;
+                return;
+            }
+            s_pull.opening = ui_nav_drag_open_begin(ui_apps_create);
+            if (!s_pull.opening) {
+                s_pull.drag.state = UI_DRAG_REJECTED;
+                return;
             }
         }
+        ui_nav_drag_open_move(s_pull.drag.travel);
     } else {
-        s_swipe.drag.state = UI_DRAG_IDLE;
+        const ui_drag_result_t r = ui_drag_release(&s_pull.drag, p.x, p.y, now);
+        if (s_pull.opening) {
+            ui_nav_drag_open_end(r == UI_DRAG_COMMIT, s_pull.drag.travel);
+            s_pull.opening = false;
+        }
     }
 }
 
 void ui_apps_attach(lv_obj_t *face_page)
 {
-    lv_obj_add_flag(face_page, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(face_page, face_swipe_cb, LV_EVENT_PRESSED, NULL);
-    lv_obj_add_event_cb(face_page, face_swipe_cb, LV_EVENT_PRESSING, NULL);
-    lv_obj_add_event_cb(face_page, face_swipe_cb, LV_EVENT_RELEASED, NULL);
-    lv_obj_add_event_cb(face_page, face_swipe_cb, LV_EVENT_PRESS_LOST, NULL);
+    lv_obj_t *strip = lv_obj_create(face_page);
+    lv_obj_remove_style_all(strip);
+    lv_obj_set_size(strip, FLEX_SCREEN_W, FACE_PULL_H);
+    lv_obj_set_pos(strip, 0, FLEX_SCREEN_H - FACE_PULL_H);
+    lv_obj_remove_flag(strip, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(strip, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK);
+    lv_obj_add_event_cb(strip, face_pull_cb, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(strip, face_pull_cb, LV_EVENT_PRESSING, NULL);
+    lv_obj_add_event_cb(strip, face_pull_cb, LV_EVENT_RELEASED, NULL);
+    lv_obj_add_event_cb(strip, face_pull_cb, LV_EVENT_PRESS_LOST, NULL);
+    /* Indicio visual: una pequeña asa abajo */
+    lv_obj_t *pill = lv_obj_create(strip);
+    lv_obj_remove_style_all(pill);
+    lv_obj_set_size(pill, 40, 5);
+    lv_obj_set_style_radius(pill, 3, 0);
+    lv_obj_set_style_bg_color(pill, flex_color(FLEX_C_TXT2), 0);
+    lv_obj_set_style_bg_opa(pill, LV_OPA_50, 0);
+    lv_obj_align(pill, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_remove_flag(pill, LV_OBJ_FLAG_CLICKABLE);
 }

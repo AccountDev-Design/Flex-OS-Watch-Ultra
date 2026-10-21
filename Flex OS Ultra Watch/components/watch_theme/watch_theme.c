@@ -542,3 +542,31 @@ void watch_theme_info_set(lv_obj_t *row, const char *value)
         lv_label_set_text(v, value ? value : "");
     }
 }
+
+void watch_theme_set_text_color(lv_obj_t *obj, uint32_t rgb)
+{
+    const lv_color_t c = flex_color(rgb);
+    if (obj && !lv_color_eq(lv_obj_get_style_text_color(obj, LV_PART_MAIN), c)) {
+        lv_obj_set_style_text_color(obj, c, 0);
+    }
+}
+
+void watch_theme_set_bg_color(lv_obj_t *obj, uint32_t rgb)
+{
+    const lv_color_t c = flex_color(rgb);
+    if (obj && !lv_color_eq(lv_obj_get_style_bg_color(obj, LV_PART_MAIN), c)) {
+        lv_obj_set_style_bg_color(obj, c, 0);
+    }
+}
+
+void watch_theme_set_visible(lv_obj_t *obj, bool visible)
+{
+    if (!obj || visible == !lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN)) {
+        return;
+    }
+    if (visible) {
+        lv_obj_remove_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    }
+}

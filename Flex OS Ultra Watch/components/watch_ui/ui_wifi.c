@@ -265,19 +265,17 @@ static void refresh(wifi_page_t *p)
     char b[64];
     state_text(&s, b, sizeof(b));
     watch_theme_info_set(p->state, b);
-    lv_obj_set_style_text_color(lv_obj_get_child(p->state, 1),
-                                flex_color(s.state == NET_CONNECTED ? FLEX_C_OK
-                                           : s.state == NET_FAILED  ? FLEX_C_WARN
-                                                                    : FLEX_C_TXT),
-                                0);
+    watch_theme_set_text_color(lv_obj_get_child(p->state, 1), s.state == NET_CONNECTED ? FLEX_C_OK
+                                                              : s.state == NET_FAILED  ? FLEX_C_WARN
+                                                                                       : FLEX_C_TXT);
     if (s.state == NET_CONNECTED) {
         watch_theme_info_set(p->ip, s.ip);
-        lv_obj_remove_flag(p->ip, LV_OBJ_FLAG_HIDDEN);
+        watch_theme_set_visible(p->ip, true);
         watch_theme_info_set(p->time, s.time_synced ? "Sincronizada" : "Pidiendo la hora");
-        lv_obj_remove_flag(p->time, LV_OBJ_FLAG_HIDDEN);
+        watch_theme_set_visible(p->time, true);
     } else {
-        lv_obj_add_flag(p->ip, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(p->time, LV_OBJ_FLAG_HIDDEN);
+        watch_theme_set_visible(p->ip, false);
+        watch_theme_set_visible(p->time, false);
     }
     /* Forget: el aviso caduca */
     if (p->forget[0] && lv_tick_elaps(p->forget_at) >= FORGET_MS) {

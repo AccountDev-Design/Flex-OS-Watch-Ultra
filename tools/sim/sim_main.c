@@ -1,3 +1,4 @@
+#include <pthread.h>
 /*
  * Vista previa y pruebas de PC de la interfaz (tools/sim).
  *
@@ -36,6 +37,13 @@ static struct {
 
 static uint32_t tick_cb(void) { return s_ms; }
 
+static uint64_t s_flush_px;
+
+uint64_t sim_flush_pixels(void)
+{
+    return s_flush_px;
+}
+
 static void flush_cb(lv_display_t *d, const lv_area_t *a, uint8_t *px)
 {
     const uint16_t *src = (const uint16_t *)px;
@@ -44,6 +52,7 @@ static void flush_cb(lv_display_t *d, const lv_area_t *a, uint8_t *px)
         memcpy(&sim_fb[y * SIM_W + a->x1], &src[(y - a->y1) * aw], (size_t)aw * 2);
     }
     s_flushes++;
+    s_flush_px += (uint64_t)aw * (uint64_t)lv_area_get_height(a);
     lv_display_flush_ready(d);
 }
 
@@ -432,6 +441,31 @@ void watch_diag_mem(watch_mem_report_t *out)
     out->psram_largest = 6900 * 1024;
 }
 
+/* Memoria simulada para las guardas (sim_mem_*): por defecto, abundante. */
+size_t sim_mem_psram_block = 6900u * 1024;
+size_t sim_mem_internal_free = 120u * 1024;
+int sim_mem_events;
+
+void watch_diag_mem_start(void)
+{
+}
+
+void watch_diag_mem_event(const char *what)
+{
+    (void)what;
+    sim_mem_events++;
+}
+
+bool watch_mem_psram_fits(size_t n)
+{
+    return sim_mem_psram_block >= n;
+}
+
+bool watch_mem_internal_fits(size_t n, size_t min_left)
+{
+    return sim_mem_internal_free >= n + min_left;
+}
+
 void sim_scenario(int pct, int mv, batt_state_t st, batt_level_t lv, bool vbus)
 {
     memset(&sim_power, 0, sizeof(sim_power));
@@ -447,7 +481,60 @@ void sim_scenario(int pct, int mv, batt_state_t st, batt_level_t lv, bool vbus)
     sim_power.track.vbat_mv = mv;
 }
 
+/* Medida de la pila (SIM_STACK_PROBE=1): la vista previa corre en un hilo con
+ * la pila "pintada" y se mide la parte que llegó a usarse. En el reloj la tarea
+ * de LVGL tiene 10 KB (watch_display.c); en el PC los marcos son de x86-64
+ * (orden de magnitud parecido, no idéntico). */
+static uint8_t *s_stk;
+static size_t s_stk_n;
+#define STK_PAT 0xA5
+
+static size_t stack_used(void)
+{
+    if (!s_stk) {
+        return 0;
+    }
+    size_t i = 0;
+    while (i < s_stk_n && s_stk[i] == STK_PAT) {
+        i++;
+    }
+    return s_stk_n - i;
+}
+
+static int real_main(int argc, char **argv);
+
+static void *probe_thread(void *arg)
+{
+    char **argv = arg;
+    static int rc;
+    int argc = 0;
+    while (argv[argc]) {
+        argc++;
+    }
+    rc = real_main(argc, argv);
+    return &rc;
+}
+
 int main(int argc, char **argv)
+{
+    if (!getenv("SIM_STACK_PROBE")) {
+        return real_main(argc, argv);
+    }
+    s_stk_n = 4u * 1024 * 1024;
+    s_stk = aligned_alloc(4096, s_stk_n);
+    memset(s_stk, STK_PAT, s_stk_n);
+    pthread_attr_t at;
+    pthread_attr_init(&at);
+    pthread_attr_setstack(&at, s_stk, s_stk_n);
+    pthread_t th;
+    pthread_create(&th, &at, probe_thread, argv);
+    void *rc;
+    pthread_join(th, &rc);
+    printf("pila maxima de la vista previa: %zu B\n", stack_used());
+    return *(int *)rc;
+}
+
+static int real_main(int argc, char **argv)
 {
     const char *out = argc > 1 ? argv[1] : ".";
     lv_init();
@@ -475,11 +562,17 @@ int main(int argc, char **argv)
         {"navegador", sim_suite_browser},
         {"relay", sim_suite_relay},
         {"ota", sim_suite_ota},
+        {"reposo", sim_suite_redraw},
+        {"memoria", sim_suite_mem},
         {"mono", sim_suite_monkey},      {"visual", sim_suite_visual}, {"banco", sim_suite_bench},
     };
     for (size_t i = 0; i < sizeof(suites) / sizeof(suites[0]); i++) {
         if (!only || strcmp(only, suites[i].name) == 0 || strcmp(suites[i].name, "arranque") == 0) {
+            const size_t before = stack_used();
             suites[i].run(out);
+            if (s_stk && stack_used() > before) {
+                printf("  [pila: %s sube el maximo a %zu B]\n", suites[i].name, stack_used());
+            }
         }
     }
 

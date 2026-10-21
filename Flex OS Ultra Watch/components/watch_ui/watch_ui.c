@@ -17,6 +17,9 @@
 
 #include "ui_internal.h"
 #include "watch_theme.h"
+#if LV_USE_TJPGD
+#include "libs/tjpgd/lv_tjpgd.h"
+#endif
 
 #define SPLASH_OUT_MS (FLEX_ANIM_BOOT_FADE_MS / 3)
 #define SPLASH_MIN_MS 3000u
@@ -79,6 +82,18 @@ void watch_ui_boot_splash(void)
     if (s_splash.scr) {
         return;
     }
+#if LV_USE_TJPGD
+    /* Fuera de la cadena de decodificadores de imagen de LVGL: el navegador
+     * decodifica sus JPEG con TJpgDec directamente (ui_jpeg.c) y ninguna
+     * imagen de LVGL es JPEG. Registrado el último, LVGL lo consultaba el
+     * PRIMERO para cada imagen que dibujaba, y su decoder_info reserva 4272 B
+     * de pila (uint8_t workb[4096], marco fijo al entrar aunque la imagen no
+     * sea JPEG; medido con -fstack-usage) en el punto más profundo del
+     * render. Con la pila de 10 KB de la tarea de LVGL eso desbordaba en
+     * pantallas con muchas imágenes dentro de capas (selector de esferas con
+     * el cajón detrás): reinicio del 2026-10-20 (docs/F11-ESTABILIDAD.md). */
+    lv_tjpgd_deinit();
+#endif
     watch_theme_init();
     lv_obj_t *scr = lv_obj_create(NULL);
     lv_obj_remove_style_all(scr);

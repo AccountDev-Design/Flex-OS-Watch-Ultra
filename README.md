@@ -24,7 +24,8 @@ Detalles, archivos generados y avisos: [`Flex OS Ultra Watch/README.md`](Flex%20
 **Novedades de F10** ([docs/F10-EXPERIENCIA.md](docs/F10-EXPERIENCIA.md)), compiladas y probadas en el PC, pendientes
 de probar en el reloj (T124-T141):
 
-- Gestos: hacia abajo en la esfera, el cajón; desde el borde inferior, a la esfera sin cerrar la app; borde derecho,
+- Gestos: en la esfera, desde el borde inferior hacia arriba, el cajón (F11); en una app, desde el borde inferior, a la
+  esfera sin cerrar la app; borde derecho,
   atrás; borde izquierdo, al cajón; borde superior, el panel rápido desde cualquier página.
 - Cajón en panal con iconos circulares sin nombres.
 - Cinco esferas y selector (mantener pulsada la esfera o Ajustes > Pantalla).

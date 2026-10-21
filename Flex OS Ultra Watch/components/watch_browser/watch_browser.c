@@ -417,6 +417,7 @@ void watch_browser_persist(bool force)
 static void task(void *arg)
 {
     (void)arg;
+    UBaseType_t min_stack = ~(UBaseType_t)0;
     while (!s_stop) {
         const uint32_t now = io_now(NULL);
         if (now - s_be_ms >= BACKEND_MS) {
@@ -425,20 +426,70 @@ static void task(void *arg)
         }
         br_net_set_online(s_net, watch_browser_online());
         uint32_t w = br_net_step(s_net);
+        const UBaseType_t st = uxTaskGetStackHighWaterMark(NULL);
+        if (st < min_stack) { /* tras la conexión TLS, el mínimo real de pila */
+            min_stack = st;
+            if (st < 2048) {
+                ESP_LOGW(TAG, "pila de la sesion: solo %u B libres de %u", (unsigned)st, (unsigned)FLEXBR_NET_STACK);
+            }
+        }
         if (w > 100) {
             w = 100; /* se mira el Wi-Fi y la orden de parar a menudo */
         }
         vTaskDelay(pdMS_TO_TICKS(w ? w : 1));
     }
     br_net_shutdown(s_net);
-    s_task = NULL;
+    ESP_LOGI(TAG, "sesion cerrada: pila minima libre %u de %u B", (unsigned)min_stack, (unsigned)FLEXBR_NET_STACK);
+    /* La tarea suelta lo suyo al terminar: cerrar no espera en la de LVGL. */
+    heap_caps_free(s_rx);
+    s_rx = NULL;
+    __atomic_store_n(&s_task, (TaskHandle_t)NULL, __ATOMIC_RELEASE);
     vTaskDelete(NULL);
+}
+
+/* Lo que la sesión necesita de verdad (F11) antes de reservar nada:
+ *  - RAM interna: la pila de la tarea en UN bloque y, además, MIN_INTERNAL
+ *    libres para lwIP, el Wi-Fi, el BLE y la interfaz (no se le da todo);
+ *  - PSRAM: el búfer de recepción en un bloque contiguo y MIN_PSRAM de margen
+ *    (TLS de mbedTLS, lienzo de la página, el resto del sistema).
+ * Se mide con las API de ESP-IDF; why dice qué falta y cuánto. */
+static char s_mem_why[96];
+
+bool watch_browser_mem_check(char *why, size_t n)
+{
+    const size_t in_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    const size_t in_block = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
+    const size_t ps_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    const size_t ps_block = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
+    const size_t need_ps = (s_rx ? 0 : RX_CAP) + (s_net ? 0 : sizeof(*s_net));
+    const char *msg = NULL;
+    if (in_block < FLEXBR_NET_STACK + 512 || in_free < FLEXBR_NET_STACK + MIN_INTERNAL) {
+        snprintf(s_mem_why, sizeof(s_mem_why), "Falta RAM interna: %u KB libres (bloque %u KB)",
+                 (unsigned)(in_free / 1024), (unsigned)(in_block / 1024));
+        msg = s_mem_why;
+    } else if (ps_block < (s_rx ? 0 : RX_CAP) || ps_free < need_ps + MIN_PSRAM) {
+        snprintf(s_mem_why, sizeof(s_mem_why), "Falta PSRAM: %u KB libres (bloque %u KB)", (unsigned)(ps_free / 1024),
+                 (unsigned)(ps_block / 1024));
+        msg = s_mem_why;
+    }
+    if (msg) {
+        ESP_LOGW(TAG, "sesion no abierta: %s", msg);
+        if (why && n) {
+            snprintf(why, n, "%s", msg);
+        }
+        return false;
+    }
+    return true;
 }
 
 esp_err_t watch_browser_open(void)
 {
     if (s_task) {
-        return ESP_OK;
+        /* Cerrándose (cierre asíncrono): se reabrirá cuando termine. */
+        return s_stop ? ESP_ERR_INVALID_STATE : ESP_OK;
+    }
+    if (!watch_browser_mem_check(NULL, 0)) {
+        return ESP_ERR_NO_MEM; /* nada reservado: el reloj sigue igual */
     }
     if (!s_set_loaded) {
         load_settings();
@@ -467,6 +518,8 @@ esp_err_t watch_browser_open(void)
     s_stop = false;
     if (xTaskCreate(task, "watch_br", FLEXBR_NET_STACK, NULL, TASK_PRIO, &s_task) != pdPASS) {
         s_task = NULL;
+        heap_caps_free(s_rx); /* lo reservado se devuelve: nada queda a medias */
+        s_rx = NULL;
         return ESP_ERR_NO_MEM;
     }
     ESP_LOGI(TAG, "sesión abierta: %u B de sesión + %u B de recepción en PSRAM", (unsigned)sizeof(*s_net),
@@ -480,16 +533,11 @@ void watch_browser_close(void)
     if (!s_task) {
         return;
     }
+    /* Sin esperar: antes se esperaba hasta 3 s DENTRO de la tarea de LVGL
+     * (la interfaz se congelaba al cerrar el navegador). La tarea de red
+     * termina sola (como mucho 100 ms de espera más lo que tarde en cerrar el
+     * socket) y libera el búfer de recepción (task()). */
     s_stop = true;
-    for (int i = 0; i < 300 && s_task; i++) { /* la referencia esperaba hasta 3 s */
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-    if (s_task) {
-        ESP_LOGW(TAG, "la tarea de red no terminó: el búfer se conserva");
-        return;
-    }
-    heap_caps_free(s_rx);
-    s_rx = NULL;
 }
 
 void watch_browser_source(watch_browser_source_t *out)
@@ -513,7 +561,7 @@ void watch_browser_source(watch_browser_source_t *out)
 
 br_net_t *watch_browser_net(void)
 {
-    return s_task ? s_net : NULL;
+    return s_task && !s_stop ? s_net : NULL;
 }
 
 /* ======================= probar el servidor ======================= */

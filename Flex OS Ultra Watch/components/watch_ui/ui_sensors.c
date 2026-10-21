@@ -41,6 +41,8 @@ typedef struct {
     lv_obj_t *note;
     int32_t pitch, roll;  /* décimas de grado */
     bool have_tilt;
+    int32_t dot_dx, dot_dy; /* posición dibujada del punto (px desde el centro) */
+    bool dot_flat, dot_shown;
     uint32_t gen;
     bool imu_on;
 } sen_t;
@@ -61,6 +63,26 @@ static void fmt_milli(char *buf, size_t n, int32_t v, const char *unit, int deci
     } else {
         snprintf(buf, n, "%s%ld,%01ld %s", sign, (long)(a / 1000), (long)(a % 1000 / 100), unit);
     }
+}
+
+/* Posición del punto en px (dentro del círculo) y si está "plano". */
+static void dot_pos(const sen_t *s, int32_t *odx, int32_t *ody, bool *oflat)
+{
+    const int32_t r = LEVEL_D / 2 - 2;
+    const int32_t span = r - DOT_R - 2;
+    int32_t dx = s->roll * span / TILT_MAX, dy = s->pitch * span / TILT_MAX;
+    const int32_t d2 = dx * dx + dy * dy;
+    if (d2 > span * span) {
+        int32_t d = 1;
+        while (d * d < d2) {
+            d++;
+        }
+        dx = dx * span / d;
+        dy = dy * span / d;
+    }
+    *odx = dx;
+    *ody = dy;
+    *oflat = s->roll < FLAT_D10 && s->roll > -FLAT_D10 && s->pitch < FLAT_D10 && s->pitch > -FLAT_D10;
 }
 
 static void level_draw_cb(lv_event_t *e)
@@ -100,22 +122,11 @@ static void level_draw_cb(lv_event_t *e)
     ln.p2.y = cy + r;
     lv_draw_line(layer, &ln);
 
-    if (!s->have_tilt) {
+    if (!s->dot_shown) {
         return;
     }
-    const int32_t span = r - DOT_R - 2;
-    int32_t dx = s->roll * span / TILT_MAX, dy = s->pitch * span / TILT_MAX;
-    /* dentro del círculo */
-    const int32_t d2 = dx * dx + dy * dy;
-    if (d2 > span * span) {
-        int32_t d = 1;
-        while (d * d < d2) {
-            d++;
-        }
-        dx = dx * span / d;
-        dy = dy * span / d;
-    }
-    const bool flat = s->roll < FLAT_D10 && s->roll > -FLAT_D10 && s->pitch < FLAT_D10 && s->pitch > -FLAT_D10;
+    const int32_t dx = s->dot_dx, dy = s->dot_dy;
+    const bool flat = s->dot_flat;
     lv_draw_rect_dsc_t dot;
     lv_draw_rect_dsc_init(&dot);
     dot.bg_color = flex_color(flat ? FLEX_C_OK : FLEX_C_ACCENT);
@@ -133,11 +144,14 @@ static void refresh(sen_t *s)
     const bool live = have && im.state == IMU_RUNNING && im.samples > 0;
     if (!have || im.state == IMU_ABSENT || im.state == IMU_ERROR) {
         watch_theme_info_set(s->tilt, "No disponible");
-        lv_label_set_text(s->note, im.state == IMU_ERROR ? "El IMU responde pero no se pudo configurar."
-                                                         : "El IMU (QMI8658, 0x6B) no responde.");
-        lv_obj_remove_flag(s->note, LV_OBJ_FLAG_HIDDEN);
+        const char *nt = im.state == IMU_ERROR ? "El IMU responde pero no se pudo configurar."
+                                               : "El IMU (QMI8658, 0x6B) no responde.";
+        if (strcmp(lv_label_get_text(s->note), nt) != 0) {
+            lv_label_set_text(s->note, nt);
+        }
+        watch_theme_set_visible(s->note, true);
     } else {
-        lv_obj_add_flag(s->note, LV_OBJ_FLAG_HIDDEN);
+        watch_theme_set_visible(s->note, false);
     }
     if (live && watch_imu_generation() != s->gen) {
         s->gen = watch_imu_generation();
@@ -156,7 +170,20 @@ static void refresh(sen_t *s)
         }
         fmt_milli(buf, sizeof(buf), im.temp_c100 * 10, "°C", 1);
         watch_theme_info_set(s->temp, buf);
-        lv_obj_invalidate(s->level);
+        /* El nivel se redibuja solo si el punto se mueve de verdad (antes,
+         * con cada muestra: ~2 pantallas por segundo con el reloj quieto). */
+        int32_t dx = 0, dy = 0;
+        bool flat = false;
+        if (s->have_tilt) {
+            dot_pos(s, &dx, &dy, &flat);
+        }
+        if (s->have_tilt != s->dot_shown || dx != s->dot_dx || dy != s->dot_dy || flat != s->dot_flat) {
+            s->dot_shown = s->have_tilt;
+            s->dot_dx = dx;
+            s->dot_dy = dy;
+            s->dot_flat = flat;
+            lv_obj_invalidate(s->level);
+        }
     } else if (have && im.state == IMU_STARTING) {
         watch_theme_info_set(s->tilt, "Arrancando…");
     }

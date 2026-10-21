@@ -35,8 +35,8 @@ recorrido o velocidad, rechazo si el primer movimiento va por el otro eje).
 
 | Gesto | Dónde | Resultado |
 |---|---|---|
-| Deslizar hacia abajo | esfera (fuera de la franja superior) | Cajón de aplicaciones, que baja desde arriba |
-| Desde el borde inferior hacia arriba (30 px) | cualquier página | A la esfera **sin cerrar la app**: sus páginas quedan suspendidas, ocultas y con su estado; abrirla de nuevo desde el cajón la retoma tal cual |
+| Desde el borde inferior hacia arriba (56 px) | esfera | Cajón de aplicaciones, que sube siguiendo al dedo (**cambiado en F11**: antes era deslizar hacia abajo desde el centro; ver `F11-ESTABILIDAD.md` §5) |
+| Desde el borde inferior hacia arriba (30 px) | cualquier página salvo la esfera | A la esfera **sin cerrar la app**: sus páginas quedan suspendidas, ocultas y con su estado; abrirla de nuevo desde el cajón la retoma tal cual |
 | Desde el borde derecho hacia la izquierda (20 px) | cualquier página | Atrás un nivel (la página sale por la izquierda) |
 | Desde el borde izquierdo hacia la derecha (20 px) | cualquier página | Sale de la app al cajón (si no se abrió desde el cajón, se crea uno debajo); en el propio cajón, a la esfera |
 | Desde el borde superior hacia abajo (22 px) | cualquier página | Panel rápido encima; la página de debajo no cambia |
@@ -213,7 +213,7 @@ giroscopio sobre la gravedad, así que vale también con el reloj inclinado.
 | T127 | Contraseña mala; red con señal débil (lejos del router) | "Contraseña incorrecta" sin reintentos; con señal débil, reintentos sin bloqueos de la interfaz |
 | T128 | Abrir el Clima y el navegador con Wi-Fi y BLE a la vez | Sin congelaciones de la interfaz |
 | T129 | Arranque | El logotipo "Flex OS" se ve unos 3 s y la esfera entra con fundido; sin medidor de FPS abajo |
-| T130 | Esfera: deslizar hacia abajo | Baja el cajón en panal; iconos circulares nítidos, sin nombres, centrados |
+| T130 | Esfera: deslizar desde el borde inferior hacia arriba (F11) | Sube el cajón en panal siguiendo al dedo; iconos circulares nítidos, sin nombres, centrados |
 | T131 | En una app: borde derecho → izquierda; borde izquierdo → derecha; borde inferior → arriba; borde superior → abajo | Atrás; al cajón; a la esfera (reabrirla desde el cajón la retoma igual); panel rápido encima |
 | T132 | Listas y teclados cerca de los bordes (Ajustes, Notas, contraseña Wi-Fi) | Desplazar y escribir no dispara gestos por error |
 | T133 | Mantener pulsada la esfera, recorrer y elegir cada esfera; reiniciar | Vistas previas reales; la elegida se conserva tras reiniciar |

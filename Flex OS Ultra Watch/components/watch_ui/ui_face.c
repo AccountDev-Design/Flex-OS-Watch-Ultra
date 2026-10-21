@@ -27,8 +27,8 @@
  * fecha sobre negro, sin fondo, sin IMU y sin complicaciones que sondeen.
  *
  * Mantener pulsada la esfera abre el selector (ui_face_editor.c); deslizar
- * hacia abajo abre el cajón de aplicaciones; arrastrar desde la franja
- * superior, el panel rápido.
+ * hacia arriba desde el borde inferior abre el cajón de aplicaciones;
+ * arrastrar desde la franja superior, el panel rápido.
  */
 #include "ui_internal.h"
 
@@ -560,10 +560,12 @@ lv_obj_t *ui_face_create_style(lv_obj_t *parent, int style, bool interactive)
     }
 
     if (interactive) {
-        /* Arrastrar hacia abajo desde arriba abre el panel rápido; deslizar
-         * hacia abajo en el resto, el cajón; mantener pulsado, el selector. */
+        /* Arrastrar hacia abajo desde arriba abre el panel rápido; hacia
+         * arriba desde el borde inferior, el cajón; mantener pulsado, el
+         * selector. */
         ui_qp_attach(scr);
         ui_apps_attach(scr);
+        lv_obj_add_flag(scr, LV_OBJ_FLAG_CLICKABLE); /* recibe la pulsación larga */
         lv_obj_add_event_cb(scr, long_press_cb, LV_EVENT_LONG_PRESSED, NULL);
     }
     f->timer = lv_timer_create(tick_cb, FACE_TICK_MS, f);

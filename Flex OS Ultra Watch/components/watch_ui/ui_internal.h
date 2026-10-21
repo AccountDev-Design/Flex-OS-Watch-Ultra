@@ -68,6 +68,12 @@ bool ui_nav_back(void);
 void ui_nav_home(void);
 /** El cajón de aplicaciones baja desde arriba (gesto hacia abajo en la esfera). */
 bool ui_nav_push_from_top(ui_page_create_t create);
+/** Abre una página que sube siguiendo al dedo (cajón desde el borde inferior
+ * de la esfera): begin al reconocerse el gesto, move con el recorrido, end al
+ * soltar (commit: se completa; si no, baja y se borra). */
+bool ui_nav_drag_open_begin(ui_page_create_t create);
+void ui_nav_drag_open_move(int32_t travel);
+void ui_nav_drag_open_end(bool commit, int32_t travel);
 /** A la esfera SIN cerrar la app: sus páginas quedan suspendidas (ocultas,
  * con su estado) hasta que se vuelve a abrir esa app (ui_nav_open_app). */
 bool ui_nav_suspend(bool animated);
@@ -195,7 +201,7 @@ void ui_phone_text(const char *in, char *out, size_t n, const lv_font_t *font);
 void ui_phone_when(uint32_t when_s, char *b, size_t n);
 /** Estado corto del enlace ("Conectado", "Buscando"...) y su color. */
 const char *ui_phone_chip(const watch_phone_status_t *s, uint32_t *rgb);
-void ui_apps_attach(lv_obj_t *face_page); /**< deslizar la esfera hacia abajo abre el cajón */
+void ui_apps_attach(lv_obj_t *face_page); /**< deslizar hacia arriba desde el borde inferior de la esfera abre el cajón */
 /** Icono de la app con ese nombre en el cajón (o NULL): accesibilidad y pruebas. */
 lv_obj_t *ui_apps_find(lv_obj_t *drawer, const char *name);
 lv_obj_t *ui_stopwatch_create(lv_obj_t *parent);
@@ -277,6 +283,8 @@ void ui_analog_set(lv_obj_t *dial, int hour, int minute, int second);
 lv_obj_t *ui_face_editor_create(lv_obj_t *parent);
 /** Abre el selector; from_settings: al aplicar vuelve a la esfera. */
 void ui_face_editor_open(bool from_settings);
+/** Vistas previas renderizadas desde el arranque (diagnóstico y pruebas). */
+uint32_t ui_face_editor_previews_made(void);
 
 /* ---- Panel rápido (ui_qp) ---- */
 /** Arrastre hacia abajo que abre el panel (franja superior de cualquier página). */

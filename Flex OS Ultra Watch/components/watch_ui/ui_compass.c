@@ -21,6 +21,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 #include "qmi8658.h"
 #include "watch_imu.h"
 #include "watch_theme.h"
@@ -42,10 +43,18 @@ static void back_cb(lv_event_t *e)
     ui_nav_back();
 }
 
+/* Texto y color solo si cambian (F11: sin redibujos en reposo). */
 static void set(lv_obj_t *row, const char *v, uint32_t rgb)
 {
     watch_theme_info_set(row, v);
-    lv_obj_set_style_text_color(lv_obj_get_child(row, 1), flex_color(rgb), 0);
+    watch_theme_set_text_color(lv_obj_get_child(row, 1), rgb);
+}
+
+static void set_txt(lv_obj_t *l, const char *t)
+{
+    if (strcmp(lv_label_get_text(l), t) != 0) {
+        lv_label_set_text(l, t);
+    }
 }
 
 /* "-1,5°" desde décimas de grado */
@@ -66,25 +75,33 @@ static void refresh(cmp_page_t *p)
     if (live && im.heading.valid) {
         const int deg = (int)lroundf(im.heading.yaw) % 360;
         snprintf(b, sizeof(b), "%d°", deg);
-        lv_label_set_text(p->deg, b);
+        set_txt(p->deg, b);
         snprintf(b, sizeof(b), "± %d° · %s", (int)lroundf(im.heading.drift),
                  im.heading.bias_ok ? "giroscopio calibrado" : "quieto 1 s para calibrar");
-        lv_label_set_text(p->unc, b);
-        lv_obj_set_style_text_color(p->unc, flex_color(im.heading.drift > 20.0f ? FLEX_C_WARN : FLEX_C_TXT2), 0);
-        /* La aguja apunta a la referencia (0°): gira al revés que el reloj. */
+        set_txt(p->unc, b);
+        watch_theme_set_text_color(p->unc, im.heading.drift > 20.0f ? FLEX_C_WARN : FLEX_C_TXT2);
+        /* La aguja apunta a la referencia (0°): gira al revés que el reloj.
+         * Solo se mueve si su punta cambia de píxel. */
         const float a = -im.heading.yaw * 3.14159265f / 180.0f;
         const float r = DIAL_D / 2.0f;
-        p->npts[0].x = r;
-        p->npts[0].y = r;
-        p->npts[1].x = r + sinf(a) * r * 0.82f;
-        p->npts[1].y = r - cosf(a) * r * 0.82f;
-        lv_line_set_points(p->needle, p->npts, 2);
-        lv_obj_remove_flag(p->needle, LV_OBJ_FLAG_HIDDEN);
+        const int32_t tx = (int32_t)lroundf(r + sinf(a) * r * 0.82f), ty = (int32_t)lroundf(r - cosf(a) * r * 0.82f);
+        if (tx != (int32_t)p->npts[1].x || ty != (int32_t)p->npts[1].y || p->npts[0].x == 0) {
+            p->npts[0].x = (int32_t)r;
+            p->npts[0].y = (int32_t)r;
+            p->npts[1].x = tx;
+            p->npts[1].y = ty;
+            lv_line_set_points(p->needle, p->npts, 2);
+        }
+        if (lv_obj_has_flag(p->needle, LV_OBJ_FLAG_HIDDEN)) {
+            lv_obj_remove_flag(p->needle, LV_OBJ_FLAG_HIDDEN);
+        }
         set(p->head, "Relativo (sin Norte)", FLEX_C_TXT2);
     } else {
-        lv_label_set_text(p->deg, "--");
-        lv_label_set_text(p->unc, live ? "Sin vertical clara: sujeta el reloj" : "Esperando al IMU");
-        lv_obj_add_flag(p->needle, LV_OBJ_FLAG_HIDDEN);
+        set_txt(p->deg, "--");
+        set_txt(p->unc, live ? "Sin vertical clara: sujeta el reloj" : "Esperando al IMU");
+        if (!lv_obj_has_flag(p->needle, LV_OBJ_FLAG_HIDDEN)) {
+            lv_obj_add_flag(p->needle, LV_OBJ_FLAG_HIDDEN);
+        }
         set(p->head, "No disponible", FLEX_C_MUTE);
     }
     const char *stxt = st == IMU_RUNNING ? "Conectado"
