@@ -1,7 +1,7 @@
 # Hoja de ruta — Flex OS Watch Ultra
 
 ```
-PROGRESO GLOBAL: 50,7 %   [██████████░░░░░░░░░░]   49,3 % pendiente   (verificado en el reloj: 7,6 %)
+PROGRESO GLOBAL: 51,7 %   [██████████░░░░░░░░░░]   48,3 % pendiente   (verificado en el reloj: 7,3 %)
 ```
 
 El alcance ha crecido dos veces y ningún trabajo hecho se perdió. Cuando crece el alcance, el porcentaje baja porque
@@ -18,6 +18,10 @@ mide más trabajo. Detalle en el historial del final.
   falta de memoria del navegador (LVGL en PSRAM), de un puntero nulo al cerrar el navegador, diagnóstico de memoria,
   cajón desde el borde inferior y redibujado solo de lo que cambia. Sin peso nuevo: corrigen tareas que ya contaban
   (`docs/F11-ESTABILIDAD.md`, pruebas físicas T142-T150).
+- **2026-10-23, Galería compartida (FG):** la Galería entra en el reloj como cliente del Flex Web Server de Flex OS
+  Ultra, de Flex Cloud (con la misma Flex Account) y del teléfono a través del P4, sin nube, cuenta, biblioteca ni
+  servidor propios. El peso total pasa a 144. Resuelve D9 y D11 y da contenido a F8.1 y F8.2 (`docs/GALERIA.md`,
+  pruebas físicas T151-T166).
 
 - **Completado:**
   - Auditoría y plan (F0).
@@ -55,6 +59,10 @@ mide más trabajo. Detalle en el historial del final.
   - Estabilidad (F11, `docs/F11-ESTABILIDAD.md`), compilada y probada en el PC: tres fallos fatales con su causa raíz
     y su prueba de regresión, LVGL fuera de la RAM interna, diagnóstico de memoria, cajón desde el borde inferior y
     0 px redibujados en reposo.
+  - Galería compartida (FG, `docs/GALERIA.md`), compilada y probada en el PC y contra los servidores reales del P4 y
+    de Flex Cloud: fotos del reloj, de Flex OS Ultra, de Flex Cloud y del teléfono por el P4, origen Automático con
+    reglas explícitas, miniaturas y visor por flujo, transferencias reanudables con integridad y Flex Account del
+    reloj (F8.1, F8.2).
 - **En curso:** pruebas físicas de F2-F4.
 - **Falta:**
   - Pruebas físicas de F2-F4 sobre el firmware actual (T41-T66 y las T de F2/F3 aún sin resultado).
@@ -64,12 +72,12 @@ mide más trabajo. Detalle en el historial del final.
     Plugin.
   - La seguridad y las pruebas finales; el navegador, probarlo en el reloj con el servicio; el OTA, probarlo en el
     reloj y publicar la clave y el manifiesto (`docs/F7-OTA.md`).
-- **Siguiente:** pruebas físicas de F11 y F10 (`docs/PRUEBAS-RELOJ.md`: primero T142-T150, después T124-T141) y de F2-F4;
+- **Siguiente:** pruebas físicas de F11, la Galería y F10 (`docs/PRUEBAS-RELOJ.md`: primero T142-T150, después T151-T166 y T124-T141) y de F2-F4;
   después F5 (Wi-Fi y Flex Phone).
 
 ## Cómo se calcula
 
-- Cada fase tiene un **peso fijo** desde la Fase 0 (suma 100). La ampliación del alcance del 2026-10-16 añadió 22 (total 122) y la del 2026-10-20 (fase FP) otras 8 (total 130). El global es la suma de puntos dividida entre el peso total. Dentro de cada fase, las tareas reparten ese peso según su complejidad e importancia.
+- Cada fase tiene un **peso fijo** desde la Fase 0 (suma 100). La ampliación del alcance del 2026-10-16 añadió 22 (total 122), la del 2026-10-20 (fase FP) otras 8 (total 130), F10 otras 8 (total 138) y la Galería (FG, 2026-10-23) otras 6 (total 144). El global es la suma de puntos dividida entre el peso total. Dentro de cada fase, las tareas reparten ese peso según su complejidad e importancia.
 - Una tarea vale:
   - **0 %** si solo está planificada o escrita sin compilar;
   - **50 %** si compila y pasa las pruebas de PC;
@@ -156,11 +164,11 @@ Limitación conocida: sin servidor de renderizado o sin el móvil, no hay web. N
 | F7.2 Manifiesto propio (`flex_os_watch_ultra`) + firma de la imagen (ECDSA P-256 sobre producto, versión, tamaño y SHA-256) | 3 | 🟡 falta T110 (y publicar la clave y el manifiesto) |
 | F7.3 Interfaz de actualización | 1 | 🟡 faltan T110, T112, T114 |
 
-### F8 · Cuenta, nube, seguridad y cierre — 0 / 10
+### F8 · Cuenta, nube, seguridad y cierre — 1,5 / 10
 | Tarea | Peso | Estado |
 |---|---|---|
-| F8.1 Flex Account, solo si se adapta con seguridad | 2 | ❓ D11 |
-| F8.2 Flex Cloud, solo si es útil | 1 | ❓ D11 |
+| F8.1 Flex Account: vinculación por código de `FlexOS_Account.cpp` pasada a C, sobre ES256 verificado, TLS verificado, credencial aleatoria en la NVS como el P4 (`watch_gallery/gal_acct.c`, `docs/GALERIA.md` §6) | 2 | 🟡 falta T160 (servicio de producción) |
+| F8.2 Flex Cloud: biblioteca, cuota, descargas y subidas reanudables de la misma cuenta (lo usa la Galería) | 1 | 🟡 faltan T161-T162 |
 | F8.3 Protección de credenciales: cifrado de NVS y flash | 2 | ❓ D12 |
 | F8.4 Consumo medido y optimización (pantalla, radio, sondeos) | 2 | ⬜ |
 | F8.5 Pruebas finales: 24 h de estabilidad, memoria y regresión completa en el reloj | 3 | ⬜ |
@@ -199,6 +207,14 @@ Limitación conocida: sin servidor de renderizado o sin el móvil, no hay web. N
 Fuera del peso (correcciones de tareas que ya contaban): Wi-Fi (F5.1, T124-T128), splash (F3.4, T129), medidor de FPS
 retirado.
 
+### FG · Galería compartida con Flex OS Ultra y Flex Cloud (`docs/GALERIA.md`) — 3 / 6
+| Tarea | Peso | Estado |
+|---|---|---|
+| FG.1 Fuentes y conexión: cliente del Flex Web Server del P4 (código, sesión, biblioteca), pasarela al teléfono, Flex Cloud; Automático con reglas y estabilidad, salud, esperas y recuperación | 2 | 🟡 faltan T153-T154, T159, T162-T163 |
+| FG.2 Miniaturas y visor: JPEG por flujo y por bandas (TJpgDec de la ROM con escala), miniaturas fijadas, 2x, memoria acotada | 1,5 | 🟡 faltan T151-T152, T155, T165 |
+| FG.3 Transferencias: descargas y subidas reanudables con integridad (SHA-256, CRC32), papeleras, cola con reintentos limitados | 1,5 | 🟡 faltan T156-T158, T161, T164 |
+| FG.4 App Galería: rejilla virtual, pestañas, origen, visor con gestos, información, emparejamiento, cuenta, transferencias e icono original | 1 | 🟡 faltan T151, T153, T155 |
+
 ### Acordado sin peso asignado
 
 Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y quedará anotado en el historial.
@@ -211,7 +227,7 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 
 - Samsung DeX / Flex DeX y modo PC.
 - Cámara.
-- Galería y edición de imágenes o vídeo.
+- Edición de imágenes o vídeo (la Galería entra sin edición: FG).
 - Multimedia de escritorio.
 - Servidor web de subida.
 - Kiosco.
@@ -231,9 +247,9 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | D6 | Topología prioritaria: misma red, hotspot del móvil o punto de acceso del reloj. El navegador por el teléfono necesita misma red o hotspot del móvil (el control va por BLE; las imágenes, por Wi-Fi) | F5.5 |
 | D7 | Protocolo: Flex Link v2 (en claro) o v3 cifrado | F5.6 |
 | D8 | ✅ Resuelta (2026-10-20): la app vive en `FlexPhone/` de este repositorio, con varios dispositivos y el modelo «reloj» en el `HELLO` | — |
-| D9 | ¿Comunicación directa reloj ↔ Flex OS Ultra (P4)? | F5 |
+| D9 | ✅ Resuelta (2026-10-23, Galería): el reloj es un cliente más del Flex Web Server del P4 en la red local (código de 6 cifras y sesión, como el móvil o el PC). No se cambia nada en el P4 | — |
 | D10 | ~~Funciones de Flex Phone en el reloj más allá de las notificaciones~~ Resuelta por el prompt maestro (2026-10-16): todo lo que el protocolo y la app ofrecen (estado, capacidades, multimedia, hacer sonar, respuestas) | F5.4 |
-| D11 | Flex Account / Flex Cloud en el reloj (modelo, servidor) | F8.1, F8.2 |
+| D11 | ✅ Resuelta (2026-10-23, Galería): la misma Flex Account (vinculación por código como el P4, `model` ESP32-S3) y la API de Flex Cloud de Flex Developer Studio, sin cuenta ni nube propias | — |
 | D12 | Cifrado de flash y NVS desde el principio | F8.3 |
 | D13 | Uso de audio, motor y microSD | sin peso |
 | D14 | Nombre "Liquid Glass" (denominación de terceros) en el producto | F3 |
@@ -285,3 +301,4 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | 2026-10-20 | **50,8 %** | +3,5 | F7 OTA (50 % de 7): motor de `FlexOS_OTA` en C puro (`watch_ota/ota_core.c`: versiones con SemVer, manifiesto con JSON leído de verdad, instalación paso a paso sobre un transporte abstracto; 492 comprobaciones con los vectores de la especificación y el motor entero contra un servidor y una flash falsos), firma ECDSA P-256 obligatoria con el mbedTLS de IDF (la referencia no verificaba), comprobación de producto, chip y versión de la imagen, reversión automática con confirmación a los 60 s, reglas de batería, Ajustes > Actualizaciones, pantalla de instalación y avisos; `tools/ota/ota_sign.py` comprobado con la imagen real; suite "ota". Sin clave ni manifiesto publicados todavía: el reloj comprueba pero no instala. Puntos 62 / 122 |
 | 2026-10-20 | **50,8 %** | 0 (peso +8, puntos +4) | **Ampliación del alcance**: fase FP (integración con Flex Phone, peso 8). La app Android entra en `FlexPhone/`, importada sin cambios y modificada encima. Las tres tareas compilan y pasan las pruebas de PC, así que cuentan al 50 %: FP.1 (50 % de 3), FP.2 (50 % de 2) y FP.3 (50 % de 3). Pruebas que respaldan ese 50 %: 2756 comprobaciones de PC con ASan, vista previa completa y con sanitizadores (semillas 2, 9 y 13), 244 pruebas Kotlin, interoperabilidad con el motor C del reloj y el firmware compilado. El APK no se construyó aquí. Además se corrigió un fallo de navegación anterior (tocar un aviso con el panel rápido abierto dejaba la página debajo del panel). Puntos 66 / 130. Verificado en el reloj: 10,5 / 130 = 8,1 % |
 | 2026-10-20 | **50,7 %** | −0,1 (peso +8, puntos +4) | **Ampliación del alcance**: fase F10 (experiencia Watch Ultra, peso 8). Las cinco tareas compilan con ESP-IDF 5.5.5 y pasan las pruebas de PC (3019 comprobaciones con ASan/UBSan) y la vista previa completa, también con sanitizadores (semillas 2, 9 y 13) y la batería nueva `esferas`: 50 % de 8. Además, sin peso: cinco causas de fallo del Wi-Fi corregidas en `watch_net` (sin reproducir en el reloj), splash de 3 s como mínimo y medidor de FPS fuera de la interfaz. Puntos 70 / 138. Verificado en el reloj: 10,5 / 138 = 7,6 % |
+| 2026-10-23 | **51,7 %** | +1,0 (peso +6, puntos +4,5) | **Ampliación del alcance**: fase FG (Galería compartida, peso 6), a petición del usuario. Sus cuatro tareas compilan con ESP-IDF 5.5.5 y pasan las pruebas de PC: 344 comprobaciones de la Galería además de las 3019 del firmware, con ASan/UBSan; 40 de extremo a extremo contra el Flex Web Server real del P4 y el servidor real de Flex Cloud; vista previa completa con la batería nueva «galeria», también con sanitizadores. Cuentan al 50 % de 6. Además F8.1 (50 % de 2) y F8.2 (50 % de 1), que la Galería implementa (D11 resuelta). Puntos 74,5 / 144. Verificado en el reloj: 10,5 / 144 = 7,3 % |

@@ -18,6 +18,7 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | T116-T123 | [FLEX-PHONE-INTEGRACION.md](FLEX-PHONE-INTEGRACION.md) (dispositivos en Flex Phone y navegador por el teléfono) |
 | **T124-T141** | [F10-EXPERIENCIA.md](F10-EXPERIENCIA.md) §9 (Wi-Fi, splash, gestos, cajón, esferas, AOD, ahorro, Device Care, rumbo relativo). **Empieza por T124-T125 (Wi-Fi)** |
 | **T142-T150** | [F11-ESTABILIDAD.md](F11-ESTABILIDAD.md) §9 (editor de esferas, Wi-Fi, navegador y memoria, gesto del cajón, redibujado, volcado de fallos). **Empieza por T142 (el fallo del vídeo) y T149 si algo reinicia** |
+| **T151-T166** | [GALERIA.md](GALERIA.md) §10 (Galería: fotos del reloj, Flex OS Ultra, Flex Cloud y el teléfono por el P4). **Empieza por T151-T152 (memoria y JPEG grandes)** |
 | Flash de 32 MB | [FLASH-32MB.md](FLASH-32MB.md) |
 
 **Verificado en el reloj hasta ahora** (fotos y vídeo del 2026-10-15): pantalla, táctil, LVGL y la sonda de 32 MB (T10). Lo demás no. Compilar y pasar las pruebas de PC no prueba el reloj: cada resultado que me envíes es lo que convierte una tarea del 50 % al 100 %.
@@ -159,6 +160,19 @@ Studio. Después, reloj y teléfono en la **misma red Wi-Fi**, y el reloj empare
 | T121 | Parar el relay desde el teléfono | El reloj dice «Servidor del navegador detenido en el teléfono» y no lo vuelve a encender solo. Con «Solo Flex Phone» no se conecta a otro servidor |
 | T122 | Apagar el Wi-Fi del teléfono con el relay encendido | El motivo real aparece en el reloj. Al volver, la sesión se rehace sola |
 | T123 | 30 min navegando por el teléfono y luego cerrar y abrir el navegador 10 veces | Sin reinicios. La PSRAM libre en `flex://about` (telemetría) vuelve al mismo valor. Copiar las líneas `watch_browser` y `watch_phone` |
+
+## 14. Galería (`GALERIA.md` §10)
+
+Hace falta un Flex OS Ultra en la **misma red Wi-Fi** con su Flex Web Server encendido («Conectar con el móvil»
+enseña la dirección y el código). Para T160-T161, una Flex Account en la web de Flex Developer Studio.
+
+| Pruebas | Qué mirar |
+|---|---|
+| T151-T152 | Abrir la Galería con fotos en `/Imagenes` (y un JPEG de 4000 × 3000): miniaturas y visor sin reinicio. Copiar las líneas `watch_gallery` (memoria al abrir) y anotar cuánto tarda la foto grande |
+| T153-T155 | Emparejar con el P4 (primero un código malo), comparar con la Galería del P4, visor con deslizar, doble toque y arrastre |
+| T156-T159 | Descarga con corte de red, subida al P4, papeleras y fotos del teléfono por el P4 |
+| T160-T162 | Vincular la Flex Account (producción), fotos de Flex Cloud Web, subida del reloj, Automático apagando y encendiendo el P4 |
+| T163-T166 | Sin Wi-Fi y vuelta, ir a la esfera durante una descarga, abrir y cerrar 10 veces (PSRAM en Device Care), HTTPS real. Copiar la línea «fin: … pila libre mínima» |
 
 ## Qué enviarme
 

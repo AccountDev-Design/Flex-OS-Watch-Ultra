@@ -53,10 +53,11 @@ centro, ampliado al mismo tamaño) con el del reloj (104 px, 8×8). Se genera co
 
 ### 1.4 Qué iconos y por qué
 
-- **14 originales:** Reloj, Calendario, Calculadora, Clima, Música, Notas, Flex Phone, Navegador, Flex Compass,
-  Device Care, Almacenamiento, Paint, Flex Store y Ajustes.
-- **No se incluyen:** Modo PC (DeX: excluido por el proyecto), Juegos, Cámara, Galería y Multimedia (apps excluidas en
-  el reloj, `INVENTARIO-APPS.md` §3).
+- **15 originales:** Reloj, Calendario, Calculadora, Clima, Música, Notas, Flex Phone, Navegador, Flex Compass,
+  Device Care, Almacenamiento, Paint, Flex Store, Ajustes y Galería.
+- **No se incluyen:** Modo PC (DeX: excluido por el proyecto), Juegos, Cámara y Multimedia (apps excluidas en el
+  reloj, `INVENTARIO-APPS.md` §3). La **Galería** se añadió el 2026-10-23 con su icono original (`app_galeria.bin`,
+  `docs/GALERIA.md`); al regenerar, los demás iconos salieron idénticos byte a byte.
 - **1 nuevo, Sensores:** existe solo en el reloj (F4.4). Se dibuja con el mismo lenguaje: `iconBase` con brillo
   superior, glifo blanco hecho con `arcStroke` y `fillCircle`, sobre verde. No se presenta como original.
 - **Flex Phone, tal cual:** su comentario dice "dos arcos de enlace a la derecha del aparato", pero

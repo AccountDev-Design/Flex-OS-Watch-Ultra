@@ -19,7 +19,16 @@ Detalles, archivos generados y avisos: [`Flex OS Ultra Watch/README.md`](Flex%20
 
 ## Estado
 
-**Progreso global: 50,7 %** (49,3 % pendiente), del que un 7,6 % está verificado en el reloj. El alcance se amplió el 2026-10-16 (iconos y fondos originales, todas las apps del inventario, BLE) y el 2026-10-20 (integración con Flex Phone y experiencia Watch Ultra, F10): ver el historial de [docs/ROADMAP.md](docs/ROADMAP.md).
+**Progreso global: 51,7 %** (48,3 % pendiente), del que un 7,3 % está verificado en el reloj. El alcance se amplió el 2026-10-16 (iconos y fondos originales, todas las apps del inventario, BLE), el 2026-10-20 (integración con Flex Phone y experiencia Watch Ultra, F10) y el 2026-10-23 (Galería compartida, FG): ver el historial de [docs/ROADMAP.md](docs/ROADMAP.md).
+
+**Galería** ([docs/GALERIA.md](docs/GALERIA.md)), compilada y probada en el PC y contra los servidores reales del P4
+y de Flex Cloud, pendiente de probar en el reloj (T151-T166):
+
+- Fotos del reloj, de **Flex OS Ultra** (cliente de su Flex Web Server: código de 6 cifras, como el móvil), de
+  **Flex Cloud** (la misma Flex Account, cuota y biblioteca que la web) y del teléfono a través del P4.
+- Origen Automático con reglas explícitas, o el que se elija. Siempre se dice de dónde sale cada foto.
+- Miniaturas y visor por flujo con 2x, descargas y subidas reanudables con integridad, sin servidor, cuenta ni nube
+  propias.
 
 **Novedades de F10** ([docs/F10-EXPERIENCIA.md](docs/F10-EXPERIENCIA.md)), compiladas y probadas en el PC, pendientes
 de probar en el reloj (T124-T141):

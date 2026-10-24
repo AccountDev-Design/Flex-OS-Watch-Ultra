@@ -15,7 +15,7 @@ No hay más apps nativas. Las apps instalables de Flex Store (`FlexOS_AppVM`, by
 | # | App (id) | Icono original | Diseño y funciones reales en Flex OS Ultra | Hardware | Conectividad | En el reloj | Estado |
 |---|---|---|---|---|---|---|---|
 | 0 | **Reloj** (`IC_RELOJ`) | esfera blanca con agujas (Icons.h:105) | Pestañas Hora / Cronómetro / Temporizador. El temporizador es un marcador "próximamente" (AppFramework.h:600-630, AppChrono.h) | RTC | — | App **Reloj** que agrupa Alarmas, Cronómetro y Temporizador (los tres con motor real, F4.3: el reloj ya supera a la referencia) | 🟡 |
-| 1 | Galería (`IC_GALERIA`) | flor de 8 pétalos (Icons.h:120) | Miniaturas, visor, edición de foto y vídeo (AppGallery.h, GalleryEdit.h, GalleryVideoEdit.h) | PSRAM 32 MB, cámara | — | Sin cámara ni microSD montada; la edición no cabe en 8 MB. Visor de imágenes de LittleFS posible más adelante | ⛔ (edición) · ⬜ (visor, ❓ D13) |
+| 1 | **Galería** (`IC_GALERIA`) | flor de 8 pétalos (Icons.h:120) | Miniaturas, visor, edición de foto y vídeo (AppGallery.h, GalleryEdit.h, GalleryVideoEdit.h) | PSRAM 32 MB, cámara | Wi-Fi: Flex Web Server del P4, Flex Cloud | **Galería compartida** sin edición (`docs/GALERIA.md`): fotos del reloj, de Flex OS Ultra, de Flex Cloud (misma Flex Account) y del teléfono por el P4; miniaturas, visor con 2x, descargas y subidas reanudables. La edición no cabe en 8 MB | ⛔ (edición) · 🟡 (Galería, FG) |
 | 2 | Multimedia (`IC_MULTIMEDIA`) | triángulo de reproducción (Icons.h:133) | Reproductor de vídeo/audio de escritorio (AppMultimedia.h, MediaViewer.h) | decodificador de vídeo del P4 | — | Excluido en F0 (vídeo); el control de la música del móvil va en Música | ⛔ |
 | 3 | **Almacenamiento** (`IC_ALMACEN`) | carpeta con nube (Icons.h:139) | Uso del almacenamiento, aviso de poco espacio, explorador (AppStorage.h, AppFiles.h) | flash | — | Ajustes > Almacenamiento (F4.6) + explorador de LittleFS | 🟡 (uso y explorador, F9.6) |
 | 4 | Modo PC (`IC_MODOPC`) | monitor (Icons.h:150) | Samsung DeX / escritorio (DeX.h, DeXDraw.h, DeXInput.h) | HDMI/USB host | — | **Excluido por decisión del proyecto** | ⛔ |
@@ -60,7 +60,7 @@ IMU siguen igual).
 | Función | Motivo |
 |---|---|
 | **Modo PC / Samsung DeX** (`DeX.h`, `DeXDraw.h`, `DeXInput.h`, mosaico `QSID_DEX`) | Exclusión explícita del proyecto: no tiene sentido en un reloj. No se migra, no se reserva memoria ni se dibuja su icono |
-| Cámara, Galería con edición, Multimedia de vídeo | Sin cámara; la edición de imagen y vídeo necesita la PSRAM de 32 MB del P4 |
+| Cámara, edición de la Galería, Multimedia de vídeo | Sin cámara; la edición de imagen y vídeo necesita la PSRAM de 32 MB del P4. La Galería sin edición sí está (FG) |
 | Juegos (Jumper) | Recrea Geometry Dash: riesgo de propiedad intelectual (F0) |
 | Servidor web de subida, kiosco | Funciones de escritorio |
 | Drivers del P4/C6 (BNO085, esp-hosted, DSI, GT911) | Hardware que el reloj no tiene |
