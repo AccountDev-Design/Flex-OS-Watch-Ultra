@@ -548,6 +548,7 @@ static const struct {
     {IC_AJUSTES, "app_ajustes"},     {IC_CALC, "app_calc"},           {IC_CALEND, "app_calend"},
     {IC_CLIMA, "app_clima"},         {IC_FLEXSTORE, "app_flexstore"}, {IC_FLEXPHONE, "app_flexphone"},
     {IC_DEVCARE, "app_devcare"},     {IC_MUSICA, "app_musica"},       {IC_W_SENSORES, "app_sensores"},
+    {IC_GALERIA, "app_galeria"},
 };
 
 static int write_file(const char *dir, const char *name, const char *ext, const void *data, size_t n)

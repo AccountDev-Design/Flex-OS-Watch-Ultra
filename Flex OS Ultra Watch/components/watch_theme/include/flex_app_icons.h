@@ -9,8 +9,9 @@
  * 24,8 KB cada uno) y LVGL los dibuja tal cual: sin escalar, sin decodificar,
  * sin máscaras de recorte y sin reservar memoria.
  *
- * Los iconos de Modo PC (DeX), Juegos, Cámara, Galería y Multimedia no se
- * incluyen: esas apps están excluidas en el reloj (docs/INVENTARIO-APPS.md).
+ * Los iconos de Modo PC (DeX), Juegos, Cámara y Multimedia no se incluyen:
+ * esas apps están excluidas en el reloj (docs/INVENTARIO-APPS.md). La
+ * Galería sí (visor y fuentes compartidas, sin edición: docs/GALERIA.md).
  */
 #pragma once
 
@@ -39,6 +40,7 @@ typedef enum {
     FLEX_APP_FLEX_STORE,
     FLEX_APP_AJUSTES,
     FLEX_APP_SENSORES, /**< solo en el reloj: icono nuevo con el lenguaje de la referencia */
+    FLEX_APP_GALERIA,  /**< IC_GALERIA original (flor de 8 pétalos) */
     FLEX_APP_COUNT_
 } flex_app_t;
 

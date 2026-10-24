@@ -147,6 +147,7 @@ void sim_suite_notes(const char *out);
 void sim_suite_weather(const char *out);
 void sim_suite_browser(const char *out);
 void sim_suite_ota(const char *out);
+void sim_suite_gallery(const char *out);
 /* OTA simulado (sim_ota.c): motor y firma reales, servidor y flash falsos */
 void sim_ota_reset(void);
 void sim_ota_publish(const char *ver, bool good_sig, const char *changelog);

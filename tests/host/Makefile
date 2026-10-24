@@ -58,8 +58,41 @@ MBT_CC := $(CC)
 include mbedtls_host.mk
 .DEFAULT_GOAL := all
 
-.PHONY: all test clean peer
-all: test
+.PHONY: all test clean peer gallery gallery-skip
+all: test $(if $(LVGL_DIR),gallery,gallery-skip)
+
+# Galería (watch_gallery): binario aparte porque decodifica con el TJpgDec de
+# LVGL (en el reloj, el de la ROM del S3). Sin LVGL_DIR se dice, no se da por pasada.
+#   make -C tests/host gallery LVGL_DIR=/ruta/a/lvgl-9.5.0
+GAL_DIR := $(FW)/components/watch_gallery
+GAL_CORE := $(filter-out $(GAL_DIR)/watch_gallery.c,$(wildcard $(GAL_DIR)/*.c)) # sin la capa de ESP-IDF
+GAL_SRC := test_gallery.c gal_fake.c gal_fake_eco.c $(GAL_CORE) \
+           $(FW)/components/watch_files/files_logic.c $(FW)/components/watch_files/flexfs.c \
+           $(FW)/components/watch_ota/ota_sig.c
+GAL_INC := -I. -I$(GAL_DIR)/include -I$(GAL_DIR) -I$(FW)/components/watch_files/include \
+           -I$(FW)/components/watch_ota/include
+TJPGD_FLAGS = -DLV_CONF_SKIP -DLV_USE_TJPGD=1 -I$(LVGL_DIR) -I$(LVGL_DIR)/src
+$(BUILD)/tjpgd.o: $(LVGL_DIR)/src/libs/tjpgd/tjpgd.c
+	$(CC) -std=c11 -O2 -w $(TJPGD_FLAGS) -c $< -o $@
+$(BUILD)/test_gallery: $(GAL_SRC) $(wildcard $(GAL_DIR)/include/*.h) $(GAL_DIR)/gal_priv.h gal_fake.h gal_fake_eco.h \
+                       $(BUILD)/tjpgd.o $(MBT_LIB)
+	$(CC) $(CFLAGS) $(TJPGD_FLAGS) $(GAL_INC) $(MBT_INC) $(GAL_SRC) $(BUILD)/tjpgd.o $(MBT_LIB) -lm -o $@
+gallery: $(BUILD)/test_gallery
+	./$(BUILD)/test_gallery fixtures
+	./gallery_checks.sh
+gallery-skip:
+	@echo "=== Galería: pruebas OMITIDAS (define LVGL_DIR con la ruta a LVGL 9.5.0) ==="
+
+# Galería contra los servidores REALES: el Flex Web Server del P4 (de REF_DIR,
+# compilado fuera de su repositorio) y Flex Cloud (CLOUD_DIR, Node). Ver gallery_e2e.sh.
+GAL_E2E_SRC := gal_e2e.c gal_posix_io.c gal_fake.c $(GAL_CORE) \
+               $(FW)/components/watch_files/files_logic.c $(FW)/components/watch_files/flexfs.c \
+               $(FW)/components/watch_ota/ota_sig.c
+$(BUILD)/gal_e2e: $(GAL_E2E_SRC) $(wildcard $(GAL_DIR)/include/*.h) gal_posix_io.h $(BUILD)/tjpgd.o $(MBT_LIB)
+	$(CC) $(CFLAGS) $(TJPGD_FLAGS) $(GAL_INC) $(MBT_INC) $(GAL_E2E_SRC) $(BUILD)/tjpgd.o $(MBT_LIB) -lm -o $@
+.PHONY: gallery-e2e
+gallery-e2e: $(BUILD)/gal_e2e
+	./gallery_e2e.sh
 
 # El motor del reloj como proceso de PC, para la prueba de interoperabilidad
 # con el lado Android (FlexPhone: WatchPeerInteropTest).

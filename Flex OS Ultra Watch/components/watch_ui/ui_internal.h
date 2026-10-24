@@ -160,6 +160,10 @@ void ui_note_open(const char *path);
 lv_obj_t *ui_paint_create(lv_obj_t *parent);        /**< app Paint: galería de /Paint (F9.11) */
 lv_obj_t *ui_paint_canvas_create(lv_obj_t *parent); /**< lienzo del dibujo de ui_paint_open() */
 void ui_paint_open(const char *path);
+/** Pinta el dibujo .fxp encajado en un lienzo cw x ch (miniaturas de la Galería). false si no es válido. */
+bool ui_paint_thumb(lv_obj_t *canvas, int cw, int ch, const char *path);
+/* Galería (ui_gallery.c, motor en watch_gallery) */
+lv_obj_t *ui_gallery_create(lv_obj_t *parent);     /**< app Galería: reloj, Flex OS Ultra, Flex Cloud y Flex Phone */
 lv_obj_t *ui_files_create(lv_obj_t *parent);       /**< explorador (carpeta de ui_files_open_dir, o "/") */
 lv_obj_t *ui_file_opts_create(lv_obj_t *parent);   /**< opciones del archivo de ui_file_options() */
 lv_obj_t *ui_file_rename_create(lv_obj_t *parent);

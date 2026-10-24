@@ -562,6 +562,7 @@ static int real_main(int argc, char **argv)
         {"navegador", sim_suite_browser},
         {"relay", sim_suite_relay},
         {"ota", sim_suite_ota},
+        {"galeria", sim_suite_gallery},
         {"reposo", sim_suite_redraw},
         {"memoria", sim_suite_mem},
         {"mono", sim_suite_monkey},      {"visual", sim_suite_visual}, {"banco", sim_suite_bench},

@@ -133,6 +133,11 @@ static bool render(lv_obj_t *canvas, int cw, int ch, const char *path, fit_t *ou
     return true;
 }
 
+bool ui_paint_thumb(lv_obj_t *canvas, int cw, int ch, const char *path)
+{
+    return render(canvas, cw, ch, path, NULL);
+}
+
 /* ======================= Galería ======================= */
 
 typedef struct {
