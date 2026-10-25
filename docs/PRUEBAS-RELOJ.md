@@ -19,6 +19,7 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | **T124-T141** | [F10-EXPERIENCIA.md](F10-EXPERIENCIA.md) §9 (Wi-Fi, splash, gestos, cajón, esferas, AOD, ahorro, Device Care, rumbo relativo). **Empieza por T124-T125 (Wi-Fi)** |
 | **T142-T150** | [F11-ESTABILIDAD.md](F11-ESTABILIDAD.md) §9 (editor de esferas, Wi-Fi, navegador y memoria, gesto del cajón, redibujado, volcado de fallos). **Empieza por T142 (el fallo del vídeo) y T149 si algo reinicia** |
 | **T151-T166** | [GALERIA.md](GALERIA.md) §10 (Galería: fotos del reloj, Flex OS Ultra, Flex Cloud y el teléfono por el P4). **Empieza por T151-T152 (memoria y JPEG grandes)** |
+| T185-T204 | [BIENESTAR.md](BIENESTAR.md) (app Bienestar: pasos, entrenamientos, funciones automáticas, gesto, memoria y batería). **Empieza por T185-T186 (arranque y sensor)** |
 | Flash de 32 MB | [FLASH-32MB.md](FLASH-32MB.md) |
 
 **Verificado en el reloj hasta ahora** (fotos y vídeo del 2026-10-15): pantalla, táctil, LVGL y la sonda de 32 MB (T10). Lo demás no. Compilar y pasar las pruebas de PC no prueba el reloj: cada resultado que me envíes es lo que convierte una tarea del 50 % al 100 %.
@@ -199,6 +200,35 @@ OK, FALLO o NO REALIZADA.
 | T182 | Panel rápido: cada mosaico | Wi-Fi y Bluetooth se encienden y apagan (cian = encendido); AOD no se puede con el ahorro; Reloj abre la app; la batería abre Ajustes > Batería |
 | T183 | Panel rápido: brillo de un extremo a otro | El brillo cambia en vivo, mínimo 10 %, y se mantiene tras reiniciar |
 | T184 | 10 min de uso normal por todas las pantallas nuevas | Sin reinicios ni pantallas en blanco. Copiar el registro serie completo |
+
+## 16. Bienestar (`BIENESTAR.md`)
+
+Lleva el reloj en la muñeca de siempre, bien ajustado. Cuenta los pasos tú (en voz alta o con un contador) y anota
+la cifra del reloj **antes y después** de cada prueba (app Bienestar, tarjeta Pasos). Marca OK, FALLO o NO
+REALIZADA. Las cifras de T187-T192 sirven para ajustar los umbrales del detector: envíalas aunque salgan bien.
+
+| # | Prueba | Resultado esperado |
+|---|---|---|
+| T185 | Arrancar con el monitor abierto | Líneas `watch_act`: `servicio de actividad: motor … B (RAM interna), caché … B (PSRAM), anillo 64 muestras` y `en marcha: IMU contando…`. Bienestar está en el cajón con su icono de tres anillos. Copiar las líneas |
+| T186 | Reloj sobre la mesa 2 min; Bienestar > Ajustes > Diagnóstico del sensor | 0 pasos nuevos. "Muestras" sube unas 49 por segundo (unas 25 tras 30 s quieto, "Lectura" 40 ms); "Perdidas" e "Inválidas" en 0 o casi. Anotar todos los valores |
+| T187 | Caminar 100 pasos a ritmo normal, tres veces | Cada vez 100 ± 5. Anotar las tres cifras |
+| T188 | 100 pasos despacio (paseo) y 100 deprisa | Anotar las dos cifras (se espera ± 10 % despacio) |
+| T189 | 100 pasos con esa mano en el bolsillo y 100 empujando un carro o con la mano apoyada | Anotar: se esperan pasos de menos (límite conocido) |
+| T190 | Entrenar > Correr al aire libre; correr 200 pasos contados | 200 ± 10; la sesión dice pasos, distancia (est.) y ritmo. Anotar |
+| T191 | 10 min sentado escribiendo o con el móvil | Anotar cuántos pasos suben (ideal 0) |
+| T192 | 20 gestos sueltos (mirar la hora, rascarse, aplaudir 5 veces, golpear la mesa), cepillarse los dientes 30 s y 10 min en coche o autobús | Anotar los pasos que suben en cada parte (ideal 0; cepillarse puede contar: límite conocido) |
+| T193 | Caminar al aire libre: caminar 1 min, parar de pie 40 s, volver a caminar | ~20 s después de parar, "Pausa automática" (sin vibración: solo en pantalla); al caminar, "En curso" en unos 3 s. El tiempo activo no incluye la espera |
+| T194 | Pausar a mano y esperar 5 min sin moverse | No se reanuda al caminar un poco; a los 5 min termina solo con el resumen. La pausa final no cuenta en el tiempo total |
+| T195 | Ajustes: apagar la pausa automática y repetir T193; luego la reanudación; luego el fin (T194). Reiniciar | La función apagada no actúa y las otras sí. Tras reiniciar siguen como se dejaron |
+| T196 | Pantalla apagada y la app cerrada: caminar 200 pasos | Al encender, los 200 pasos están en Bienestar |
+| T197 | A mitad de un entrenamiento, reiniciar el reloj (en el monitor, Ctrl+T y Ctrl+R; o apagarlo manteniendo el botón y volver a encenderlo) | Vuelve en pausa con sus tiempos; "Reanudar" sigue. El día conserva los pasos (como mucho faltan los de los últimos 5 min). Copiar la línea `estado restaurado` |
+| T198 | Llevar el reloj puesto al pasar la medianoche (sin cambiar la hora) | Al día siguiente: el anillo de pasos empieza en 0 y el historial tiene ayer una sola vez. Copiar la línea `día cerrado`. **No** cambies la fecha a mano para esta prueba |
+| T199 | En la esfera: desde el borde derecho hacia la izquierda; desde el centro; dedo quieto en el borde y luego arrastrar; en una app, el borde derecho; panel rápido y cajón | Solo el primero abre las tarjetas, siguiendo al dedo. En una app el borde derecho sigue siendo "atrás". Panel y cajón como antes. Con un entrenamiento en marcha, un roce corto no abre |
+| T200 | Abrir y cerrar Bienestar 20 veces (app, tarjetas, selector, historial), con un entrenamiento en marcha | Sin reinicios ni tirones. RAM interna y PSRAM libres en Device Care iguales al principio y al final (anotar los cuatro valores) |
+| T201 | Entrenamiento de 1 h caminando, con la pantalla apagada casi todo el rato | Sin reinicios. Anotar en Diagnóstico: "Pila libre (mín.)" (esperado > 1000 B), "Perdidas" y "Guardados / errores" (errores 0) |
+| T202 | Ajustes > Calibrar distancia en una pista de 400 m (o un recorrido medido), caminando; luego repetir los 400 m | Anotar el error antes de calibrar y la zancada nueva; en la repetición la distancia (est.) da 400 m ± 5 % |
+| T203 | Terminar un entrenamiento corto, mirar el resumen y reiniciar como en T197 | El resumen se ve igual tras reiniciar y el entrenamiento está **una sola vez** en el historial. (Sin LittleFS solo se probó en el PC: en el reloj no se puede provocar sin formatear, y no se debe formatear)
+| T204 | Batería: 2 h con "Contar pasos" encendido y 2 h apagado, pantalla apagada, uso parecido | Anotar el % gastado en cada caso (cuesta energía tener el sensor siempre encendido) |
 
 ## Qué enviarme
 
