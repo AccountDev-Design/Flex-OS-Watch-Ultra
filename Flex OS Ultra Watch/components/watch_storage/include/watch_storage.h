@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include "esp_err.h"
 #include "stg_logic.h"
+#include "stg_usage.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,7 +37,9 @@ typedef enum {
     STG_ERROR,
 } stg_state_t;
 
-typedef enum { STG_REQ_SECTOR_TEST = 1, STG_REQ_FORMAT, STG_REQ_FILE_TEST } stg_req_t;
+/** STG_REQ_USAGE: tamaños por categoría (stg_usage), solo lectura y sin
+ * pasar a STG_BUSY: las apps siguen usando el disco mientras tanto. */
+typedef enum { STG_REQ_SECTOR_TEST = 1, STG_REQ_FORMAT, STG_REQ_FILE_TEST, STG_REQ_USAGE } stg_req_t;
 
 typedef struct {
     stg_state_t state;
@@ -48,6 +51,8 @@ typedef struct {
     uint32_t file_count;  /**< contador del archivo de prueba (persistente) */
     esp_err_t last_err;
     const char *detail;   /**< texto de la última operación */
+    stg_usage_t usage;    /**< tamaños por categoría (válidos si usage_gen > 0) */
+    uint32_t usage_gen;   /**< cambia con cada recuento terminado */
 } watch_storage_info_t;
 
 /** Arranca la tarea y, si la puerta lo permite, intenta montar. */

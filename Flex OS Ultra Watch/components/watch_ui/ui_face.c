@@ -26,9 +26,10 @@
  * Con Flex Ultra Power Saving activo se usa siempre una esfera mínima: hora y
  * fecha sobre negro, sin fondo, sin IMU y sin complicaciones que sondeen.
  *
- * Mantener pulsada la esfera abre el selector (ui_face_editor.c); deslizar
- * hacia arriba desde el borde inferior abre el cajón de aplicaciones;
- * arrastrar desde la franja superior, el panel rápido.
+ * Mantener pulsada la esfera (sin mover el dedo) abre el selector
+ * (ui_face_editor.c); deslizar hacia abajo desde el centro o hacia arriba
+ * desde el borde inferior abre el cajón de aplicaciones; arrastrar desde la
+ * franja superior, el panel rápido.
  */
 #include "ui_internal.h"
 
@@ -36,6 +37,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "flex_battery_icon.h"
+#include "flex_safe.h"
 #include "qmi8658.h"
 #include "ui_logic.h"
 #include "watch_imu.h"
@@ -43,6 +45,7 @@
 #include "watch_theme.h"
 #include "watch_time.h"
 #include "watch_weather.h"
+#include "wx_logic.h"
 
 #define FACE_TICK_MS     1000
 #define PARALLAX_TICK_MS 50
@@ -62,7 +65,9 @@
 #define PAR_MAX     18   /* px de desplazamiento de la capa delantera */
 #define PAR_DATE_DY 58   /* fecha bajo la hora, dentro de la tarjeta */
 
-static const char *const kNames[UI_FACE_COUNT_] = {"Digital", "Analógica", "Modular", "Liquid Glass", "Parallax"};
+static const char *const kNames[UI_FACE_COUNT_] = {"Digital", "Analógica", "Modular", "Liquid Glass", "Parallax",
+                                                    "Montaña", "Ultra",     "Luna",    "Tierra",       "Flores",
+                                                    "Taj Mahal"};
 
 const char *ui_face_name(int style)
 {
@@ -92,7 +97,29 @@ typedef struct {
     int last_pct;
     uint32_t wx_gen;
     uint32_t txt, txt2;
+    lv_timer_t *warm; /* prepara el fondo desenfocado del cajón (se borra al terminar) */
+    /* esferas de los diseños del usuario */
+    const struct photo_cfg *photo;
+    lv_obj_t *minutes;  /* Flores: los minutos, debajo de la hora */
+    lv_obj_t *p_batt;   /* Flores: "53%" */
+    lv_obj_t *p_wx;     /* Tierra: el clima */
+    struct ultra *ultra;
 } face_t;
+
+static void ultra_set(face_t *f, int hour, int minute, int second);
+static void ultra_battery(face_t *f);
+static void photo_extras(face_t *f);
+static void photo_date(face_t *f, const ui_face_time_t *t, const wt_datetime_t *dt);
+
+/* Pulsación larga: solo si el dedo no se ha movido (un gesto la cancela). */
+#define LONG_PRESS_SLOP 14
+static bool s_moved;
+static lv_point_t s_press;
+
+void ui_face_moved(void)
+{
+    s_moved = true;
+}
 
 /* ---- Esfera analógica compartida (también la usa el AOD) ---- */
 
@@ -269,8 +296,21 @@ static void update_time(face_t *f)
         f->last_sec = dt.second;
         ui_analog_set(f->dial, dt.hour, dt.minute, dt.second);
     }
+    if (f->ultra) {
+        if (t.valid && dt.second != f->last_sec) {
+            f->last_sec = dt.second;
+            ultra_set(f, dt.hour, dt.minute, dt.second);
+        } else if (!t.valid && f->last_sec != -2) {
+            f->last_sec = -2;
+            ultra_set(f, -1, 0, 0);
+        }
+        ultra_battery(f);
+    }
     if (f->c_alarm) {
         update_modular(f);
+    }
+    if (f->photo) {
+        photo_extras(f);
     }
     if (t.key == f->last_key) {
         return;
@@ -285,7 +325,34 @@ static void update_time(face_t *f)
     if (f->dial && !t.valid) {
         ui_analog_set(f->dial, -1, 0, -1);
     }
-    if (f->time) {
+    if (f->photo) {
+        if (f->minutes) { /* Flores: la hora y los minutos en dos líneas */
+            char hh[4] = "--", mm[4] = "--";
+            if (t.valid) {
+                watch_settings_t ws;
+                watch_settings_get(&ws);
+                const int h = ws.h24 ? dt.hour : (dt.hour % 12 == 0 ? 12 : dt.hour % 12);
+                snprintf(hh, sizeof(hh), "%02d", h);
+                snprintf(mm, sizeof(mm), "%02d", dt.minute);
+            }
+            lv_label_set_text(f->time, hh);
+            lv_label_set_text(f->minutes, mm);
+            watch_theme_set_text_color(f->minutes, t.valid ? f->txt : FLEX_C_MUTE);
+        } else {
+            lv_label_set_text(f->time, t.time);
+        }
+        watch_theme_set_text_color(f->time, t.valid ? f->txt : FLEX_C_MUTE);
+        photo_date(f, &t, &dt);
+    } else if (f->ultra) {
+        char b[16];
+        static const char *const kWd[7] = {"DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"};
+        if (t.valid) {
+            snprintf(b, sizeof(b), "%s %d", kWd[dt.weekday % 7], dt.day);
+        } else {
+            b[0] = 0;
+        }
+        lv_label_set_text(f->date, b);
+    } else if (f->time) {
         lv_label_set_text(f->time, t.time);
         lv_obj_set_style_text_color(f->time, flex_color(t.valid ? f->txt : FLEX_C_MUTE), 0);
         if (f->ampm) {
@@ -299,7 +366,7 @@ static void update_time(face_t *f)
             }
         }
     }
-    if (f->date && strcmp(lv_label_get_text(f->date), t.date) != 0) {
+    if (f->date && !f->photo && !f->ultra && strcmp(lv_label_get_text(f->date), t.date) != 0) {
         lv_label_set_text(f->date, t.date);
     }
     if (f->c_day) {
@@ -351,10 +418,27 @@ static void parallax_cb(lv_timer_t *t)
     lv_obj_align(f->date, LV_ALIGN_CENTER, dx, dy + PAR_DATE_DY);
 }
 
+/* Fondo desenfocado del cajón: se genera por partes con la esfera quieta a
+ * la vista, para que el cajón lo tenga listo al abrirse. */
+static void warm_cb(lv_timer_t *t)
+{
+    face_t *f = lv_timer_get_user_data(t);
+    if (ui_nav_depth() != 1 || ui_nav_busy() || ui_qp_active() || !ui_screen_is_on()) {
+        return;
+    }
+    if (watch_theme_blur_step(40)) {
+        lv_timer_delete(t);
+        f->warm = NULL;
+    }
+}
+
 static void delete_cb(lv_event_t *e)
 {
     face_t *f = lv_event_get_user_data(e);
     lv_timer_delete(f->timer);
+    if (f->warm) {
+        lv_timer_delete(f->warm);
+    }
     if (f->ptimer) {
         lv_timer_delete(f->ptimer);
     }
@@ -364,10 +448,26 @@ static void delete_cb(lv_event_t *e)
     lv_free(f);
 }
 
+static void press_track_cb(lv_event_t *e)
+{
+    lv_indev_t *indev = lv_indev_active();
+    if (!indev) {
+        return;
+    }
+    lv_point_t p;
+    lv_indev_get_point(indev, &p);
+    if (lv_event_get_code(e) == LV_EVENT_PRESSED) {
+        s_press = p;
+        s_moved = false;
+    } else if (LV_ABS(p.x - s_press.x) > LONG_PRESS_SLOP || LV_ABS(p.y - s_press.y) > LONG_PRESS_SLOP) {
+        s_moved = true;
+    }
+}
+
 static void long_press_cb(lv_event_t *e)
 {
     (void)e;
-    if (ui_nav_depth() == 1 && !ui_nav_busy() && !ui_qp_active()) {
+    if (!s_moved && ui_nav_depth() == 1 && !ui_nav_busy() && !ui_qp_active()) {
         ui_face_editor_open(false);
     }
 }
@@ -502,6 +602,320 @@ static void build_parallax(face_t *f, lv_obj_t *c, bool interactive)
     }
 }
 
+
+/* ---- Esferas de los diseños del usuario (rediseño 2026-10) ----
+ * Fondo propio (JPEG en flash, tools/faces/gen_faces.py, con los textos de la
+ * captura borrados) y encima, con LVGL, los datos REALES en el sitio y con el
+ * tamaño de la referencia (cajas medidas en la imagen escalada a 410x502:
+ * docs/REDISENO-2026-10.md). Sin dato, "--" o nada; nunca un valor inventado. */
+
+typedef struct photo_cfg {
+    flex_bg_t bg;
+    const lv_font_t *tfont;  /* hora */
+    int32_t tx, tw, tbottom; /* x y ancho de la etiqueta; parte baja de la tinta */
+    lv_text_align_t talign;
+    uint32_t trgb;
+    const lv_font_t *dfont;  /* fecha */
+    int32_t dx, dw, dbottom;
+    lv_text_align_t dalign;
+    uint32_t drgb;
+    bool ddot;               /* "SÁB. 24" (con punto) o "SÁB 24" */
+    int32_t mbottom;         /* Flores: minutos debajo de la hora (0 = hora en una línea) */
+    int32_t bbottom;         /* Flores: batería (0 = no) */
+    int32_t wbottom;         /* Tierra: clima (0 = no) */
+} photo_cfg_t;
+
+#define R_ALIGN LV_TEXT_ALIGN_RIGHT
+#define C_ALIGN LV_TEXT_ALIGN_CENTER
+static const photo_cfg_t kPhotos[] = {
+    /*            fondo          hora                                fecha                                                */
+    [UI_FACE_MONTANA - UI_FACE_MONTANA] = {FLEX_BG_MONTANA, &flex_cond_196, 52, 320, 463, R_ALIGN, FLEX_C_WHITE,
+                                           FLEX_FONT_CAPS, 163, 200, 59, R_ALIGN, FLEX_C_WHITE, true, 0, 0, 0},
+    [UI_FACE_LUNA - UI_FACE_MONTANA] = {FLEX_BG_GATO, &flex_outfit_xl_105, 75, 320, 163, R_ALIGN, FLEX_C_WHITE,
+                                        FLEX_FONT_TITLE, 181, 200, 74, R_ALIGN, FLEX_C_WHITE, true, 0, 0, 0},
+    [UI_FACE_TIERRA - UI_FACE_MONTANA] = {FLEX_BG_TIERRA, &flex_outfit_sb_101, 26, 360, 146, C_ALIGN, FLEX_C_WHITE,
+                                          FLEX_FONT_CAPS_L, 25, 360, 47, C_ALIGN, FLEX_C_WHITE, false, 0, 0, 474},
+    [UI_FACE_FLORES - UI_FACE_MONTANA] = {FLEX_BG_FLORES, &flex_cond_248, 185, 200, 236, R_ALIGN, 0xF6F3DE,
+                                          FLEX_FONT_CAPS, 163, 200, 56, R_ALIGN, 0xEFFBEA, false, 421, 465, 0},
+    [UI_FACE_TAJ - UI_FACE_MONTANA] = {FLEX_BG_TAJ, &flex_cond_156, 52, 300, 185, C_ALIGN, FLEX_C_WHITE,
+                                       FLEX_FONT_CAPS, 54, 300, 53, C_ALIGN, FLEX_C_WHITE, true, 0, 0, 0},
+};
+
+bool ui_face_has_own_background(int style)
+{
+    return style >= UI_FACE_MONTANA && style < UI_FACE_COUNT_;
+}
+
+/* Etiqueta cuya tinta termina (línea base) en y = bottom. */
+static lv_obj_t *text_at(lv_obj_t *c, const lv_font_t *f, uint32_t rgb, int32_t x, int32_t w, int32_t bottom,
+                         lv_text_align_t align)
+{
+    lv_obj_t *l = watch_theme_label(c, f, rgb, "");
+    lv_obj_set_width(l, w);
+    lv_obj_set_style_text_align(l, align, 0);
+    lv_obj_set_pos(l, x, bottom + 1 - (lv_font_get_line_height(f) - f->base_line));
+    return l;
+}
+
+/* Nombres cortos del cielo para la línea de la Tierra (la referencia: "POUCO NUBLADO 22°"). */
+static const char *short_sky(int code)
+{
+    const char *n = wx_cond_name(code);
+    if (strcmp(n, "Parcialmente nublado") == 0) {
+        return "Poco nublado";
+    }
+    if (strcmp(n, "Mayormente despejado") == 0) {
+        return "Casi despejado";
+    }
+    if (strcmp(n, "Tormenta con granizo") == 0) {
+        return "Granizo";
+    }
+    if (strcmp(n, "Lluvia intensa") == 0) {
+        return "Lluvia fuerte";
+    }
+    return n;
+}
+
+static void photo_date(face_t *f, const ui_face_time_t *t, const wt_datetime_t *dt)
+{
+    static const char *const kWd[7] = {"DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"};
+    char b[16];
+    if (t->valid) {
+        snprintf(b, sizeof(b), f->photo->ddot ? "%s. %d" : "%s %d", kWd[dt->weekday % 7], dt->day);
+    } else {
+        b[0] = 0;
+    }
+    if (strcmp(lv_label_get_text(f->date), b) != 0) {
+        lv_label_set_text(f->date, b);
+    }
+}
+
+static void photo_extras(face_t *f)
+{
+    if (f->p_batt) {
+        watch_power_snapshot_t snap;
+        const int pct = ui_system_power(&snap) ? snap.track.percent : -1;
+        if (pct != f->last_pct) {
+            f->last_pct = pct;
+            if (pct >= 0) {
+                lv_label_set_text_fmt(f->p_batt, "%d%%", pct);
+            } else {
+                lv_label_set_text(f->p_batt, "--");
+            }
+        }
+    }
+    if (f->p_wx) {
+        watch_weather_status_t *wst = lv_malloc(sizeof(*wst));
+        if (!wst) {
+            return;
+        }
+        watch_weather_get(wst);
+        const uint32_t gen = wst->gen + (wst->have ? 1u : 0u);
+        lv_free(wst);
+        if (gen == f->wx_gen) {
+            return;
+        }
+        f->wx_gen = gen;
+        wx_data_t *wx = lv_malloc(sizeof(*wx));
+        if (wx && watch_weather_data(wx)) {
+            char b[48], u[48];
+            snprintf(b, sizeof(b), "%s %d°", short_sky(wx->code), (int)lroundf(wx->temp));
+            ui_upper_es(b, u, sizeof(u));
+            lv_label_set_text(f->p_wx, u);
+            lv_obj_remove_flag(f->p_wx, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(f->p_wx, LV_OBJ_FLAG_HIDDEN); /* sin datos del clima: nada inventado */
+        }
+        lv_free(wx);
+    }
+}
+
+static void build_photo(face_t *f, lv_obj_t *c, int style)
+{
+    const photo_cfg_t *p = &kPhotos[style - UI_FACE_MONTANA];
+    f->photo = p;
+    f->txt = p->trgb;
+    f->txt2 = p->drgb;
+    f->time = text_at(c, p->tfont, FLEX_C_MUTE, p->tx, p->tw, p->tbottom, p->talign);
+    lv_label_set_text(f->time, "--:--");
+    if (p->mbottom) {
+        f->minutes = text_at(c, p->tfont, FLEX_C_MUTE, p->tx, p->tw, p->mbottom, p->talign);
+        lv_label_set_text(f->minutes, "--");
+        lv_label_set_text(f->time, "--");
+    }
+    f->date = text_at(c, p->dfont, p->drgb, p->dx, p->dw, p->dbottom, p->dalign);
+    if (p->bbottom) {
+        f->p_batt = text_at(c, FLEX_FONT_CAPS, p->drgb, p->dx, p->dw, p->bbottom, p->dalign);
+        lv_label_set_text(f->p_batt, "--");
+    }
+    if (p->wbottom) {
+        /* Tan abajo, la esquina redondeada estrecha la línea: se limita al
+         * ancho que se ve de verdad (flex_safe) y, si no cabe, puntos suspensivos */
+        const lv_font_t *wf = FLEX_FONT_CAPS_S;
+        const int32_t y2 = p->wbottom, y1 = y2 - wf->line_height + wf->base_line;
+        const int32_t x1 = flex_safe_left(y1, y2, FLEX_SAFE_MARGIN), x2 = flex_safe_right(y1, y2, FLEX_SAFE_MARGIN);
+        f->p_wx = text_at(c, wf, FLEX_C_WHITE, x1, x2 - x1 + 1, p->wbottom, LV_TEXT_ALIGN_CENTER);
+        lv_label_set_long_mode(f->p_wx, LV_LABEL_LONG_MODE_DOTS);
+        lv_obj_add_flag(f->p_wx, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+/* ---- Ultra: analógica azul de la referencia ---- */
+#define U_CX     207.5f
+#define U_CY     254.0f
+#define U_BCX    200     /* complicación de batería */
+#define U_BCY    328
+#define U_SEGS   12
+#define U_RING_R 35
+
+typedef struct ultra {
+    lv_point_precise_t pts[7][2]; /* conector, borde y centro de las dos agujas; segundero */
+    lv_obj_t *l[7];
+    lv_obj_t *seg[U_SEGS];
+    lv_obj_t *pct;
+} ultra_t;
+
+static lv_obj_t *uline(lv_obj_t *parent, lv_point_precise_t *pts, int32_t w, uint32_t rgb)
+{
+    lv_obj_t *l = lv_line_create(parent);
+    lv_line_set_points(l, pts, 2);
+    lv_obj_set_style_line_width(l, w, 0);
+    lv_obj_set_style_line_color(l, flex_color(rgb), 0);
+    lv_obj_set_style_line_rounded(l, true, 0);
+    lv_obj_remove_flag(l, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_pos(l, 0, 0);
+    return l;
+}
+
+static void useg(lv_point_precise_t *pts, float frac, float r0, float r1)
+{
+    const float a = frac * 6.2831853f;
+    pts[0].x = U_CX + sinf(a) * r0;
+    pts[0].y = U_CY - cosf(a) * r0;
+    pts[1].x = U_CX + sinf(a) * r1;
+    pts[1].y = U_CY - cosf(a) * r1;
+}
+
+static void ultra_set(face_t *f, int hour, int minute, int second)
+{
+    ultra_t *u = f->ultra;
+    const bool valid = hour >= 0;
+    for (int i = 0; i < 7; i++) {
+        watch_theme_set_visible(u->l[i], valid);
+    }
+    if (!valid) {
+        return;
+    }
+    const float fh = ((float)(hour % 12) + (float)minute / 60.0f) / 12.0f;
+    const float fm = ((float)minute + (float)second / 60.0f) / 60.0f;
+    /* hora: conector fino hasta 24 px y la barra blanca con borde azul hasta 101 */
+    useg(u->pts[0], fh, 0, 26);
+    useg(u->pts[1], fh, 26, 101);
+    useg(u->pts[2], fh, 26, 101);
+    useg(u->pts[3], fm, 0, 28);
+    useg(u->pts[4], fm, 28, 176);
+    useg(u->pts[5], fm, 28, 176);
+    useg(u->pts[6], (float)second / 60.0f, -30, 240);
+    for (int i = 0; i < 7; i++) {
+        lv_line_set_points(u->l[i], u->pts[i], 2);
+    }
+}
+
+static void ultra_battery(face_t *f)
+{
+    watch_power_snapshot_t snap;
+    const int pct = ui_system_power(&snap) ? snap.track.percent : -1;
+    if (pct == f->last_pct) {
+        return;
+    }
+    f->last_pct = pct;
+    ultra_t *u = f->ultra;
+    const int lit = pct < 0 ? 0 : (pct * U_SEGS + 50) / 100;
+    for (int i = 0; i < U_SEGS; i++) {
+        lv_obj_set_style_arc_color(u->seg[i], flex_color(i < lit ? 0xC5D2DE : 0x3D4A5A), 0);
+    }
+    if (pct >= 0) {
+        lv_label_set_text_fmt(u->pct, "%d", pct);
+    } else {
+        lv_label_set_text(u->pct, "--");
+    }
+}
+
+static void ultra_free_cb(lv_event_t *e)
+{
+    lv_free(lv_event_get_user_data(e));
+}
+
+static void build_ultra(face_t *f, lv_obj_t *c)
+{
+    ultra_t *u = lv_malloc_zeroed(sizeof(*u));
+    LV_ASSERT_MALLOC(u);
+    f->ultra = u;
+    lv_obj_add_event_cb(c, ultra_free_cb, LV_EVENT_DELETE, u);
+    f->txt = FLEX_C_WHITE;
+    /* Fecha "VIE 23" en gris azulado, centrada sobre las agujas */
+    f->date = text_at(c, FLEX_FONT_CAPS, 0x72889B, 57, 300, 171, LV_TEXT_ALIGN_CENTER);
+    /* Complicación: 12 segmentos, "Batería" en arco y el % en un disco blanco */
+    for (int i = 0; i < U_SEGS; i++) {
+        lv_obj_t *a = lv_arc_create(c);
+        lv_obj_remove_style_all(a);
+        lv_obj_set_size(a, 2 * U_RING_R, 2 * U_RING_R);
+        lv_obj_set_pos(a, U_BCX - U_RING_R, U_BCY - U_RING_R);
+        lv_arc_set_bg_angles(a, (uint32_t)(i * 30 + 3 + 270) % 360, (uint32_t)(i * 30 + 27 + 270) % 360);
+        lv_obj_set_style_arc_width(a, 5, 0);
+        lv_obj_set_style_arc_color(a, flex_color(0x3D4A5A), 0);
+        lv_obj_set_style_arc_opa(a, LV_OPA_COVER, 0);
+        lv_obj_remove_flag(a, LV_OBJ_FLAG_CLICKABLE);
+        u->seg[i] = a;
+    }
+    lv_obj_t *al = lv_arclabel_create(c);
+    lv_obj_set_size(al, 2 * (U_RING_R - 4), 2 * (U_RING_R - 4));
+    lv_obj_set_pos(al, U_BCX - (U_RING_R - 4), U_BCY - (U_RING_R - 4));
+    /* Texto estático: lv_arclabel (LVGL 9.5.0) no tiene destructor y nunca
+     * libera la copia que hace lv_arclabel_set_text (fuga en cada esfera) */
+    lv_arclabel_set_text_static(al, "Batería");
+    /* Entre el anillo (r 30..35) y el disco (r 17), centrado arriba */
+    lv_arclabel_set_radius(al, 24);
+    lv_arclabel_set_angle_start(al, 195);
+    lv_arclabel_set_angle_size(al, 150);
+    lv_arclabel_set_text_vertical_align(al, LV_ARCLABEL_TEXT_ALIGN_CENTER);
+    lv_arclabel_set_text_horizontal_align(al, LV_ARCLABEL_TEXT_ALIGN_CENTER);
+    lv_obj_set_style_text_font(al, FLEX_FONT_S16, 0);
+    lv_obj_set_style_text_color(al, flex_color(0xC5D2DE), 0);
+    lv_obj_remove_flag(al, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t *disc = lv_obj_create(c);
+    lv_obj_remove_style_all(disc);
+    lv_obj_set_size(disc, 34, 34);
+    lv_obj_set_pos(disc, U_BCX - 17, U_BCY - 13);
+    lv_obj_set_style_radius(disc, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(disc, flex_color(0xEDF3F7), 0);
+    lv_obj_set_style_bg_opa(disc, LV_OPA_COVER, 0);
+    lv_obj_remove_flag(disc, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    u->pct = watch_theme_label(disc, FLEX_FONT_CAPS_S, 0x1B2C42, "--");
+    lv_obj_center(u->pct);
+    lv_obj_t *ps = watch_theme_label(c, FLEX_FONT_TINY, 0x9AA9B8, "%");
+    lv_obj_align(ps, LV_ALIGN_TOP_LEFT, U_BCX - 5, U_BCY + 22);
+    /* Agujas: borde azul claro, cuerpo blanco y segundero fino con cola */
+    u->l[0] = uline(c, u->pts[0], 4, FLEX_C_WHITE);
+    u->l[1] = uline(c, u->pts[1], 18, 0x7FA6C6);
+    u->l[2] = uline(c, u->pts[2], 11, FLEX_C_WHITE);
+    u->l[3] = uline(c, u->pts[3], 4, FLEX_C_WHITE);
+    u->l[4] = uline(c, u->pts[4], 18, 0x7FA6C6);
+    u->l[5] = uline(c, u->pts[5], 11, FLEX_C_WHITE);
+    u->l[6] = uline(c, u->pts[6], 3, FLEX_C_WHITE);
+    lv_obj_t *hub = lv_obj_create(c);
+    lv_obj_remove_style_all(hub);
+    lv_obj_set_size(hub, 14, 14);
+    lv_obj_set_pos(hub, (int32_t)U_CX - 7, (int32_t)U_CY - 7);
+    lv_obj_set_style_radius(hub, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(hub, flex_color(0x5A90B3), 0);
+    lv_obj_set_style_bg_opa(hub, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(hub, 3, 0);
+    lv_obj_set_style_border_color(hub, flex_color(FLEX_C_WHITE), 0);
+    lv_obj_remove_flag(hub, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    ultra_set(f, -1, 0, 0);
+}
+
 lv_obj_t *ui_face_create_style(lv_obj_t *parent, int style, bool interactive)
 {
     watch_theme_init();
@@ -519,6 +933,12 @@ lv_obj_t *ui_face_create_style(lv_obj_t *parent, int style, bool interactive)
     if (f->minimal) {
         lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
         lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
+    } else if (ui_face_has_own_background(f->style)) {
+        static const flex_bg_t kBg[UI_FACE_COUNT_] = {
+            [UI_FACE_MONTANA] = FLEX_BG_MONTANA, [UI_FACE_ULTRA] = FLEX_BG_ANALOGICA, [UI_FACE_LUNA] = FLEX_BG_GATO,
+            [UI_FACE_TIERRA] = FLEX_BG_TIERRA,   [UI_FACE_FLORES] = FLEX_BG_FLORES,   [UI_FACE_TAJ] = FLEX_BG_TAJ,
+        };
+        watch_theme_apply_image(scr, kBg[f->style]);
     } else {
         watch_theme_apply_background(scr);
     }
@@ -553,6 +973,17 @@ lv_obj_t *ui_face_create_style(lv_obj_t *parent, int style, bool interactive)
             build_parallax(f, c, interactive);
             f->shift = NULL; /* ya se mueve con la muñeca */
             break;
+        case UI_FACE_ULTRA:
+            build_ultra(f, c);
+            f->shift = NULL; /* las marcas están en el fondo: moverlas solo a ellas no sirve */
+            break;
+        case UI_FACE_MONTANA:
+        case UI_FACE_LUNA:
+        case UI_FACE_TIERRA:
+        case UI_FACE_FLORES:
+        case UI_FACE_TAJ:
+            build_photo(f, c, f->style);
+            break;
         default:
             build_digital(f, c, TIME_Y);
             break;
@@ -566,7 +997,12 @@ lv_obj_t *ui_face_create_style(lv_obj_t *parent, int style, bool interactive)
         ui_qp_attach(scr);
         ui_apps_attach(scr);
         lv_obj_add_flag(scr, LV_OBJ_FLAG_CLICKABLE); /* recibe la pulsación larga */
+        lv_obj_add_event_cb(scr, press_track_cb, LV_EVENT_PRESSED, NULL);
+        lv_obj_add_event_cb(scr, press_track_cb, LV_EVENT_PRESSING, NULL);
         lv_obj_add_event_cb(scr, long_press_cb, LV_EVENT_LONG_PRESSED, NULL);
+        if (watch_theme_has_background() && !watch_theme_blur_get()) {
+            f->warm = lv_timer_create(warm_cb, 25, f);
+        }
     }
     f->timer = lv_timer_create(tick_cb, FACE_TICK_MS, f);
     lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, f);

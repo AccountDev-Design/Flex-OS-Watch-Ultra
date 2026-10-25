@@ -21,7 +21,7 @@
 static const char *TAG = "watch_storage";
 
 #define LABEL       "storage"
-#define TASK_STACK  4096
+#define TASK_STACK  5120 /* + el recuento recursivo de carpetas (stg_usage, ruta de 192 B por nivel) */
 #define TASK_PRIO   1
 #define TEST_DIR    WATCH_STORAGE_BASE "/flexos"
 #define TEST_FILE   TEST_DIR "/prueba.txt"
@@ -247,6 +247,21 @@ static void storage_task(void *arg)
         uint32_t req = 0;
         xTaskNotifyWait(0, UINT32_MAX, &req, portMAX_DELAY);
         if (s_info.gate != STG_GATE_OK) {
+            continue;
+        }
+        if (req == STG_REQ_USAGE) {
+            /* Solo lectura: sin STG_BUSY (Notas, Archivos... siguen funcionando). */
+            if (s_mounted) {
+                stg_usage_t u;
+                stg_usage_scan(WATCH_STORAGE_BASE, &u);
+                refresh_usage();
+                xSemaphoreTake(s_lock, portMAX_DELAY);
+                s_info.usage = u;
+                s_info.usage_gen++;
+                xSemaphoreGive(s_lock);
+                ESP_LOGI(TAG, "recuento: documentos %u B, papelera %u B, %u archivos%s", (unsigned)u.docs,
+                         (unsigned)u.trash, (unsigned)u.files, u.truncated ? " (tope alcanzado)" : "");
+            }
             continue;
         }
         set_info(STG_BUSY, ESP_OK, "Trabajando…");

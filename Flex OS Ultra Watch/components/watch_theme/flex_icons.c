@@ -16,9 +16,12 @@
  */
 #include "flex_icons.h"
 
+#include <math.h>
+
 typedef struct {
     flex_icon_t icon;
     lv_color_t color;
+    lv_color_t color2;
 } icon_data_t;
 
 typedef struct {
@@ -120,7 +123,123 @@ static const int8_t DIR8[8][2] = {
     {100, 0}, {71, 71}, {0, 100}, {-71, 71}, {-100, 0}, {-71, -71}, {0, -100}, {71, -71},
 };
 
+
+/* Triángulo en píxeles (coordenadas ya convertidas). */
+static void tri_px(const pen_t *p, float x0, float y0, float x1, float y1, float x2, float y2)
+{
+    lv_draw_triangle_dsc_t d;
+    lv_draw_triangle_dsc_init(&d);
+    d.color = p->color;
+    d.opa = p->opa;
+    d.p[0].x = (lv_value_precise_t)lroundf(x0);
+    d.p[0].y = (lv_value_precise_t)lroundf(y0);
+    d.p[1].x = (lv_value_precise_t)lroundf(x1);
+    d.p[1].y = (lv_value_precise_t)lroundf(y1);
+    d.p[2].x = (lv_value_precise_t)lroundf(x2);
+    d.p[2].y = (lv_value_precise_t)lroundf(y2);
+    lv_draw_triangle(p->layer, &d);
+}
+
+static float fx(const pen_t *p, float c)
+{
+    return (float)p->b->x1 + (float)(lv_area_get_width(p->b) - 1) * c / 100.0f;
+}
+
+static float fy(const pen_t *p, float c)
+{
+    return (float)p->b->y1 + (float)(lv_area_get_height(p->b) - 1) * c / 100.0f;
+}
+
+/* Puntos de intersección de dos circunferencias (en centésimas de la caja). */
+static bool circles_meet(float ax, float ay, float ar, float bx, float by, float br, float *i1x, float *i1y,
+                         float *i2x, float *i2y)
+{
+    const float dx = bx - ax, dy = by - ay, d = sqrtf(dx * dx + dy * dy);
+    if (d <= 0.0f || d >= ar + br || d <= fabsf(ar - br)) {
+        return false;
+    }
+    const float a = (ar * ar - br * br + d * d) / (2.0f * d), h = sqrtf(ar * ar - a * a);
+    const float mx = ax + a * dx / d, my = ay + a * dy / d;
+    *i1x = mx + h * dy / d;
+    *i1y = my - h * dx / d;
+    *i2x = mx - h * dy / d;
+    *i2y = my + h * dx / d;
+    return true;
+}
+
+/* Arco de la circunferencia (cx, cy, r) de i1 a i2 por el lado de toward. */
+static void arc_pts(float cx, float cy, float r, float i1x, float i1y, float i2x, float i2y, float tx, float ty,
+                    int n, float *xs, float *ys)
+{
+    float a1 = atan2f(i1y - cy, i1x - cx), a2 = atan2f(i2y - cy, i2x - cx);
+    float span = a2 - a1;
+    while (span <= 0.0f) {
+        span += 6.2831853f;
+    }
+    /* ¿El arco a1 -> a2 (sentido positivo) pasa por el lado de toward? */
+    const float am = a1 + span / 2.0f;
+    const float mx = cx + r * cosf(am), my = cy + r * sinf(am);
+    const float ox = cx - r * cosf(am), oy = cy - r * sinf(am);
+    if ((mx - tx) * (mx - tx) + (my - ty) * (my - ty) > (ox - tx) * (ox - tx) + (oy - ty) * (oy - ty)) {
+        span -= 6.2831853f; /* el otro lado */
+    }
+    for (int k = 0; k < n; k++) {
+        const float a = a1 + span * (float)k / (float)(n - 1);
+        xs[k] = cx + r * cosf(a);
+        ys[k] = cy + r * sinf(a);
+    }
+}
+
+/* Región entre dos arcos que unen los mismos extremos (luna o lente), con una
+ * tira de triángulos. Todo en centésimas de la caja. */
+#define STRIP_N 18
+static void fill_between(const pen_t *p, const float *ax, const float *ay, const float *bx, const float *by)
+{
+    for (int k = 0; k + 1 < STRIP_N; k++) {
+        tri_px(p, fx(p, ax[k]), fy(p, ay[k]), fx(p, ax[k + 1]), fy(p, ay[k + 1]), fx(p, bx[k]), fy(p, by[k]));
+        tri_px(p, fx(p, bx[k]), fy(p, by[k]), fx(p, ax[k + 1]), fy(p, ay[k + 1]), fx(p, bx[k + 1]),
+               fy(p, by[k + 1]));
+    }
+}
+
+/* Luna: el disco A menos el disco B. */
+static void crescent(const pen_t *p, float ax, float ay, float ar, float bx, float by, float br)
+{
+    float i1x, i1y, i2x, i2y;
+    if (!circles_meet(ax, ay, ar, bx, by, br, &i1x, &i1y, &i2x, &i2y)) {
+        return;
+    }
+    float oxs[STRIP_N], oys[STRIP_N], ixs[STRIP_N], iys[STRIP_N];
+    /* borde exterior: el arco de A lejos de B; interior: el arco de B dentro de A */
+    arc_pts(ax, ay, ar, i1x, i1y, i2x, i2y, 2 * ax - bx, 2 * ay - by, STRIP_N, oxs, oys);
+    arc_pts(bx, by, br, i1x, i1y, i2x, i2y, ax, ay, STRIP_N, ixs, iys);
+    fill_between(p, oxs, oys, ixs, iys);
+}
+
+/* Contorno de una hoja (lente entre dos circunferencias) de grosor w100. */
+static void leaf_outline(const pen_t *p, float t1x, float t1y, float t2x, float t2y, float bulge, int32_t w100)
+{
+    const float mx = (t1x + t2x) / 2, my = (t1y + t2y) / 2;
+    const float dx = t2x - t1x, dy = t2y - t1y, L = sqrtf(dx * dx + dy * dy);
+    const float nx = -dy / L, ny = dx / L, h = L / 2;
+    const float r = (h * h + bulge * bulge) / (2 * bulge), c = r - bulge;
+    for (int s = -1; s <= 1; s += 2) {
+        const float cx = mx + nx * c * (float)s, cy = my + ny * c * (float)s;
+        float xs[STRIP_N], ys[STRIP_N];
+        arc_pts(cx, cy, r, t1x, t1y, t2x, t2y, mx - nx * (float)s * r, my - ny * (float)s * r, STRIP_N, xs, ys);
+        for (int k = 0; k + 1 < STRIP_N; k++) {
+            line(p, (int32_t)xs[k], (int32_t)ys[k], (int32_t)xs[k + 1], (int32_t)ys[k + 1], w100);
+        }
+    }
+}
+
 void flex_icon_draw(lv_layer_t *layer, flex_icon_t icon, const lv_area_t *box, lv_color_t color, lv_opa_t opa)
+{
+    flex_icon_draw2(layer, icon, box, color, lv_color_black(), opa);
+}
+
+void flex_icon_draw2(lv_layer_t *layer, flex_icon_t icon, const lv_area_t *box, lv_color_t color, lv_color_t color2,
+                     lv_opa_t opa)
 {
     const int32_t w = lv_area_get_width(box), h = lv_area_get_height(box);
     const pen_t p = {layer, box, w < h ? w : h, color, opa};
@@ -238,12 +357,21 @@ void flex_icon_draw(lv_layer_t *layer, flex_icon_t icon, const lv_area_t *box, l
         disc(&p, 50, 16, 6);
         break;
     case FLEX_ICON_HOURGLASS: {
-        line(&p, 18, 8, 82, 8, 9);
-        line(&p, 18, 92, 82, 92, 9);
-        line(&p, 26, 10, 74, 90, 8);
-        line(&p, 74, 10, 26, 90, 8);
-        static const int32_t sand[6] = {34, 88, 66, 88, 50, 64};
+        /* Barras arriba y abajo, cristal en dos bulbos y la arena abajo. */
+        line(&p, 17, 9, 83, 9, 10);
+        line(&p, 17, 91, 83, 91, 10);
+        line(&p, 26, 13, 26, 24, 8);
+        line(&p, 74, 13, 74, 24, 8);
+        line(&p, 26, 24, 46, 48, 8);
+        line(&p, 74, 24, 54, 48, 8);
+        line(&p, 46, 52, 26, 76, 8);
+        line(&p, 54, 52, 74, 76, 8);
+        line(&p, 26, 76, 26, 87, 8);
+        line(&p, 74, 76, 74, 87, 8);
+        static const int32_t sand[6] = {32, 86, 68, 86, 50, 66};
         tri(&p, sand);
+        static const int32_t top[6] = {40, 32, 60, 32, 50, 44};
+        tri(&p, top);
         break;
     }
     case FLEX_ICON_STOPWATCH:
@@ -315,6 +443,41 @@ void flex_icon_draw(lv_layer_t *layer, flex_icon_t icon, const lv_area_t *box, l
         line(&p, 88, 88, 88, 66, 11);
         break;
     }
+    case FLEX_ICON_CLOCK_SOLID: {
+        /* Disco con las agujas caladas en el segundo color (las 12 y las 4). */
+        disc(&p, 50, 50, 46);
+        const pen_t p2 = {layer, box, p.side, color2, opa};
+        line(&p2, 50, 50, 50, 20, 11);
+        line(&p2, 50, 50, 70, 64, 11);
+        break;
+    }
+    case FLEX_ICON_ALARM:
+        /* Esfera, dos campanas arriba, patas y agujas. */
+        arc(&p, 50, 56, 37, 8, 0, 360, false);
+        arc(&p, 22, 22, 17, 9, 160, 290, true);
+        arc(&p, 78, 22, 17, 9, 250, 20, true);
+        line(&p, 30, 86, 20, 97, 8);
+        line(&p, 70, 86, 80, 97, 8);
+        line(&p, 50, 56, 50, 36, 7);
+        line(&p, 50, 56, 64, 66, 7);
+        break;
+    case FLEX_ICON_MOON_SOLID:
+        /* Luna creciente maciza (disco menos disco desplazado arriba a la derecha). */
+        crescent(&p, 46, 54, 44, 70, 34, 38);
+        break;
+    case FLEX_ICON_BATT_LEAF: {
+        /* Batería (contorno y polo) con una hoja delante: ahorro de energía. */
+        line(&p, 6, 28, 78, 28, 6);
+        line(&p, 78, 28, 78, 76, 6);
+        line(&p, 78, 76, 6, 76, 6);
+        line(&p, 6, 76, 6, 28, 6);
+        line(&p, 86, 44, 86, 60, 9);
+        disc(&p, 16, 40, 3);
+        disc(&p, 22, 58, 2);
+        leaf_outline(&p, 46, 96, 70, 16, 14, 5);
+        line(&p, 49, 90, 68, 22, 4);
+        break;
+    }
     default:
         break;
     }
@@ -329,7 +492,7 @@ static void icon_draw_cb(lv_event_t *e)
     }
     lv_area_t box;
     lv_obj_get_content_coords(obj, &box);
-    flex_icon_draw(lv_event_get_layer(e), d->icon, &box, d->color, lv_obj_get_style_opa_recursive(obj, 0));
+    flex_icon_draw2(lv_event_get_layer(e), d->icon, &box, d->color, d->color2, lv_obj_get_style_opa_recursive(obj, 0));
 }
 
 static void icon_delete_cb(lv_event_t *e)
@@ -349,6 +512,7 @@ lv_obj_t *flex_icon_create(lv_obj_t *parent, flex_icon_t icon, int32_t size, uin
     LV_ASSERT_MALLOC(d);
     d->icon = icon;
     d->color = lv_color_hex(rgb);
+    d->color2 = lv_color_black();
     lv_obj_set_user_data(obj, d);
     lv_obj_add_event_cb(obj, icon_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
     lv_obj_add_event_cb(obj, icon_delete_cb, LV_EVENT_DELETE, NULL);
@@ -360,6 +524,15 @@ void flex_icon_set_color(lv_obj_t *obj, uint32_t rgb)
     icon_data_t *d = lv_obj_get_user_data(obj);
     if (d && lv_color_to_u32(d->color) != lv_color_to_u32(lv_color_hex(rgb))) {
         d->color = lv_color_hex(rgb);
+        lv_obj_invalidate(obj);
+    }
+}
+
+void flex_icon_set_color2(lv_obj_t *obj, uint32_t rgb)
+{
+    icon_data_t *d = lv_obj_get_user_data(obj);
+    if (d && lv_color_to_u32(d->color2) != lv_color_to_u32(lv_color_hex(rgb))) {
+        d->color2 = lv_color_hex(rgb);
         lv_obj_invalidate(obj);
     }
 }

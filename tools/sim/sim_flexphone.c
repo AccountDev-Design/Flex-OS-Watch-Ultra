@@ -196,6 +196,16 @@ void sim_suite_phone(const char *out)
     sim_run(500);
     EXPECT(ui_banner_active(), "no salta el aviso de la notificación");
     lv_obj_t *bt = sim_find_label(lv_layer_top(), "Ana: Perfecto, nos vemos allí");
+    /* El enlace simulado entrega la notificación con un retardo variable: se
+     * revisa el aviso ya quieto (al final de su entrada de 220 ms) */
+    for (int k = 0, y = INT32_MIN; bt && k < 20; k++) {
+        const int32_t y1 = lv_obj_get_y(lv_obj_get_parent(bt));
+        if (y1 == y) {
+            break;
+        }
+        y = y1;
+        sim_run(50);
+    }
     EXPECT(bt != NULL, "aviso: falta el texto");
     sim_lint("aviso notificación");
     sim_save(out, "f5_aviso");

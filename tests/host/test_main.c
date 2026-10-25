@@ -579,6 +579,7 @@ int main(void)
     test_files_all();
     test_weather_all();
     test_ota_all();
+    test_grid_all();
     test_browser_all();
     test_br_net_all();
     test_br_backend_all();

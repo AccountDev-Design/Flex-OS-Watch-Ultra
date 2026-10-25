@@ -63,10 +63,13 @@ bool ui_fs_ready(const char **why)
         }
         return false;
     }
-    static bool dirs;
-    if (!dirs) {
-        ffs_init_dirs(); /* /Notas, /Documentos, /Paint, /Papelera */
-        dirs = true;
+    /* Carpetas fijas (/Notas, /Documentos, /Paint, /Papelera). Se comprueba
+     * cada vez (un stat; solo se llama al abrir una app o una lista): tras
+     * formatear la partición desde Almacenamiento > Detalles hay que volver a
+     * crearlas, y un indicador "ya hechas" de una vez por arranque no lo veía. */
+    if (!ffs_is_dir(FFS_DIR_NOTAS) || !ffs_is_dir(FFS_DIR_DOCS) || !ffs_is_dir(FFS_DIR_PAINT) ||
+        !ffs_is_dir(FFS_DIR_TRASH)) {
+        ffs_init_dirs();
     }
     return true;
 }

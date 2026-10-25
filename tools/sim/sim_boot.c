@@ -35,6 +35,10 @@ void sim_suite_boot(const char *out)
     boot.touch_ok = true;
     boot.power_ok = true;
     boot.flash.configured_size = 32u * 1024 * 1024;
+    boot.flash.physical_size = 32u * 1024 * 1024;
+    boot.flash.storage_found = true; /* partitions.csv: "storage", 16 MB desde 16 MB */
+    boot.flash.storage_offset = 0x1000000;
+    boot.flash.storage_size = 0x1000000;
     boot.flash.verdict = FLASH_PROBE_UPPER_DISTINCT;
     boot.brightness_get = sim_brightness_get;
     boot.brightness_set = sim_brightness_set;

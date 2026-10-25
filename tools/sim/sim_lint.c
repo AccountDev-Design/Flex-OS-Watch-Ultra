@@ -24,6 +24,7 @@
  * redibujado completo; si difieren, alguna animación dejó píxeles viejos.
  */
 #include <math.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -308,6 +309,14 @@ int sim_lint(const char *where)
     return s_errors;
 }
 
+/* Diferencia (suma de canales RGB565, en LSB) que se tolera entre el dibujo
+ * incremental y un redibujado completo: LVGL escala las imágenes (iconos del
+ * cajón con la lupa) muestreando desde el borde de cada franja de render, y
+ * con franjas distintas el redondeo cambia 1-2 LSB por canal en píxeles
+ * sueltos. Un resto de verdad (píxeles viejos que no se borraron) difiere
+ * muchísimo más. */
+#define RESIDUE_TOL 6
+
 int sim_check_residue(const char *where)
 {
     static uint16_t before[SIM_W * SIM_H];
@@ -316,21 +325,29 @@ int sim_check_residue(const char *where)
     lv_obj_invalidate(lv_screen_active());
     lv_obj_invalidate(lv_layer_top());
     lv_refr_now(NULL);
-    int diff = 0;
+    int diff = 0, maxd = 0;
     int x1 = SIM_W, y1 = SIM_H, x2 = -1, y2 = -1;
     for (int i = 0; i < SIM_W * SIM_H; i++) {
-        if (before[i] != sim_fb[i]) {
-            diff++;
-            const int x = i % SIM_W, y = i / SIM_W;
-            x1 = x < x1 ? x : x1;
-            x2 = x > x2 ? x : x2;
-            y1 = y < y1 ? y : y1;
-            y2 = y > y2 ? y : y2;
+        if (before[i] == sim_fb[i]) {
+            continue;
         }
+        const int d = abs((int)(before[i] >> 11) - (int)(sim_fb[i] >> 11)) +
+                      abs((int)((before[i] >> 5) & 63) - (int)((sim_fb[i] >> 5) & 63)) +
+                      abs((int)(before[i] & 31) - (int)(sim_fb[i] & 31));
+        if (d <= RESIDUE_TOL) {
+            continue;
+        }
+        diff++;
+        maxd = d > maxd ? d : maxd;
+        const int x = i % SIM_W, y = i / SIM_W;
+        x1 = x < x1 ? x : x1;
+        x2 = x > x2 ? x : x2;
+        y1 = y < y1 ? y : y1;
+        y2 = y > y2 ? y : y2;
     }
     if (diff) {
-        printf("  [%s] RESIDUOS: %d px distintos de un redibujado completo en (%d,%d)-(%d,%d)\n", where, diff, x1,
-               y1, x2, y2);
+        printf("  [%s] RESIDUOS: %d px distintos de un redibujado completo en (%d,%d)-(%d,%d), diferencia max %d\n",
+               where, diff, x1, y1, x2, y2, maxd);
         sim_fails++;
     }
     return diff;

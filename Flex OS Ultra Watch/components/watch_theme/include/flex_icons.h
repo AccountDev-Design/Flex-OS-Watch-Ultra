@@ -41,15 +41,25 @@ typedef enum {
     FLEX_ICON_STOP,
     FLEX_ICON_FLAG,         /**< vuelta del cronómetro */
     FLEX_ICON_UPDATE,       /**< actualización del sistema (OTA) */
+    /* Rediseño 2026-10 (diseños del usuario) */
+    FLEX_ICON_CLOCK_SOLID,  /**< reloj macizo: disco con las agujas en el segundo color */
+    FLEX_ICON_ALARM,        /**< despertador (campanas y patas) */
+    FLEX_ICON_MOON_SOLID,   /**< luna creciente maciza */
+    FLEX_ICON_BATT_LEAF,    /**< batería con hoja: ahorro de energía */
     FLEX_ICON_COUNT_
 } flex_icon_t;
 
 /** Dibuja el icono dentro de box (llamar desde un evento de dibujo). */
 void flex_icon_draw(lv_layer_t *layer, flex_icon_t icon, const lv_area_t *box, lv_color_t color, lv_opa_t opa);
+/** Igual, con el segundo color de los iconos de dos tonos. */
+void flex_icon_draw2(lv_layer_t *layer, flex_icon_t icon, const lv_area_t *box, lv_color_t color, lv_color_t color2,
+                     lv_opa_t opa);
 
 /** Objeto LVGL de size x size que dibuja el icono (sin hijos ni imágenes). */
 lv_obj_t *flex_icon_create(lv_obj_t *parent, flex_icon_t icon, int32_t size, uint32_t rgb);
 void flex_icon_set_color(lv_obj_t *obj, uint32_t rgb);
+/** Segundo color (agujas del reloj macizo); por defecto, negro. */
+void flex_icon_set_color2(lv_obj_t *obj, uint32_t rgb);
 /** ¿obj es un icono de flex_icon_create()? (verificación de la interfaz) */
 bool flex_icon_is(lv_obj_t *obj);
 

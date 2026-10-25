@@ -52,6 +52,7 @@ APP_SRC := $(wildcard sim_*.c) \
            $(FW)/components/watch_imu/qmi8658.c \
            $(FW)/components/watch_imu/imu_heading.c \
            $(FW)/components/watch_storage/stg_logic.c \
+           $(FW)/components/watch_storage/stg_usage.c \
            $(FW)/components/watch_net/net_logic.c \
            $(FW)/components/watch_net/net_text.c \
            $(wildcard $(FW)/components/flexlink/*.c) \
@@ -82,6 +83,12 @@ LVGL_OBJ := $(patsubst $(LVGL_DIR)/%.c,$(BUILD)/lvgl/%.o,$(LVGL_SRC))
 ICONS := reloj calend calc clima musica notas flexphone nav brujula devcare almacen paint flexstore ajustes sensores galeria
 ICON_BINS := $(foreach n,$(ICONS),$(FW)/assets/icons/app_$(n).bin)
 ICON_ASM := $(BUILD)/flex_app_icons_data.S
+
+# Fondos de las esferas fotográficas: el mismo .incbin que genera
+# components/watch_theme/CMakeLists.txt (con su final, para el tamaño).
+FACES := montana analogica gato tierra flores taj
+FACE_JPGS := $(foreach n,$(FACES),$(FW)/assets/faces/face_$(n).jpg)
+FACE_ASM := $(BUILD)/flex_face_bg_data.S
 
 # Páginas JPEG de prueba del navegador (gen_br_pages.py) y fotos de la Galería (gen_gal_fixtures.py)
 BR_JPGS := $(wildcard fixtures/br_*.jpg fixtures/gal_*.jpg)
@@ -118,6 +125,14 @@ $(ICON_ASM): $(ICON_BINS) Makefile
 	      $$n $$n "$(abspath $(FW))/assets/icons/app_$$n.bin"; \
 	  done; echo '.section .note.GNU-stack,"",@progbits'; } > $@
 
+$(FACE_ASM): $(FACE_JPGS) Makefile
+	@mkdir -p $(dir $@)
+	@{ echo '.section .rodata.flex_face_bg, "a"'; \
+	  for n in $(FACES); do \
+	    printf '.balign 4\n.global _binary_face_%s_jpg_start\n_binary_face_%s_jpg_start:\n.incbin "%s"\n.global _binary_face_%s_jpg_end\n_binary_face_%s_jpg_end:\n' \
+	      $$n $$n "$(abspath $(FW))/assets/faces/face_$$n.jpg" $$n $$n; \
+	  done; echo '.section .note.GNU-stack,"",@progbits'; } > $@
+
 $(BR_ASM): $(BR_JPGS) Makefile
 	@mkdir -p $(dir $@)
 	@{ echo '.section .rodata.br_pages, "a"'; \
@@ -126,9 +141,9 @@ $(BR_ASM): $(BR_JPGS) Makefile
 	      $$n $$n "$(abspath $$f)" $$n $$n; \
 	  done; echo '.section .note.GNU-stack,"",@progbits'; } > $@
 
-$(BUILD)/sim: $(APP_SRC) $(APP_HDR) $(LVGL_OBJ) $(ICON_ASM) $(BR_ASM) $(MBT_LIB)
+$(BUILD)/sim: $(APP_SRC) $(APP_HDR) $(LVGL_OBJ) $(ICON_ASM) $(FACE_ASM) $(BR_ASM) $(MBT_LIB)
 	@echo "LD $@"
-	@$(CC) $(CFLAGS) -Werror -pthread $(APP_SRC) $(ICON_ASM) $(BR_ASM) $(LVGL_OBJ) $(MBT_LIB) -lm -o $@
+	@$(CC) $(CFLAGS) -Werror -pthread $(APP_SRC) $(ICON_ASM) $(FACE_ASM) $(BR_ASM) $(LVGL_OBJ) $(MBT_LIB) -lm -o $@
 
 clean:
 	rm -rf build build-san out

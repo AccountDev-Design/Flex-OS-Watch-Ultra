@@ -82,6 +82,28 @@ const char *ui_time_state_text(watch_time_state_t st);
 int ui_brightness_clamp(int percent);
 bool ui_brightness_should_apply(int value, int applied, uint32_t last_ms, uint32_t now_ms, bool final);
 
+/* ---- Almacenamiento (rediseño 2026-10) ---- */
+/** "16/32 MB  (50%)" con coma decimal por debajo de 10 MB ("4,5/8 MB  (56%)").
+ * total 0: "--" (no se divide por cero). */
+int ui_fmt_usage(char *buf, size_t n, uint64_t used, uint64_t total);
+/** Uso en milésimas (0..1000), sin dividir por cero ni pasarse de 1000. */
+int32_t ui_permille(uint64_t used, uint64_t total);
+
+/** Estado de la memoria de la tarjeta "Detalles de memoria y sistema". */
+typedef enum { UI_MEM_OK = 0, UI_MEM_TIGHT, UI_MEM_LOW } ui_mem_health_t;
+#define UI_MEM_INTERNAL_OK    (48u * 1024u)  /* lo que pide el Wi-Fi para encenderse (watch_net) */
+#define UI_MEM_INTERNAL_LOW   (24u * 1024u)
+#define UI_MEM_PSRAM_BLOCK_OK (1024u * 1024u) /* cabe un fondo (402 KB) y una captura (411 KB) */
+#define UI_MEM_PSRAM_BLOCK_LOW (256u * 1024u)
+/** A partir de la RAM interna libre, su bloque mayor, el bloque mayor de PSRAM
+ * y las reservas fallidas desde el arranque. */
+ui_mem_health_t ui_mem_health(uint32_t internal_free, uint32_t internal_largest, uint32_t psram_largest,
+                              uint32_t alloc_fails);
+const char *ui_mem_health_text(ui_mem_health_t h);
+
+/** Mayúsculas de un texto UTF-8 en español (a-z, áéíóúñü). */
+void ui_upper_es(const char *in, char *out, size_t n);
+
 /* ---- Zonas horarias (F4.2): desfases fijos con ciudades de ejemplo ---- */
 typedef struct {
     int16_t off_min;   /**< minutos respecto a UTC */

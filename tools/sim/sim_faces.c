@@ -80,10 +80,11 @@ void sim_suite_faces(const char *out)
     const uint32_t blocks0 = sim_mem_blocks();
     const int timers0 = sim_timer_count();
 
-    /* ---- Los cinco estilos ---- */
-    static const char *const png[UI_FACE_COUNT_] = {"f10_esfera_digital", "f10_esfera_analogica",
-                                                    "f10_esfera_modular", "f10_esfera_glass",
-                                                    "f10_esfera_parallax"};
+    /* ---- Todos los estilos (los cinco de siempre y los seis del rediseño) ---- */
+    static const char *const png[UI_FACE_COUNT_] = {
+        "f10_esfera_digital", "f10_esfera_analogica", "f10_esfera_modular", "f10_esfera_glass",
+        "f10_esfera_parallax", "f10_esfera_montana", "f10_esfera_ultra", "f10_esfera_luna",
+        "f10_esfera_tierra", "f10_esfera_flores", "f10_esfera_taj"};
     for (int i = 0; i < UI_FACE_COUNT_; i++) {
         set_face(i);
         EXPECT(face_setting() == i, "estilo %d no se guardo", i);
@@ -91,7 +92,10 @@ void sim_suite_faces(const char *out)
         sim_check_glyphs(face, ui_face_name(i));
         sim_lint(ui_face_name(i));
         sim_save(out, png[i]);
-        if (i != UI_FACE_ANALOG) {
+        if (i == UI_FACE_FLORES) { /* horas y minutos apilados */
+            EXPECT(sim_find_label_n(face, "10", 0) && sim_find_label(face, "09"), "%s: no muestra la hora",
+                   ui_face_name(i));
+        } else if (i != UI_FACE_ANALOG && i != UI_FACE_ULTRA) {
             EXPECT(sim_find_label(face, "10:09"), "%s: no muestra la hora", ui_face_name(i));
         }
     }

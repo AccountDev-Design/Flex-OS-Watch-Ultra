@@ -28,8 +28,9 @@ SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test
        test_clock.c $(FW)/components/watch_ui/ui_clock_logic.c \
        test_screen.c $(FW)/components/watch_ui/ui_screen_logic.c \
        test_imu.c $(FW)/components/watch_imu/qmi8658.c $(FW)/components/watch_imu/imu_heading.c \
-       test_storage.c $(FW)/components/watch_storage/stg_logic.c \
+       test_storage.c $(FW)/components/watch_storage/stg_logic.c $(FW)/components/watch_storage/stg_usage.c \
        test_apps.c $(FW)/components/watch_ui/apps_logic.c \
+       test_grid.c $(FW)/components/watch_ui/ui_grid_logic.c $(FW)/components/watch_theme/flex_blur.c \
        test_net.c $(FW)/components/watch_net/net_logic.c \
        test_flexlink.c $(FW)/components/flexlink/flex_link.c $(FW)/components/flexlink/flex_auth.c \
        $(FW)/components/flexlink/flex_phone.c $(FW)/components/flexlink/flex_phone_transport.c \

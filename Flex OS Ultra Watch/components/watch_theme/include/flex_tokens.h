@@ -117,6 +117,52 @@
 #define FLEX_ROW_ICON        32
 #define FLEX_INFO_ROW_H      56   /* fila de solo información (no pulsable) */
 
+/* ---- Rediseño 2026-10: colores de los diseños del usuario ---------------
+ * Muestreados de las referencias escaladas a 410x502 (design/referencias,
+ * docs/REDISENO-2026-10.md). Solo los usan las pantallas rediseñadas. */
+/* Liquid Glass oscuro (tarjetas sobre negro: Reloj, Almacenamiento, alarmas) */
+#define FLEX_LG_DARK_TOP     0x24282E   /* degradado vertical del cristal */
+#define FLEX_LG_DARK_BOT     0x121518
+#define FLEX_LG_DARK_EDGE    0xA9BCCF   /* borde de luz */
+#define FLEX_LG_DARK_EDGE_OPA 170
+#define FLEX_LG_GLOW         0xFFFFFF   /* reflejo del borde inferior */
+#define FLEX_LG_GLOW_OPA     200
+/* Liquid Glass claro (mosaicos sobre el degradado del panel rápido) */
+#define FLEX_LG_LIGHT_FILL_OPA 34       /* blanco */
+#define FLEX_LG_LIGHT_EDGE_OPA 120
+/* Panel rápido */
+#define FLEX_QP_GRAD_L       0x56BCC8
+#define FLEX_QP_GRAD_R       0x9EE38C
+#define FLEX_QP_ACTIVE       0x5CE1E6   /* mosaico activo y relleno del brillo */
+/* Reloj */
+#define FLEX_RD_TAB_ACTIVE   0x5170FF
+#define FLEX_RD_TAB_TOP      0x2A2A2A
+#define FLEX_RD_TAB_BOT      0x0E0E0E
+#define FLEX_RD_DIAL         0x26273B
+#define FLEX_RD_DIAL_CENTER  0x2E3148
+#define FLEX_RD_HAND         0x6869EE
+#define FLEX_RD_START        0x9D39EE
+#define FLEX_RD_START_BOT    0x8A27E6
+#define FLEX_RD_SWITCH_ON    0x00D54F
+#define FLEX_RD_SWITCH_OFF   0xB2B2B2
+#define FLEX_RD_ALARM_SUB    0x6669A2   /* "Diariamente" activa */
+#define FLEX_RD_ALARM_OFF    0x6B7075   /* alarma desactivada */
+#define FLEX_RD_FADED        0x3C3F44   /* valores vecinos del rodillo */
+#define FLEX_RD_FADED_BLUE   0x4D5070
+/* Almacenamiento */
+#define FLEX_ST_FLASH        0x5170FF
+#define FLEX_ST_PSRAM        0xC1FF72
+#define FLEX_ST_TRACK        0x737373
+#define FLEX_ST_BUTTON       0x4C6CFF
+#define FLEX_ST_DOCS         0xFF3131
+#define FLEX_ST_SYSTEM       0xFFDE59
+#define FLEX_ST_APPS         0x3CC027
+#define FLEX_ST_TRASH        0x38B6FF
+/* Brújula */
+#define FLEX_CMP_ORANGE      0xFF4F06
+#define FLEX_CMP_RED         0xE0301E
+#define FLEX_CMP_BEZEL       0x3C3C3F
+
 /* ---- Movimiento (ms) -------------------------------------------------- */
 #define FLEX_ANIM_APP_OPEN_MS   210
 #define FLEX_ANIM_APP_CLOSE_MS  190

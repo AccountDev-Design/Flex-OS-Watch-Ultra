@@ -173,3 +173,79 @@ int ui_tz_index(int off_min)
     }
     return -1;
 }
+
+/* ---- Almacenamiento ---- */
+
+static void fmt_mb(char *b, size_t n, uint64_t bytes)
+{
+    /* MB con una cifra decimal (coma) por debajo de 10 MB, entero por encima. */
+    const uint64_t tenth = (bytes * 10 + 524288) / 1048576;
+    if (tenth < 100 && tenth % 10 != 0) {
+        snprintf(b, n, "%u,%u", (unsigned)(tenth / 10), (unsigned)(tenth % 10));
+    } else {
+        snprintf(b, n, "%u", (unsigned)((bytes + 524288) / 1048576));
+    }
+}
+
+int32_t ui_permille(uint64_t used, uint64_t total)
+{
+    if (total == 0) {
+        return 0;
+    }
+    if (used >= total) {
+        return 1000;
+    }
+    return (int32_t)(used * 1000 / total);
+}
+
+int ui_fmt_usage(char *buf, size_t n, uint64_t used, uint64_t total)
+{
+    if (total == 0) {
+        return snprintf(buf, n, "--");
+    }
+    char u[16], t[16];
+    fmt_mb(u, sizeof(u), used > total ? total : used);
+    fmt_mb(t, sizeof(t), total);
+    return snprintf(buf, n, "%s/%s MB  (%d%%)", u, t, (int)((ui_permille(used, total) + 5) / 10));
+}
+
+ui_mem_health_t ui_mem_health(uint32_t internal_free, uint32_t internal_largest, uint32_t psram_largest,
+                              uint32_t alloc_fails)
+{
+    if (internal_free < UI_MEM_INTERNAL_LOW || psram_largest < UI_MEM_PSRAM_BLOCK_LOW) {
+        return UI_MEM_LOW;
+    }
+    if (internal_free < UI_MEM_INTERNAL_OK || internal_largest < UI_MEM_INTERNAL_LOW ||
+        psram_largest < UI_MEM_PSRAM_BLOCK_OK || alloc_fails > 0) {
+        return UI_MEM_TIGHT;
+    }
+    return UI_MEM_OK;
+}
+
+const char *ui_mem_health_text(ui_mem_health_t h)
+{
+    return h == UI_MEM_OK ? "Óptimo" : (h == UI_MEM_TIGHT ? "Memoria justa" : "Memoria baja");
+}
+
+void ui_upper_es(const char *in, char *out, size_t n)
+{
+    size_t o = 0;
+    if (!n) {
+        return;
+    }
+    for (const unsigned char *p = (const unsigned char *)in; *p && o + 1 < n; p++) {
+        unsigned char c = *p;
+        if (c >= 'a' && c <= 'z') {
+            c = (unsigned char)(c - 'a' + 'A');
+        } else if (c == 0xC3 && p[1] && o + 2 < n) {
+            /* á é í ó ú ñ ü (0xC3 0xA1...) -> Á É Í Ó Ú Ñ Ü (0xC3 0x81...) */
+            const unsigned char d = p[1];
+            out[o++] = (char)c;
+            out[o++] = (char)((d >= 0xA0 && d <= 0xBE) ? d - 0x20 : d);
+            p++;
+            continue;
+        }
+        out[o++] = (char)c;
+    }
+    out[o] = 0;
+}

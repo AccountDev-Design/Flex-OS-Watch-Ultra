@@ -1,7 +1,7 @@
 /*
  * Apps de tiempo (F4.3) en la vista previa:
- *  - deslizar la esfera hacia abajo abre el cajón (F3.5): panal de iconos
- *    originales circulares, sin nombres; Reloj agrupa alarmas, cronómetro y
+ *  - deslizar la esfera hacia abajo (o desde el borde inferior hacia arriba)
+ *    abre el cajón: panal de iconos originales circulares, sin nombres; Reloj agrupa alarmas, cronómetro y
  *    temporizador con su estado, y su icono lleva un punto mientras algo
  *    cuenta; Sensores ya no está en el cajón (sí en Device Care);
  *  - cronómetro: iniciar, vueltas, pausa, seguir, reiniciar; sigue contando
@@ -116,11 +116,8 @@ void sim_suite_apps(const char *out)
     const uint32_t blocks0 = sim_mem_blocks();
     const int timers0 = sim_timer_count();
 
-    /* ---- Cajón: SOLO desde el borde inferior de la esfera hacia arriba ---- */
-    sim_drag(205, 200, 207, 420, 6, 16); /* hacia abajo desde el centro: nada */
-    sim_release();
-    sim_run(400);
-    EXPECT(ui_nav_depth() == 1, "deslizar hacia abajo en el centro abrio algo");
+    /* ---- Cajón: desde el borde inferior hacia arriba o desde el centro hacia
+     * abajo (rediseño 2026-10; los detalles del panal en sim_grid.c) ---- */
     sim_drag(205, 300, 205, 60, 8, 16); /* hacia arriba desde el centro: nada */
     sim_release();
     sim_run(400);
@@ -134,6 +131,12 @@ void sim_suite_apps(const char *out)
     sim_release();
     sim_run(500);
     EXPECT(ui_nav_depth() == 1 && !ui_nav_busy(), "un gesto corto desde abajo no se cancelo");
+    sim_drag(205, 200, 207, 420, 6, 16); /* hacia abajo desde el centro: abre */
+    sim_release();
+    sim_run(400);
+    EXPECT(ui_nav_depth() == 2 && ui_apps_find(ui_nav_top(), "Reloj"), "deslizar hacia abajo no abrio el cajon");
+    ui_nav_home();
+    sim_run(400);
     sim_drag(205, FLEX_SCREEN_H - 20, 207, 120, 8, 16);
     sim_release();
     sim_run(400);
@@ -152,37 +155,36 @@ void sim_suite_apps(const char *out)
     }
     EXPECT(!ui_apps_find(ui_nav_top(), "Flex Store"), "cajon: aparece una app sin funcion");
     EXPECT(!ui_apps_find(ui_nav_top(), "Sensores"), "cajon: Sensores sigue en el cajon");
-    lv_obj_t *reloj_cell = ui_apps_find(ui_nav_top(), "Reloj");
-    lv_obj_t *reloj_badge =
-        reloj_cell ? lv_obj_get_child(lv_obj_get_parent(reloj_cell), lv_obj_get_index(reloj_cell) + 1) : NULL;
+    ui_apps_find(ui_nav_top(), "Reloj");
+    lv_obj_t *reloj_badge = ui_apps_badge(ui_nav_top());
     EXPECT(reloj_badge && lv_obj_has_flag(reloj_badge, LV_OBJ_FLAG_HIDDEN), "lanzador: punto de Reloj sin nada en marcha");
     lint_page("aplicaciones", out, "f4_apps");
     sim_check_residue("aplicaciones");
 
-    /* ---- Reloj: estado en vivo de las tres funciones ---- */
+    /* ---- Reloj (rediseño 2026-10: pestañas; detalles en sim_redesign.c) ---- */
     EXPECT(tap_text(ui_nav_top(), "Reloj"), "no se abrio Reloj");
-    EXPECT(sim_find_label(ui_nav_top(), "Parado") && sim_find_label(ui_nav_top(), "Listo") &&
-               sim_find_label(ui_nav_top(), "Ninguna"),
-           "Reloj no muestra el estado de sus funciones");
+    lv_obj_t *reloj = ui_nav_top();
+    ui_reloj_select(reloj, UI_RELOJ_HORA);
+    sim_run(300);
+    EXPECT(sim_find_label(reloj, "6:58") && sim_find_label(reloj, "Formato"), "Reloj no muestra la hora");
     lint_page("reloj", out, "f9_reloj");
 
     /* ---- Cronómetro ---- */
-    EXPECT(tap_text(ui_nav_top(), "Cronómetro"), "no se abrio el cronometro");
-    EXPECT(sim_find_label(ui_nav_top(), "00:00") && sim_find_label(ui_nav_top(), "Sin vueltas"),
+    ui_reloj_select(reloj, UI_RELOJ_CRONO);
+    sim_run(300);
+    EXPECT(sim_find_label(ui_nav_top(), "00:00.00") && sim_find_label(ui_nav_top(), "Iniciar"),
            "cronometro: estado inicial");
     lint_page("cronometro parado", out, NULL);
-    EXPECT(!tap_text(ui_nav_top(), "Vuelta"), "cronometro: Vuelta no esta desactivado parado");
+    EXPECT(!tap_text(ui_nav_top(), "Parcial"), "cronometro: Parcial no esta desactivado parado");
     EXPECT(tap_text(ui_nav_top(), "Iniciar"), "cronometro: no hay Iniciar");
     sim_run(1600);
-    EXPECT(tap_text(ui_nav_top(), "Vuelta"), "cronometro: no hay Vuelta en marcha");
+    EXPECT(tap_text(ui_nav_top(), "Parcial"), "cronometro: no hay Parcial en marcha");
     sim_run(2500);
-    tap_text(ui_nav_top(), "Vuelta");
+    tap_text(ui_nav_top(), "Parcial");
     sim_run(700);
-    tap_text(ui_nav_top(), "Vuelta");
+    tap_text(ui_nav_top(), "Parcial");
     sim_run(1200);
     EXPECT(ui_sw()->n == 3 && ui_sw()->st == SW_RUN, "cronometro: %d vueltas", ui_sw()->n);
-    EXPECT(sim_find_label(ui_nav_top(), "Vuelta 3") && sim_find_label(ui_nav_top(), "Vuelta 1"),
-           "cronometro: la tabla no muestra las vueltas");
     lint_page("cronometro con vueltas", out, "f4_cronometro");
     EXPECT(tap_text(ui_nav_top(), "Pausa"), "cronometro: no hay Pausa");
     const int64_t paused = sw_elapsed(ui_sw(), ui_mono_us());
@@ -193,31 +195,29 @@ void sim_suite_apps(const char *out)
     sim_run(2000);
     EXPECT(ui_sw()->st == SW_RUN && sw_elapsed(ui_sw(), ui_mono_us()) > paused + 1900000,
            "cronometro: no sigue contando fuera de su pagina");
-    sim_run(600);
-    lv_obj_t *swt = clickable_of(sim_find_label(ui_nav_top(), "Cronómetro"));
-    EXPECT(swt && !sim_find_label(swt, "Parado"), "Reloj no muestra el cronometro en marcha");
-    ui_nav_back();
     sim_run(700);
-    reloj_cell = ui_apps_find(ui_nav_top(), "Reloj");
-    reloj_badge = reloj_cell ? lv_obj_get_child(lv_obj_get_parent(reloj_cell), lv_obj_get_index(reloj_cell) + 1) : NULL;
+    ui_apps_find(ui_nav_top(), "Reloj");
+    reloj_badge = ui_apps_badge(ui_nav_top());
     EXPECT(reloj_badge && !lv_obj_has_flag(reloj_badge, LV_OBJ_FLAG_HIDDEN),
            "lanzador: sin punto en Reloj con el cronometro en marcha");
     sim_save(out, "f3_apps_punto");
-    tap_text(ui_nav_top(), "Reloj");
-    tap_text(ui_nav_top(), "Cronómetro");
+    tap_text(ui_nav_top(), "Reloj"); /* vuelve a la última pestaña: el cronómetro */
+    EXPECT(ui_reloj_tab(ui_nav_top()) == UI_RELOJ_CRONO, "Reloj no vuelve a la ultima pestana");
     tap_text(ui_nav_top(), "Pausa");
     EXPECT(tap_text(ui_nav_top(), "Reiniciar"), "cronometro: no hay Reiniciar en pausa");
     EXPECT(ui_sw()->st == SW_IDLE && ui_sw()->n == 0, "cronometro: no se reinicio");
-    ui_nav_back();
-    sim_run(400);
 
-    /* ---- Temporizador: atajo de 1 min, pausa, aviso en otra pantalla ---- */
-    EXPECT(tap_text(ui_nav_top(), "Temporizador"), "no se abrio el temporizador");
+    /* ---- Temporizador: 1 min en los rodillos, pausa, aviso en otra pantalla ---- */
+    ui_reloj_select(ui_nav_top(), UI_RELOJ_TEMP);
+    sim_run(300);
     lint_page("temporizador parado", out, "f4_temporizador");
-    EXPECT(tap_text(ui_nav_top(), "1"), "temporizador: no hay atajo de 1 min");
+    EXPECT(tap_text(ui_nav_top(), "00:10:00"), "temporizador: no hay atajo de 10 min");
     sim_run(400);
-    EXPECT(lv_roller_get_selected(roller(0)) == 1 && lv_roller_get_selected(roller(1)) == 0,
-           "temporizador: el atajo no pone 01:00");
+    EXPECT(lv_roller_get_selected(roller(0)) == 0 && lv_roller_get_selected(roller(1)) == 10 &&
+               lv_roller_get_selected(roller(2)) == 0,
+           "temporizador: el atajo no pone 00:10:00");
+    lv_roller_set_selected(roller(1), 1, LV_ANIM_OFF); /* 1 min para no esperar 10 */
+    lv_obj_send_event(roller(1), LV_EVENT_VALUE_CHANGED, NULL);
     EXPECT(tap_text(ui_nav_top(), "Iniciar"), "temporizador: no hay Iniciar");
     sim_run(1100);
     EXPECT(ui_tmr()->st == TMR_RUN && sim_find_label(ui_nav_top(), "00:59"), "temporizador: no cuenta");
@@ -252,8 +252,8 @@ void sim_suite_apps(const char *out)
     sim_set_time(WATCH_TIME_OK, 2026, 10, 15, 6, 58, 0);
     ui_nav_push(ui_alarms_create);
     sim_run(400);
-    EXPECT(sim_find_label(ui_nav_top(), "Sin alarmas"), "alarmas: estado vacio");
-    EXPECT(tap_text(ui_nav_top(), "Añadir alarma"), "alarmas: no hay Añadir");
+    EXPECT(sim_find_label_n(ui_nav_top(), "Sin alarmas", 1), "alarmas: estado vacio");
+    EXPECT(tap_text(ui_nav_top(), "Añadir"), "alarmas: no hay Añadir");
     EXPECT(sim_find_label(ui_nav_top(), "Nueva alarma"), "alarmas: no se abrio el editor");
     lint_page("editor de alarma", out, "f4_alarma_editor");
     /* 7:00 una sola vez: se quitan los días L-V */
@@ -271,7 +271,7 @@ void sim_suite_apps(const char *out)
     sim_run(600);
     EXPECT(sim_find_label(ui_nav_top(), "7:00") && sim_find_label(ui_nav_top(), "Una vez"),
            "alarmas: la lista no muestra la alarma");
-    EXPECT(sim_find_label(ui_nav_top(), "hoy 7:00"), "alarmas: no muestra la proxima");
+    EXPECT(sim_find_label(ui_nav_top(), "Próxima: hoy 7:00"), "alarmas: no muestra la proxima");
     lint_page("alarmas", out, "f4_alarmas");
 
     /* Suena a las 7:00 (en otra pantalla) y se desactiva; posponer 5 min */
@@ -298,7 +298,17 @@ void sim_suite_apps(const char *out)
     /* Editar: reactivar con L a V y eliminar */
     ui_nav_push(ui_alarms_create);
     sim_run(400);
-    EXPECT(sim_find_label(ui_nav_top(), "Desactivada"), "alarmas: no se ve desactivada");
+    {
+        lv_obj_t *sw = NULL;
+        for (lv_obj_t *o = sim_find_label(ui_nav_top(), "7:00"); o && !sw; o = lv_obj_get_parent(o)) {
+            for (uint32_t k = 0; k < lv_obj_get_child_count(o) && !sw; k++) {
+                if (lv_obj_check_type(lv_obj_get_child(o, (int32_t)k), &lv_switch_class)) {
+                    sw = lv_obj_get_child(o, (int32_t)k);
+                }
+            }
+        }
+        EXPECT(sw && !lv_obj_has_state(sw, LV_STATE_CHECKED), "alarmas: no se ve desactivada");
+    }
     EXPECT(tap_text(ui_nav_top(), "7:00"), "alarmas: no se abre para editar");
     EXPECT(sim_find_label(ui_nav_top(), "Editar alarma"), "alarmas: no es el editor de una existente");
     tap_text(ui_nav_top(), "Desactivada");
@@ -312,7 +322,7 @@ void sim_suite_apps(const char *out)
     tap_text(ui_nav_top(), "7:00");
     EXPECT(tap_text(ui_nav_top(), "Eliminar"), "alarmas: no hay Eliminar");
     sim_run(600);
-    EXPECT(ui_alarms()->n == 0 && sim_find_label(ui_nav_top(), "Sin alarmas"), "alarmas: no se elimino");
+    EXPECT(ui_alarms()->n == 0 && sim_find_label_n(ui_nav_top(), "Sin alarmas", 1), "alarmas: no se elimino");
 
     /* ---- Sensores (F4.4): sin IMU dice "No disponible"; con datos, los muestra ---- */
     ui_nav_home();

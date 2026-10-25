@@ -1,13 +1,10 @@
 /*
- * ui_jpeg — JPEG baseline a un lienzo RGB565 para el navegador (F6), con el
- * TJpgDec que trae LVGL (LV_USE_TJPGD). Hace lo de brDecodeInto de la
- * referencia (FlexOS_BrowserApp.cpp:1359-1422): si la imagen no mide lo que
- * dice el FRAME (escala del viewport), se amplía o reduce al vecino más
- * próximo; todo se recorta al lienzo, así una página remota no puede pintar
- * fuera de su zona. El progresivo lo rechaza TJpgDec, como la referencia.
- * Se llama desde la tarea de LVGL; la memoria de trabajo (8 KB) es temporal.
+ * flex_jpeg — ver include/flex_jpeg.h. Hace lo de brDecodeInto de la
+ * referencia (FlexOS_BrowserApp.cpp:1359-1422) para el navegador; antes era
+ * watch_ui/ui_jpeg.c y se movió aquí para que también lo usen los fondos de
+ * las esferas. Se llama desde la tarea de LVGL.
  */
-#include "ui_internal.h"
+#include "flex_jpeg.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -61,7 +58,7 @@ static int out_cb(JDEC *jd, void *bitmap, JRECT *r)
     return 1;
 }
 
-int ui_jpeg_draw(const uint8_t *jpg, uint32_t n, uint16_t *canvas, int cw, int ch, int dx, int dy, int dw, int dh)
+int flex_jpeg_draw(const uint8_t *jpg, uint32_t n, uint16_t *canvas, int cw, int ch, int dx, int dy, int dw, int dh)
 {
     if (!jpg || n < 4 || !canvas || dw <= 0 || dh <= 0) {
         return -1;

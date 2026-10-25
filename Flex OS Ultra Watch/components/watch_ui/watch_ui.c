@@ -84,7 +84,7 @@ void watch_ui_boot_splash(void)
     }
 #if LV_USE_TJPGD
     /* Fuera de la cadena de decodificadores de imagen de LVGL: el navegador
-     * decodifica sus JPEG con TJpgDec directamente (ui_jpeg.c) y ninguna
+     * decodifica sus JPEG con TJpgDec directamente (flex_jpeg.c de watch_theme) y ninguna
      * imagen de LVGL es JPEG. Registrado el último, LVGL lo consultaba el
      * PRIMERO para cada imagen que dibujaba, y su decoder_info reserva 4272 B
      * de pila (uint8_t workb[4096], marco fijo al entrar aunque la imagen no

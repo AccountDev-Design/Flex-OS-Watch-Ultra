@@ -9,7 +9,8 @@
  * lineales.
  *
  *  - Abrir: la página nueva entra desde la derecha en 210 ms. El cajón de
- *    aplicaciones baja desde arriba (ui_nav_push_from_top).
+ *    aplicaciones sube desde abajo o baja desde arriba siguiendo al dedo
+ *    (ui_nav_drag_open_begin_dir).
  *  - Volver: la de arriba sale por la derecha en 190 ms y se borra.
  *  - Gestos de borde en cada página abierta (los cuatro siguen al dedo y al
  *    soltar se completan o se cancelan con ui_gesture; la animación dura lo
@@ -67,6 +68,7 @@ static struct {
     nav_op_t op;
     nav_op_t drag_commit; /* lo que hace el arrastre en curso si se completa */
     bool vertical;        /* la animación mueve la página en Y */
+    bool drag_from_top;   /* apertura arrastrada: la página baja desde arriba */
     int8_t dir;           /* +1: la de arriba sale por la derecha; -1: por la izquierda */
     lv_obj_t *reveal;     /* página que se descubre debajo */
     bool reveal_temp;     /* cajón creado para el gesto "salir" (no está en la pila) */
@@ -246,6 +248,7 @@ static void finish(void)
     s_nav.reveal = NULL;
     s_nav.reveal_temp = false;
     s_nav.vertical = false;
+    s_nav.drag_from_top = false;
     s_nav.dir = 1;
     if (s_nav.root_pending) {
         ui_page_create_t root = s_nav.root_pending;
@@ -564,10 +567,23 @@ bool ui_nav_push_from_top(ui_page_create_t create)
     return push(create, true, true);
 }
 
-/* ---- Abrir arrastrando desde el borde inferior (cajón desde la esfera) ----
- * La página nueva sube siguiendo al dedo; al soltar se completa (PUSHING) o
- * vuelve hacia abajo y se borra (POPPING en vertical): nunca queda a medias. */
+/* ---- Abrir arrastrando (cajón desde la esfera) ----
+ * La página nueva sube desde el borde inferior (o baja desde arriba)
+ * siguiendo al dedo; al soltar se completa (PUSHING) o vuelve por donde vino y
+ * se borra (POPPING en vertical): nunca queda a medias. */
 bool ui_nav_drag_open_begin(ui_page_create_t create)
+{
+    return ui_nav_drag_open_begin_dir(create, false);
+}
+
+/* Posición de la página que se abre arrastrando, para un recorrido dado. */
+static int32_t drag_open_y(int32_t travel)
+{
+    travel = LV_CLAMP(0, travel, FLEX_SCREEN_H);
+    return s_nav.drag_from_top ? travel - FLEX_SCREEN_H : FLEX_SCREEN_H - travel;
+}
+
+bool ui_nav_drag_open_begin_dir(ui_page_create_t create, bool from_top)
 {
     if (!s_nav.screen || s_nav.op != NAV_IDLE || s_nav.depth >= NAV_MAX_DEPTH) {
         return false;
@@ -584,15 +600,16 @@ bool ui_nav_drag_open_begin(ui_page_create_t create)
     s_nav.depth++;
     s_nav.dir = 1;
     s_nav.vertical = true;
+    s_nav.drag_from_top = from_top;
     s_nav.op = NAV_DRAGGING;
-    place(FLEX_SCREEN_H);
+    place(drag_open_y(0));
     return true;
 }
 
 void ui_nav_drag_open_move(int32_t travel)
 {
     if (s_nav.op == NAV_DRAGGING && s_nav.vertical) {
-        place(FLEX_SCREEN_H - LV_CLAMP(0, travel, FLEX_SCREEN_H));
+        place(drag_open_y(travel));
     }
 }
 
@@ -603,10 +620,10 @@ void ui_nav_drag_open_end(bool commit, int32_t travel)
     }
     travel = LV_CLAMP(0, travel, FLEX_SCREEN_H);
     if (commit) {
-        animate(NAV_PUSHING, FLEX_SCREEN_H - travel, 0,
+        animate(NAV_PUSHING, drag_open_y(travel), 0,
                 ui_drag_remaining_ms(travel, FLEX_SCREEN_H, FLEX_ANIM_APP_OPEN_MS, true));
     } else {
-        animate(NAV_POPPING, FLEX_SCREEN_H - travel, FLEX_SCREEN_H,
+        animate(NAV_POPPING, drag_open_y(travel), drag_open_y(0),
                 ui_drag_remaining_ms(travel, FLEX_SCREEN_H, FLEX_ANIM_APP_CLOSE_MS, false));
     }
 }

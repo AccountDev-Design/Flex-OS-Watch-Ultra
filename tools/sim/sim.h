@@ -95,6 +95,7 @@ extern bool sim_stg_fail;
 
 /* Memoria simulada para las guardas (sim_main.c) */
 extern size_t sim_mem_psram_block;
+extern uint32_t sim_psram_free; /* lo que devuelve watch_diag_mem() */
 extern size_t sim_mem_internal_free;
 extern int sim_mem_events;
 
@@ -148,6 +149,8 @@ void sim_suite_weather(const char *out);
 void sim_suite_browser(const char *out);
 void sim_suite_ota(const char *out);
 void sim_suite_gallery(const char *out);
+void sim_suite_grid(const char *out);
+void sim_suite_redesign(const char *out);
 /* OTA simulado (sim_ota.c): motor y firma reales, servidor y flash falsos */
 void sim_ota_reset(void);
 void sim_ota_publish(const char *ver, bool good_sig, const char *changelog);

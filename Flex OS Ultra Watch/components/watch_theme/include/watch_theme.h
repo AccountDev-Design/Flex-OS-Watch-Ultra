@@ -34,6 +34,37 @@ LV_FONT_DECLARE(flex_outfit_clock_120); /* solo '-', '0'-'9' y ':' */
 #define FLEX_FONT_LARGE  (&flex_outfit_40)
 #define FLEX_FONT_CLOCK  (&flex_outfit_clock_120)
 
+/* Pantallas rediseñadas con los diseños del usuario (League Spartan Bold, la
+ * letra de sus referencias; tools/gen_fonts.sh) */
+LV_FONT_DECLARE(flex_spartan_16);
+LV_FONT_DECLARE(flex_spartan_20);
+LV_FONT_DECLARE(flex_spartan_22);
+LV_FONT_DECLARE(flex_spartan_24);
+LV_FONT_DECLARE(flex_spartan_32);
+LV_FONT_DECLARE(flex_spartan_40);
+LV_FONT_DECLARE(flex_spartan_clock_188); /* ' ', '-', '0'-'9' y ':' */
+LV_FONT_DECLARE(flex_outfit_15);
+#define FLEX_FONT_S16      (&flex_spartan_16)
+#define FLEX_FONT_S20      (&flex_spartan_20)
+#define FLEX_FONT_S22      (&flex_spartan_22)
+#define FLEX_FONT_S24      (&flex_spartan_24)
+#define FLEX_FONT_S32      (&flex_spartan_32)
+#define FLEX_FONT_S40      (&flex_spartan_40)
+#define FLEX_FONT_S_CLOCK  (&flex_spartan_clock_188)
+#define FLEX_FONT_TINY     (&flex_outfit_15)  /* rótulos pequeños de los diseños */
+/* Esferas fotográficas: dígitos (' ', '-', '0'-'9', ':') y rótulos en mayúsculas */
+LV_FONT_DECLARE(flex_cond_156);
+LV_FONT_DECLARE(flex_cond_196);
+LV_FONT_DECLARE(flex_cond_248);
+LV_FONT_DECLARE(flex_outfit_xl_105);
+LV_FONT_DECLARE(flex_outfit_sb_101);
+LV_FONT_DECLARE(flex_outfit_med_28);
+LV_FONT_DECLARE(flex_outfit_med_34); /* ' '..'Z', ÁÉÍÓÚÑÜ, °: fechas, clima, cronómetro */
+LV_FONT_DECLARE(flex_outfit_med_48);
+#define FLEX_FONT_CAPS_S   (&flex_outfit_med_28)
+#define FLEX_FONT_CAPS     (&flex_outfit_med_34)
+#define FLEX_FONT_CAPS_L   (&flex_outfit_med_48)
+
 static inline lv_color_t flex_color(uint32_t rgb)
 {
     return lv_color_hex(rgb);
@@ -87,6 +118,56 @@ bool watch_theme_apply_background(lv_obj_t *screen);
 
 /** ¿El fondo activo es claro bajo esa región? (false con el negro) */
 bool watch_theme_wall_is_light(int32_t x, int32_t y, int32_t w, int32_t h);
+
+/**
+ * Fondos propios de las esferas fotográficas (diseños del usuario,
+ * tools/faces/gen_faces.py): JPEG baseline en la flash (~25-55 KB cada uno)
+ * que se decodifica en el MISMO búfer de 402 KB de PSRAM que el fondo de
+ * pantalla: solo hay uno vivo, el de la esfera activa.
+ */
+typedef enum {
+    FLEX_BG_NONE = 0,
+    FLEX_BG_MONTANA,
+    FLEX_BG_ANALOGICA,
+    FLEX_BG_GATO,
+    FLEX_BG_TIERRA,
+    FLEX_BG_FLORES,
+    FLEX_BG_TAJ,
+    FLEX_BG_COUNT_
+} flex_bg_t;
+
+/** Pone en screen el fondo propio bg (negro si no se puede decodificar o no
+ * hay PSRAM; se registra). true si se puso la imagen. */
+bool watch_theme_apply_image(lv_obj_t *screen, flex_bg_t bg);
+/** JPEG embebido de un fondo propio (pruebas y diagnóstico). */
+const uint8_t *watch_theme_image_jpeg(flex_bg_t bg, uint32_t *len);
+
+/**
+ * Vistas previas (selector de esferas): mientras está activo, los fondos que
+ * piden las esferas temporales se generan en un segundo búfer y no pisan el
+ * de la esfera activa. end() lo libera.
+ */
+void watch_theme_preview_begin(void);
+void watch_theme_preview_end(void);
+
+/**
+ * Fondo actual desenfocado para el cajón de aplicaciones (flex_blur): una
+ * sola copia en PSRAM, generada por partes y reutilizada mientras el fondo de
+ * la esfera no cambie.
+ *  - watch_theme_blur_get(): la imagen lista o NULL (sin fondo o sin generar).
+ *  - watch_theme_blur_step(rows): avanza la generación (rows filas de
+ *    trabajo); true si ya está lista o si no hay nada que desenfocar.
+ *  - watch_theme_has_background(): la esfera activa tiene imagen de fondo.
+ */
+const lv_image_dsc_t *watch_theme_blur_get(void);
+bool watch_theme_blur_step(int rows);
+/** Un cajón vivo muestra el desenfoque (on) o se borra (off): mientras haya
+ * alguno, la imagen no se libera (ni con watch_theme_release_caches). */
+void watch_theme_blur_hold(bool on);
+bool watch_theme_has_background(void);
+/** Suelta lo que se puede regenerar (desenfoque y caché de imágenes de
+ * LVGL). Devuelve los bytes de PSRAM liberados por el tema. */
+size_t watch_theme_release_caches(void);
 
 /**
  * Crea una tarjeta de vidrio (rol CARD) en (x, y) de tamaño w x h, en
@@ -189,6 +270,26 @@ void watch_theme_set_bg_color(lv_obj_t *obj, uint32_t rgb);
 void watch_theme_set_visible(lv_obj_t *obj, bool visible);
 /** Marca la fila como no disponible: apagada, sin toque y con el valor "Pendiente". */
 void watch_theme_row_set_pending(lv_obj_t *row);
+
+/* ---- Liquid Glass de los diseños del usuario (rediseño 2026-10) ----------
+ * Componentes compartidos por las pantallas rediseñadas; sus valores están en
+ * flex_tokens.h (FLEX_LG_*). Sin sombras ni desenfoque por cuadro: degradado,
+ * borde de luz y un reflejo fino en el borde (lo que se ve en las referencias).
+ *  - oscuro: cristal sobre negro (Reloj, alarmas, Almacenamiento);
+ *  - claro: cristal blanco translúcido sobre el degradado del panel rápido.
+ * Los pulsables reaccionan con LV_STATE_PRESSED; el claro, además, se rellena
+ * del color activo con LV_STATE_CHECKED. */
+typedef enum { FLEX_LG_DARK = 0, FLEX_LG_LIGHT } flex_lg_t;
+typedef enum { FLEX_GLOW_NONE = 0, FLEX_GLOW_TOP, FLEX_GLOW_BOTTOM } flex_glow_t;
+lv_obj_t *watch_theme_lg(lv_obj_t *parent, flex_lg_t kind, int32_t x, int32_t y, int32_t w, int32_t h,
+                         int32_t radius, flex_glow_t glow);
+/** Igual, pulsable (quien lo crea escucha LV_EVENT_CLICKED). */
+lv_obj_t *watch_theme_lg_button(lv_obj_t *parent, flex_lg_t kind, int32_t x, int32_t y, int32_t w, int32_t h,
+                                int32_t radius, flex_glow_t glow);
+/** Interruptor de las alarmas (verde activo / gris), de w x h. */
+lv_obj_t *watch_theme_switch(lv_obj_t *parent, int32_t w, int32_t h);
+/** Barra de progreso redondeada de los diseños (Almacenamiento). */
+lv_obj_t *watch_theme_bar(lv_obj_t *parent, int32_t w, int32_t h, uint32_t fill_rgb, uint32_t track_rgb);
 
 #ifdef __cplusplus
 }

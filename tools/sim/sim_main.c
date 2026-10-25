@@ -18,6 +18,7 @@
 #include "sim.h"
 #include "watch_diag.h"
 #include "watch_time.h"
+#include "flexfs.h"
 
 uint16_t sim_fb[SIM_W * SIM_H];
 int sim_fails;
@@ -351,6 +352,13 @@ esp_err_t watch_storage_request(stg_req_t req)
             sim_stg.used += 4096;
         }
         break;
+    case STG_REQ_USAGE:
+        /* el mismo recuento que el reloj, sobre la carpeta de la vista previa */
+        if (sim_stg.state == STG_MOUNTED) {
+            stg_usage_scan(ffs_root(), &sim_stg.usage);
+            sim_stg.usage_gen++;
+        }
+        break;
     }
     return ESP_OK;
 }
@@ -431,14 +439,16 @@ bool watch_power_get(watch_power_snapshot_t *out)
     return true;
 }
 
+uint32_t sim_psram_free = 7200 * 1024; /* valores de ejemplo, no medidos */
+
 void watch_diag_mem(watch_mem_report_t *out)
 {
     memset(out, 0, sizeof(*out));
-    out->internal_free = 180 * 1024;   /* valores de ejemplo, no medidos */
+    out->internal_free = 180 * 1024;
     out->internal_largest = 110 * 1024;
     out->psram_total = 8 * 1024 * 1024;
-    out->psram_free = 7200 * 1024;
-    out->psram_largest = 6900 * 1024;
+    out->psram_free = sim_psram_free;
+    out->psram_largest = sim_psram_free > 300 * 1024 ? sim_psram_free - 300 * 1024 : 0;
 }
 
 /* Memoria simulada para las guardas (sim_mem_*): por defecto, abundante. */
@@ -557,7 +567,7 @@ static int real_main(int argc, char **argv)
         {"tema", sim_suite_theme},       {"arranque", sim_suite_boot}, {"energia", sim_suite_power},
         {"esfera", sim_suite_face},      {"esferas", sim_suite_faces}, {"nav", sim_suite_nav},       {"panel", sim_suite_qp},
         {"ajustes", sim_suite_settings}, {"hora", sim_suite_datetime}, {"apps", sim_suite_apps},
-        {"pantalla", sim_suite_screen},  {"wifi", sim_suite_wifi},       {"telefono", sim_suite_phone}, {"notas", sim_suite_notes},
+        {"rejilla", sim_suite_grid},     {"rediseno", sim_suite_redesign},     {"pantalla", sim_suite_screen},  {"wifi", sim_suite_wifi},       {"telefono", sim_suite_phone}, {"notas", sim_suite_notes},
         {"clima", sim_suite_weather},
         {"navegador", sim_suite_browser},
         {"relay", sim_suite_relay},

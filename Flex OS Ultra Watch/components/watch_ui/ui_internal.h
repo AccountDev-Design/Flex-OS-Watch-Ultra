@@ -72,6 +72,8 @@ bool ui_nav_push_from_top(ui_page_create_t create);
  * de la esfera): begin al reconocerse el gesto, move con el recorrido, end al
  * soltar (commit: se completa; si no, baja y se borra). */
 bool ui_nav_drag_open_begin(ui_page_create_t create);
+/** Igual, eligiendo el borde: from_top = la página baja desde arriba. */
+bool ui_nav_drag_open_begin_dir(ui_page_create_t create, bool from_top);
 void ui_nav_drag_open_move(int32_t travel);
 void ui_nav_drag_open_end(bool commit, int32_t travel);
 /** A la esfera SIN cerrar la app: sus páginas quedan suspendidas (ocultas,
@@ -139,7 +141,20 @@ bool ui_ring_active(void);                /**< aviso de alarma o temporizador en
 lv_obj_t *ui_ring_obj(void);
 void ui_ring_dismiss(void);
 lv_obj_t *ui_apps_create(lv_obj_t *parent);
-lv_obj_t *ui_reloj_create(lv_obj_t *parent); /**< app Reloj: alarmas, cronómetro y temporizador */
+/* App Reloj (rediseño 2026-10): pestañas Hora, Cronómetro, Alarmas y
+ * Temporizador. Cada vista es un contenedor bajo la barra (y >= UI_RELOJ_TOP)
+ * que se crea al elegir su pestaña y se borra al dejarla. */
+enum { UI_RELOJ_HORA = 0, UI_RELOJ_CRONO, UI_RELOJ_ALARMAS, UI_RELOJ_TEMP, UI_RELOJ_TABS };
+#define UI_RELOJ_TOP 96
+lv_obj_t *ui_reloj_create(lv_obj_t *parent);           /**< en la última pestaña usada */
+lv_obj_t *ui_reloj_page(lv_obj_t *parent, int tab);
+int ui_reloj_tab(lv_obj_t *page);                      /**< pestaña activa (-1 si no es Reloj) */
+void ui_reloj_select(lv_obj_t *page, int tab);
+lv_obj_t *ui_reloj_view(lv_obj_t *page);               /**< contenedor vacío de una vista */
+lv_obj_t *ui_reloj_time_view(lv_obj_t *page);
+lv_obj_t *ui_stopwatch_view(lv_obj_t *page);
+lv_obj_t *ui_alarms_view(lv_obj_t *page);
+lv_obj_t *ui_timer_view(lv_obj_t *page);
 lv_obj_t *ui_calc_create(lv_obj_t *parent);     /**< app Calculadora (F9.2) */
 lv_obj_t *ui_calendar_create(lv_obj_t *parent); /**< app Calendario (F9.3) */
 lv_obj_t *ui_compass_create(lv_obj_t *parent);  /**< app Flex Compass (F9.4) */
@@ -193,10 +208,8 @@ lv_obj_t *ui_ota_create(lv_obj_t *parent);          /**< Ajustes > Actualizacion
 lv_obj_t *ui_ota_install_create(lv_obj_t *parent);  /**< pantalla de instalación (sin gesto "volver") */
 /** Cada 100 ms (ui_system): aviso de versión nueva en la esfera y aviso tras reiniciar. */
 void ui_ota_watch_tick(void);
-/* Navegador (F6; ui_browser.c, ui_jpeg.c) */
+/* Navegador (F6; ui_browser.c; JPEG con flex_jpeg de watch_theme) */
 lv_obj_t *ui_browser_create(lv_obj_t *parent);      /**< app Navegador: web renderizada por el servicio FBP/1 */
-/** JPEG baseline a un lienzo RGB565 cw x ch en (dx,dy) con tamaño dw x dh (vecino más próximo). 0 = bien. */
-int ui_jpeg_draw(const uint8_t *jpg, uint32_t n, uint16_t *canvas, int cw, int ch, int dx, int dy, int dw, int dh);
 void ui_notif_open(uint32_t id);                    /**< abre el detalle de una notificación */
 void ui_notif_watch_tick(bool screen_on);           /**< cada 100 ms (ui_system): aviso al llegar una */
 /** Texto del teléfono preparado para la fuente (sin huecos por glifos que no existen). */
@@ -205,15 +218,30 @@ void ui_phone_text(const char *in, char *out, size_t n, const lv_font_t *font);
 void ui_phone_when(uint32_t when_s, char *b, size_t n);
 /** Estado corto del enlace ("Conectado", "Buscando"...) y su color. */
 const char *ui_phone_chip(const watch_phone_status_t *s, uint32_t *rgb);
-void ui_apps_attach(lv_obj_t *face_page); /**< deslizar hacia arriba desde el borde inferior de la esfera abre el cajón */
-/** Icono de la app con ese nombre en el cajón (o NULL): accesibilidad y pruebas. */
+/** Gestos de la esfera que abren el cajón: hacia arriba desde el borde
+ * inferior y hacia abajo desde la zona central (los dos siguen al dedo). */
+void ui_apps_attach(lv_obj_t *face_page);
+/** Icono de la app con ese nombre en el cajón (o NULL): accesibilidad y
+ * pruebas. Si no se ve entero, centra la rejilla en su copia más cercana. */
 lv_obj_t *ui_apps_find(lv_obj_t *drawer, const char *name);
+/** Punto de estado de Reloj (cronómetro o temporizador en marcha). */
+lv_obj_t *ui_apps_badge(lv_obj_t *drawer);
+/** Apps (flex_app_t) con icono visible ahora mismo; devuelve cuántas. */
+int ui_apps_visible(lv_obj_t *drawer, int *apps, int max);
+/** La rejilla se está moviendo (arrastre, inercia o muelles). */
+bool ui_apps_moving(lv_obj_t *drawer);
+/** La próxima apertura empieza con Reloj en el centro (pruebas). */
+void ui_apps_reset_view(void);
+/** La esfera supo que el dedo se movió (un gesto): no ofrece la pulsación larga. */
+void ui_face_moved(void);
+/** Reloj abierto en la pestaña de cronómetro, temporizador o alarmas. */
 lv_obj_t *ui_stopwatch_create(lv_obj_t *parent);
 lv_obj_t *ui_timer_create(lv_obj_t *parent);
 lv_obj_t *ui_alarms_create(lv_obj_t *parent);
 lv_obj_t *ui_alarm_edit_create(lv_obj_t *parent);
 lv_obj_t *ui_sensors_create(lv_obj_t *parent); /* F4.4 */
-lv_obj_t *ui_storage_create(lv_obj_t *parent); /* F4.6 */
+lv_obj_t *ui_storage_create(lv_obj_t *parent);         /**< Almacenamiento (diseño del usuario) */
+lv_obj_t *ui_storage_details_create(lv_obj_t *parent); /**< sus detalles: LittleFS, pruebas y formateo (F4.6) */
 /** Rodillo con el estilo del sistema (3 filas visibles, la elegida resaltada). */
 lv_obj_t *ui_roller(lv_obj_t *parent, const char *opts, lv_roller_mode_t mode, const lv_font_t *font, int32_t w);
 /* Apagado de pantalla (F4.5, ui_screen.c) */
@@ -272,8 +300,17 @@ typedef enum {
     UI_FACE_MODULAR,
     UI_FACE_GLASS,
     UI_FACE_PARALLAX,
+    /* Diseños del usuario (fondos propios: watch_theme_apply_image) */
+    UI_FACE_MONTANA,
+    UI_FACE_ULTRA,      /**< analógica azul con complicación de batería */
+    UI_FACE_LUNA,       /**< gato y luna */
+    UI_FACE_TIERRA,     /**< con el clima de la caché */
+    UI_FACE_FLORES,     /**< horas y minutos apilados y batería */
+    UI_FACE_TAJ,
     UI_FACE_COUNT_
 } ui_face_style_t;
+/** ¿La esfera usa su propio fondo (no el fondo de pantalla elegido)? */
+bool ui_face_has_own_background(int style);
 /** Nombre de una esfera. */
 const char *ui_face_name(int style);
 /** Esfera de un estilo concreto (sin gestos: para las vistas previas). */

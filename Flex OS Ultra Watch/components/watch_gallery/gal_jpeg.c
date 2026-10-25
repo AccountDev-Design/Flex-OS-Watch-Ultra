@@ -21,7 +21,7 @@ JRESULT gal_rom_jd_decomp(JDEC *, UINT (*)(JDEC *, void *, JRECT *), BYTE);
 typedef UINT in_n_t;
 typedef UINT out_ret_t;
 #else
-/* TJpgDec R0.03 de LVGL (LV_USE_TJPGD): sin escala, salida en orden B, G, R (ui_jpeg.c). */
+/* TJpgDec R0.03 de LVGL (LV_USE_TJPGD): sin escala, salida en orden B, G, R (flex_jpeg.c). */
 #include "libs/tjpgd/tjpgd.h"
 #define ROM_TJPGD 0
 #define JD_PREPARE jd_prepare

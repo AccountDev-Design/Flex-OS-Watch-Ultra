@@ -1,8 +1,15 @@
 idf_component_register(
     SRCS "watch_theme.c" "flex_wallpaper.c" "flex_glass_math.c" "flex_batt_style.c"
          "flex_icons.c" "flex_battery_icon.c" "flex_safe.c" "flex_app_icons.c" "flex_device_icons.c"
+         "flex_blur.c" "flex_jpeg.c"
          "fonts/flex_outfit_18.c" "fonts/flex_outfit_22.c" "fonts/flex_outfit_28.c"
          "fonts/flex_outfit_40.c" "fonts/flex_outfit_clock_120.c"
+         "fonts/flex_spartan_16.c" "fonts/flex_spartan_20.c" "fonts/flex_spartan_22.c" "fonts/flex_spartan_24.c"
+         "fonts/flex_spartan_32.c" "fonts/flex_spartan_40.c" "fonts/flex_spartan_clock_188.c"
+         "fonts/flex_outfit_15.c" "fonts/flex_outfit_med_28.c"
+         "fonts/flex_cond_156.c" "fonts/flex_cond_196.c" "fonts/flex_cond_248.c"
+         "fonts/flex_outfit_xl_105.c" "fonts/flex_outfit_sb_101.c"
+         "fonts/flex_outfit_med_34.c" "fonts/flex_outfit_med_48.c"
     INCLUDE_DIRS "include"
     PRIV_REQUIRES heap log esp_timer
 )
@@ -33,3 +40,24 @@ endforeach()
 file(CONFIGURE OUTPUT "${_asm}" CONTENT "${_txt}" @ONLY)
 target_sources(${COMPONENT_LIB} PRIVATE "${_asm}")
 set_property(SOURCE "${_asm}" APPEND PROPERTY OBJECT_DEPENDS ${_deps})
+
+# Fondos de las esferas fotográficas (tools/faces/gen_faces.py): JPEG en flash,
+# con su final (_end) para conocer el tamaño. Mismo .incbin alineado que los iconos.
+set(_face_dir "${CMAKE_CURRENT_LIST_DIR}/../../assets/faces")
+set(_faces montana analogica gato tierra flores taj)
+set(_fasm "${CMAKE_CURRENT_BINARY_DIR}/flex_face_bg_data.S")
+set(_ftxt "/* GENERADO por components/watch_theme/CMakeLists.txt: no editar. */\n")
+string(APPEND _ftxt ".section .rodata.flex_face_bg, \"a\"\n")
+set(_fdeps "")
+foreach(_n IN LISTS _faces)
+    set(_f "${_face_dir}/face_${_n}.jpg")
+    if(NOT EXISTS "${_f}")
+        message(FATAL_ERROR "falta ${_f}: ejecuta tools/faces/gen_faces.py")
+    endif()
+    list(APPEND _fdeps "${_f}")
+    string(APPEND _ftxt ".balign 4\n.global _binary_face_${_n}_jpg_start\n_binary_face_${_n}_jpg_start:\n.incbin \"${_f}\"\n")
+    string(APPEND _ftxt ".global _binary_face_${_n}_jpg_end\n_binary_face_${_n}_jpg_end:\n")
+endforeach()
+file(CONFIGURE OUTPUT "${_fasm}" CONTENT "${_ftxt}" @ONLY)
+target_sources(${COMPONENT_LIB} PRIVATE "${_fasm}")
+set_property(SOURCE "${_fasm}" APPEND PROPERTY OBJECT_DEPENDS ${_fdeps})

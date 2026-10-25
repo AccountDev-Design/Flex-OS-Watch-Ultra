@@ -173,6 +173,19 @@ void sim_suite_settings(const char *out)
     /* ---- Almacenamiento (F4.6): bloqueado, y con la puerta abierta el
      * orden prueba -> formatear (dos toques) -> archivo ---- */
     open_row(4, "Almacenamiento");
+    /* Rediseño 2026-10: la página nueva resume la memoria; sin LittleFS lo dice
+     * y no inventa categorías. Las pruebas y el formateo siguen en "Detalles". */
+    EXPECT(sim_find_label(ui_nav_top(), "Datos sin montar"), "almacenamiento: no dice que los datos no estan montados");
+    lv_obj_t *bdet = sim_find_label(ui_nav_top(), "Detalles de memoria\ny sistema");
+    while (bdet && !lv_obj_has_flag(bdet, LV_OBJ_FLAG_CLICKABLE)) {
+        bdet = lv_obj_get_parent(bdet);
+    }
+    EXPECT(bdet, "almacenamiento: falta la tarjeta de detalles");
+    if (bdet) {
+        lv_obj_send_event(bdet, LV_EVENT_CLICKED, NULL);
+    }
+    sim_run(600);
+    EXPECT(sim_find_label(ui_nav_top(), "Detalles"), "almacenamiento: la tarjeta no abre los detalles");
     EXPECT(sim_find_label(ui_nav_top(), "Sonda de 32 MB no superada"), "almacenamiento: no dice por que esta bloqueado");
     lv_obj_t *bsec = sim_find_label(ui_nav_top(), "Probar escritura");
     while (bsec && !lv_obj_has_flag(bsec, LV_OBJ_FLAG_CLICKABLE)) {
@@ -214,7 +227,13 @@ void sim_suite_settings(const char *out)
     sim_lint("almacenamiento");
     sim_save(out, "f4_almacenamiento");
     back();
+    sim_run(600);
+    /* La página rediseñada no tiene cabecera: se vuelve con el gesto del borde derecho */
+    EXPECT(ui_nav_depth() == 3 && sim_find_label(ui_nav_top(), "Memoria interna"), "detalles: no vuelve al resumen");
+    sim_drag(FLEX_SCREEN_W - 4, 300, 100, 300, 12, 20);
+    sim_release();
     sim_run(1100);
+    EXPECT(ui_nav_depth() == 2, "almacenamiento: el borde derecho no vuelve a Ajustes");
     sim_stg = (watch_storage_info_t){.state = STG_LOCKED, .gate = STG_GATE_PROBE, .detail = "Sonda de 32 MB no superada"};
 
     /* ---- Batería ---- */

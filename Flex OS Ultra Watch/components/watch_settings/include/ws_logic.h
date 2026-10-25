@@ -24,7 +24,8 @@ extern "C" {
 #define WS_TZ_STEP         15
 #define WS_TZ_DEF          (-300)  /* Lima, UTC-5 sin horario de verano (referencia) */
 #define WS_SCREEN_TO_DEF   15      /* s */
-#define WS_FACE_COUNT      5       /* ui_face_style_t: digital, analógica, modular, Liquid Glass, Parallax */
+#define WS_FACE_COUNT      11      /* ui_face_style_t: digital, analógica, modular, Liquid Glass, Parallax y las 6
+                                    * esferas de los diseños del usuario (rediseño 2026-10) */
 
 /* Atenuación progresiva antes de apagar la pantalla (F4.5 ampliado) */
 enum { WS_DIM_OFF = 0, WS_DIM_SOFT, WS_DIM_MED, WS_DIM_STRONG, WS_DIM_COUNT };

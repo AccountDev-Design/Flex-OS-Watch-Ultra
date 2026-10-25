@@ -1,11 +1,14 @@
 /*
- * ui_timer — Temporizador (F4.3):
- *  - parado: rodillos de minutos (0-99) y segundos, atajos de 1, 3, 5, 10 y
- *    15 min, e "Iniciar";
- *  - en marcha o en pausa: lo que queda en grande, barra de progreso y
- *    "Pausa"/"Seguir" y "Cancelar".
- * Cuenta por instante de fin (ui_clock_core): sigue fuera de la página y no
- * se desvía. Al llegar a 0, ui_clock_core muestra el aviso "Tiempo agotado"
+ * ui_timer — Reloj > Temporizador con el diseño del usuario
+ * (design/referencias/reloj_temporizador.png):
+ *  - parado: tres rodillos (Horas 0-99, Minutos y Segundos 0-59) con el valor
+ *    elegido en blanco y los vecinos apagados, separados por ":" y ".";
+ *    atajos 00:10:00, 00:15:00 y 00:30:00 y "Iniciar" (desactivado con 0);
+ *  - en marcha o en pausa (la referencia no lo dibuja; mismo lenguaje que el
+ *    cronómetro): lo que queda dentro de la esfera oscura con un arco de
+ *    progreso azul, "Pausa"/"Seguir" y "Cancelar".
+ * Cuenta por instante de fin (ui_clock_core): sigue fuera de la app y no se
+ * desvía. Al llegar a 0, ui_clock_core muestra el aviso "Tiempo agotado"
  * esté donde esté el usuario.
  */
 #include "ui_internal.h"
@@ -15,41 +18,65 @@
 #include "watch_theme.h"
 
 #define TMR_TICK_MS 200
-#define BTN_W       150
-#define BTN_H       60
-#define CHIP_W      60
-#define CHIP_H      44
+#define VY(y)       ((y) - UI_RELOJ_TOP)
+#define COL_DX      85    /* entre columnas: centros en 120, 205 y 290 */
+#define LABEL_Y     117
+#define ROLLER_Y    136
+#define ROLLER_W    78
+#define CHIP_W      76
+#define CHIP_DX     88    /* atajos centrados en 117, 205 y 293 */
+#define CHIP_H      34
+#define CHIP_Y      360
+#define BTN_W       100
+#define BTN_H       61
+#define BTN_Y       413
+#define BTN_R       30
+#define RING_R      111
+#define RING_CY     236
 
-static const uint8_t PRESETS[] = {1, 3, 5, 10, 15};
+static const uint16_t PRESETS_MIN[] = {10, 15, 30};
 
 typedef struct {
-    lv_obj_t *idle;   /* contenedor del modo parado */
-    lv_obj_t *run;    /* contenedor en marcha / pausa */
-    lv_obj_t *mm;
-    lv_obj_t *ss;
+    lv_obj_t *idle, *run;
+    lv_obj_t *roll[3];
     lv_obj_t *start;
-    lv_obj_t *left;   /* lo que queda */
-    lv_obj_t *bar;
-    lv_obj_t *of;     /* "de 05:00" */
-    lv_obj_t *pause;
-    lv_obj_t *cancel;
+    lv_obj_t *left, *arc, *of;
+    lv_obj_t *pause, *cancel;
     tmr_state_t shown;
+    char left_txt[16];
 } tp_t;
 
-static void back_cb(lv_event_t *e)
+static lv_obj_t *box(lv_obj_t *v)
 {
-    (void)e;
-    ui_nav_back();
-}
-
-static lv_obj_t *box(lv_obj_t *page)
-{
-    lv_obj_t *b = lv_obj_create(page);
+    lv_obj_t *b = lv_obj_create(v);
     lv_obj_remove_style_all(b);
-    lv_obj_set_size(b, FLEX_SCREEN_W, FLEX_SCREEN_H - FLEX_HDR_H);
-    lv_obj_set_pos(b, 0, FLEX_HDR_H);
+    lv_obj_set_size(b, FLEX_SCREEN_W, FLEX_SCREEN_H - UI_RELOJ_TOP);
     lv_obj_remove_flag(b, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     return b;
+}
+
+static int64_t chosen_us(const tp_t *p)
+{
+    return ((int64_t)lv_roller_get_selected(p->roll[0]) * 3600 + (int64_t)lv_roller_get_selected(p->roll[1]) * 60 +
+            lv_roller_get_selected(p->roll[2])) *
+           1000000;
+}
+
+static void paint_start(tp_t *p)
+{
+    if (chosen_us(p) > 0) {
+        lv_obj_remove_state(p->start, LV_STATE_DISABLED);
+    } else {
+        lv_obj_add_state(p->start, LV_STATE_DISABLED);
+    }
+}
+
+static void set_label(lv_obj_t *btn, const char *t)
+{
+    lv_obj_t *l = lv_obj_get_child(btn, -1);
+    if (strcmp(lv_label_get_text(l), t) != 0) {
+        lv_label_set_text(l, t);
+    }
 }
 
 static void paint(tp_t *p)
@@ -59,27 +86,27 @@ static void paint(tp_t *p)
     const bool active = t->st == TMR_RUN || t->st == TMR_PAUSE;
     if (t->st != p->shown) {
         p->shown = t->st;
-        if (active) {
-            lv_obj_add_flag(p->idle, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_remove_flag(p->run, LV_OBJ_FLAG_HIDDEN);
-        } else {
-            lv_obj_remove_flag(p->idle, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(p->run, LV_OBJ_FLAG_HIDDEN);
-        }
-        watch_theme_button_set(p->pause, t->st == TMR_PAUSE ? "Seguir" : "Pausa",
-                               t->st == TMR_PAUSE ? FLEX_C_PRIMARY : FLEX_C_SURF2);
+        watch_theme_set_visible(p->idle, !active);
+        watch_theme_set_visible(p->run, active);
+        set_label(p->pause, t->st == TMR_PAUSE ? "Seguir" : "Pausa");
         char buf[24], d[16];
         tmr_format(t->dur_us, d, sizeof(d));
         snprintf(buf, sizeof(buf), "de %s", d);
         lv_label_set_text(p->of, buf);
+        paint_start(p);
     }
     if (active) {
         char buf[16];
         tmr_format(tmr_left(t, now), buf, sizeof(buf));
-        if (strcmp(lv_label_get_text(p->left), buf) != 0) {
+        if (strcmp(p->left_txt, buf) != 0) {
+            snprintf(p->left_txt, sizeof(p->left_txt), "%s", buf);
             lv_label_set_text(p->left, buf);
         }
-        lv_bar_set_value(p->bar, tmr_permille(t, now), LV_ANIM_OFF);
+        /* lo que queda: el arco se vacía en el sentido de las agujas */
+        const int32_t v = 1000 - tmr_permille(t, now);
+        if (lv_arc_get_value(p->arc) != v) {
+            lv_arc_set_value(p->arc, v);
+        }
     }
 }
 
@@ -91,8 +118,10 @@ static void tick_cb(lv_timer_t *t)
 static void start_cb(lv_event_t *e)
 {
     tp_t *p = lv_event_get_user_data(e);
-    const int64_t us = ((int64_t)lv_roller_get_selected(p->mm) * 60 + lv_roller_get_selected(p->ss)) * 1000000;
-    tmr_start(ui_tmr(), us, ui_mono_us());
+    const int64_t us = chosen_us(p);
+    if (us > 0) {
+        tmr_start(ui_tmr(), us, ui_mono_us());
+    }
     paint(p);
 }
 
@@ -100,8 +129,15 @@ static void preset_cb(lv_event_t *e)
 {
     tp_t *p = lv_obj_get_user_data(lv_event_get_current_target(e));
     const int min = (int)(intptr_t)lv_event_get_user_data(e);
-    lv_roller_set_selected(p->mm, (uint32_t)min, LV_ANIM_ON);
-    lv_roller_set_selected(p->ss, 0, LV_ANIM_ON);
+    lv_roller_set_selected(p->roll[0], (uint32_t)(min / 60), LV_ANIM_ON);
+    lv_roller_set_selected(p->roll[1], (uint32_t)(min % 60), LV_ANIM_ON);
+    lv_roller_set_selected(p->roll[2], 0, LV_ANIM_ON);
+    paint_start(p);
+}
+
+static void roller_cb(lv_event_t *e)
+{
+    paint_start(lv_event_get_user_data(e));
 }
 
 static void pause_cb(lv_event_t *e)
@@ -128,83 +164,126 @@ static void free_cb(lv_event_t *e)
     lv_free(lv_event_get_user_data(e));
 }
 
-lv_obj_t *ui_timer_create(lv_obj_t *parent)
+/* Rodillo del diseño: elegido en blanco, vecinos apagados, sin fondo. */
+static lv_obj_t *roller(lv_obj_t *parent, const char *opts, lv_roller_mode_t mode)
+{
+    lv_obj_t *r = lv_roller_create(parent);
+    lv_obj_set_style_bg_opa(r, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(r, 0, 0);
+    lv_obj_set_style_pad_all(r, 0, 0);
+    lv_obj_set_style_text_font(r, FLEX_FONT_CAPS_S, 0);
+    lv_obj_set_style_text_color(r, flex_color(FLEX_RD_FADED), 0);
+    lv_obj_set_style_text_align(r, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_line_space(r, 22, 0);
+    lv_obj_set_style_anim_duration(r, 160, 0);
+    lv_obj_set_style_bg_opa(r, LV_OPA_TRANSP, LV_PART_SELECTED);
+    lv_obj_set_style_text_color(r, flex_color(FLEX_C_WHITE), LV_PART_SELECTED);
+    lv_obj_set_style_text_font(r, FLEX_FONT_CAPS_S, LV_PART_SELECTED);
+    lv_roller_set_options(r, opts, mode);
+    lv_roller_set_visible_row_count(r, 3);
+    lv_obj_set_width(r, ROLLER_W);
+    return r;
+}
+
+static lv_obj_t *button(lv_obj_t *parent, int32_t x, const char *txt, bool primary, lv_event_cb_t cb, void *ud)
+{
+    lv_obj_t *b = watch_theme_lg_button(parent, FLEX_LG_DARK, x, VY(BTN_Y), BTN_W, BTN_H, BTN_R, FLEX_GLOW_BOTTOM);
+    if (primary) {
+        lv_obj_set_style_bg_color(b, flex_color(FLEX_RD_START), 0);
+        lv_obj_set_style_bg_grad_color(b, flex_color(FLEX_RD_START_BOT), 0);
+        lv_obj_set_style_border_color(b, flex_color(0xC79BFF), 0);
+    }
+    lv_obj_t *l = watch_theme_label(b, FLEX_FONT_S24, FLEX_C_WHITE, txt);
+    lv_obj_set_style_text_color(l, flex_color(FLEX_C_MUTE), LV_STATE_DISABLED);
+    lv_obj_center(l);
+    lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, ud);
+    return b;
+}
+
+lv_obj_t *ui_timer_view(lv_obj_t *page)
 {
     tp_t *p = lv_malloc_zeroed(sizeof(*p));
     LV_ASSERT_MALLOC(p);
     p->shown = (tmr_state_t)-1;
-    lv_obj_t *page = ui_page_new(parent);
-    watch_theme_page(page);
-    watch_theme_header(page, "Temporizador", back_cb, NULL);
+    lv_obj_t *v = ui_reloj_view(page);
 
     /* ---- Parado: elegir el tiempo ---- */
-    p->idle = box(page);
-    static char mins[100 * 3], secs[60 * 3];
-    if (!mins[0]) {
-        char *q = mins;
+    p->idle = box(v);
+    static char hours[100 * 3], mins[60 * 3];
+    if (!hours[0]) {
+        char *q = hours;
         for (int i = 0; i < 100; i++) {
             q += sprintf(q, i < 99 ? "%02d\n" : "%02d", i);
         }
-        q = secs;
+        q = mins;
         for (int i = 0; i < 60; i++) {
             q += sprintf(q, i < 59 ? "%02d\n" : "%02d", i);
         }
     }
-    p->mm = ui_roller(p->idle, mins, LV_ROLLER_MODE_NORMAL, FLEX_FONT_TITLE, 96);
-    p->ss = ui_roller(p->idle, secs, LV_ROLLER_MODE_INFINITE, FLEX_FONT_TITLE, 96);
-    lv_obj_align(p->mm, LV_ALIGN_TOP_MID, -62, 6);
-    lv_obj_align(p->ss, LV_ALIGN_TOP_MID, 62, 6);
-    lv_roller_set_selected(p->mm, 5, LV_ANIM_OFF);
-    lv_obj_update_layout(p->idle);
-    const int32_t hr = lv_obj_get_height(p->mm);
-    lv_obj_t *colon = watch_theme_label(p->idle, FLEX_FONT_TITLE, FLEX_C_TXT, ":");
-    lv_obj_align(colon, LV_ALIGN_TOP_MID, 0, 6 + (hr - lv_font_get_line_height(FLEX_FONT_TITLE)) / 2);
-    lv_obj_t *mlab = watch_theme_label(p->idle, FLEX_FONT_SMALL, FLEX_C_MUTE, "min");
-    lv_obj_align_to(mlab, p->mm, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
-    lv_obj_t *slab = watch_theme_label(p->idle, FLEX_FONT_SMALL, FLEX_C_MUTE, "s");
-    lv_obj_align_to(slab, p->ss, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
-
-    const int n = (int)(sizeof(PRESETS) / sizeof(PRESETS[0]));
-    const int32_t gap = 8, cw = n * CHIP_W + (n - 1) * gap;
-    const int32_t cy = 6 + hr + 34;
-    for (int i = 0; i < n; i++) {
-        char t[8];
-        snprintf(t, sizeof(t), "%d", PRESETS[i]);
-        lv_obj_t *c = watch_theme_button(p->idle, t, FLEX_C_SURF, CHIP_W, CHIP_H);
-        lv_obj_set_pos(c, (FLEX_SCREEN_W - cw) / 2 + i * (CHIP_W + gap), cy);
-        lv_obj_set_user_data(c, p);
-        lv_obj_add_event_cb(c, preset_cb, LV_EVENT_CLICKED, (void *)(intptr_t)PRESETS[i]);
+    static const char *const kLabels[3] = {"Horas", "Minutos", "Segundos"};
+    for (int c = 0; c < 3; c++) {
+        lv_obj_t *l = watch_theme_label(p->idle, FLEX_FONT_TINY, FLEX_C_TXT2, kLabels[c]);
+        lv_obj_align(l, LV_ALIGN_TOP_MID, (c - 1) * COL_DX, VY(LABEL_Y));
+        p->roll[c] = roller(p->idle, c == 0 ? hours : mins, LV_ROLLER_MODE_INFINITE); /* 99 sobre 00, como en el diseño */
+        lv_obj_align(p->roll[c], LV_ALIGN_TOP_MID, (c - 1) * COL_DX, VY(ROLLER_Y));
+        lv_obj_add_event_cb(p->roll[c], roller_cb, LV_EVENT_VALUE_CHANGED, p);
     }
-    p->start = watch_theme_button(p->idle, "Iniciar", FLEX_C_PRIMARY, 200, BTN_H);
-    lv_obj_align(p->start, LV_ALIGN_BOTTOM_MID, 0, -FLEX_LIST_BOTTOM);
-    lv_obj_add_event_cb(p->start, start_cb, LV_EVENT_CLICKED, p);
+    lv_obj_update_layout(p->idle);
+    const int32_t rh = lv_obj_get_height(p->roll[0]);
+    const int32_t sep_y = VY(ROLLER_Y) + (rh - lv_font_get_line_height(FLEX_FONT_CAPS_S)) / 2;
+    lv_obj_t *colon = watch_theme_label(p->idle, FLEX_FONT_CAPS_S, FLEX_C_WHITE, ":");
+    lv_obj_align(colon, LV_ALIGN_TOP_MID, -COL_DX / 2, sep_y);
+    lv_obj_t *dot = watch_theme_label(p->idle, FLEX_FONT_CAPS_S, FLEX_C_WHITE, ".");
+    lv_obj_align(dot, LV_ALIGN_TOP_MID, COL_DX / 2, sep_y);
+
+    const int n = (int)(sizeof(PRESETS_MIN) / sizeof(PRESETS_MIN[0]));
+    for (int i = 0; i < n; i++) {
+        char t[12];
+        snprintf(t, sizeof(t), "%02d:%02d:00", PRESETS_MIN[i] / 60, PRESETS_MIN[i] % 60);
+        const int32_t cx = FLEX_SCREEN_W / 2 + (i - 1) * CHIP_DX;
+        lv_obj_t *c = watch_theme_lg_button(p->idle, FLEX_LG_DARK, cx - CHIP_W / 2, VY(CHIP_Y), CHIP_W, CHIP_H, 14,
+                                            FLEX_GLOW_BOTTOM);
+        lv_obj_t *l = watch_theme_label(c, FLEX_FONT_TINY, FLEX_C_WHITE, t);
+        lv_obj_center(l);
+        lv_obj_set_ext_click_area(c, 12); /* zona táctil mayor que el dibujo (FLEX_TOUCH_MIN) */
+        lv_obj_set_user_data(c, p);
+        lv_obj_add_event_cb(c, preset_cb, LV_EVENT_CLICKED, (void *)(intptr_t)PRESETS_MIN[i]);
+    }
+    p->start = button(p->idle, (FLEX_SCREEN_W - BTN_W) / 2, "Iniciar", false, start_cb, p);
 
     /* ---- En marcha o en pausa ---- */
-    p->run = box(page);
-    p->left = watch_theme_label(p->run, FLEX_FONT_CLOCK, FLEX_C_TXT, "00:00");
-    lv_obj_align(p->left, LV_ALIGN_TOP_MID, 0, 20);
-    p->bar = lv_bar_create(p->run);
-    lv_obj_remove_style_all(p->bar);
-    lv_obj_set_size(p->bar, 300, 10);
-    lv_obj_align(p->bar, LV_ALIGN_TOP_MID, 0, 20 + lv_font_get_line_height(FLEX_FONT_CLOCK) + 18);
-    lv_bar_set_range(p->bar, 0, 1000);
-    lv_obj_set_style_radius(p->bar, 5, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(p->bar, flex_color(FLEX_C_TRACK), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(p->bar, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_radius(p->bar, 5, LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(p->bar, flex_color(FLEX_C_ACCENT), LV_PART_INDICATOR);
-    lv_obj_set_style_bg_opa(p->bar, LV_OPA_COVER, LV_PART_INDICATOR);
+    p->run = box(v);
+    p->arc = lv_arc_create(p->run);
+    lv_obj_set_size(p->arc, 2 * RING_R, 2 * RING_R);
+    lv_obj_set_pos(p->arc, FLEX_SCREEN_W / 2 - RING_R, VY(RING_CY) - RING_R);
+    lv_arc_set_range(p->arc, 0, 1000);
+    lv_arc_set_bg_angles(p->arc, 0, 360);
+    lv_arc_set_rotation(p->arc, 270);
+    lv_obj_remove_style(p->arc, NULL, LV_PART_KNOB);
+    lv_obj_remove_flag(p->arc, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_bg_color(p->arc, flex_color(FLEX_RD_DIAL), 0);
+    lv_obj_set_style_bg_opa(p->arc, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(p->arc, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_arc_color(p->arc, flex_color(0x34374F), LV_PART_MAIN);
+    lv_obj_set_style_arc_width(p->arc, 8, LV_PART_MAIN);
+    lv_obj_set_style_arc_color(p->arc, flex_color(FLEX_RD_HAND), LV_PART_INDICATOR);
+    lv_obj_set_style_arc_width(p->arc, 8, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_rounded(p->arc, true, LV_PART_INDICATOR);
+    lv_arc_set_value(p->arc, 1000);
+    p->left = watch_theme_label(p->run, FLEX_FONT_CAPS_L, FLEX_C_WHITE, "00:00");
+    lv_obj_align(p->left, LV_ALIGN_TOP_MID, 0, VY(RING_CY) - 34);
     p->of = watch_theme_label(p->run, FLEX_FONT_SMALL, FLEX_C_TXT2, "");
-    lv_obj_align_to(p->of, p->bar, LV_ALIGN_OUT_BOTTOM_MID, 0, 12);
-    p->pause = watch_theme_button(p->run, "Pausa", FLEX_C_SURF2, BTN_W, BTN_H);
-    lv_obj_align(p->pause, LV_ALIGN_BOTTOM_MID, -(BTN_W / 2 + 8), -FLEX_LIST_BOTTOM);
-    lv_obj_add_event_cb(p->pause, pause_cb, LV_EVENT_CLICKED, p);
-    p->cancel = watch_theme_button(p->run, "Cancelar", FLEX_C_DANGER, BTN_W, BTN_H);
-    lv_obj_align(p->cancel, LV_ALIGN_BOTTOM_MID, BTN_W / 2 + 8, -FLEX_LIST_BOTTOM);
-    lv_obj_add_event_cb(p->cancel, cancel_cb, LV_EVENT_CLICKED, p);
+    lv_obj_align(p->of, LV_ALIGN_TOP_MID, 0, VY(RING_CY) + 26);
+    p->pause = button(p->run, 75, "Pausa", false, pause_cb, p);
+    p->cancel = button(p->run, 235, "Cancelar", true, cancel_cb, p);
 
     paint(p);
-    lv_obj_add_event_cb(page, free_cb, LV_EVENT_DELETE, p);
-    ui_page_timer(page, tick_cb, TMR_TICK_MS, p);
-    return page;
+    lv_obj_add_event_cb(v, free_cb, LV_EVENT_DELETE, p);
+    ui_page_timer(v, tick_cb, TMR_TICK_MS, p);
+    return v;
+}
+
+lv_obj_t *ui_timer_create(lv_obj_t *parent)
+{
+    return ui_reloj_page(parent, UI_RELOJ_TEMP);
 }

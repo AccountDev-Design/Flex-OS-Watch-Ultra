@@ -7,7 +7,9 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "flex_blur.h"
 #include "flex_glass_math.h"
+#include "flex_jpeg.h"
 #include "flex_safe.h"
 #include "flex_wallpaper.h"
 #include "misc/cache/lv_cache.h" /* lv_image_cache_drop (no está en lvgl.h) */
@@ -29,13 +31,34 @@ enum { ROW_ICON = 0, ROW_TITLE, ROW_VALUE };
 
 #define HDR_CHEV 26 /* chevron de "volver" */
 
-/* Un solo fondo en PSRAM (402 KB): el que pinta la esfera. Se reescribe al
- * cambiar de fondo y se libera al volver al negro. s_wall_px_id dice qué
- * fondo contiene (FLEX_WALL_BLACK = ninguno válido). */
-static uint16_t *s_wall_px;
-static flex_wall_t s_wall_px_id = FLEX_WALL_BLACK;
-static lv_image_dsc_t s_wall_dsc;
+/* Fondos en PSRAM (402 KB cada uno), con una clave que dice qué contienen:
+ *  - s_bg: el de la esfera activa (un fondo de pantalla o un fondo propio de
+ *    esfera fotográfica). Se reescribe al cambiar y se libera con el negro;
+ *  - s_prev: el de las esferas temporales del selector (vistas previas), solo
+ *    mientras dura la generación (watch_theme_preview_begin/end);
+ *  - s_blur: s_bg desenfocado para el cajón (watch_theme_blur_*). */
+#define BG_BYTES  ((size_t)FLEX_SCREEN_W * FLEX_SCREEN_H * sizeof(uint16_t))
+#define KEY_NONE  0u
+#define KEY_IMAGE 0x100u /* | flex_bg_t; un fondo de pantalla es su flex_wall_t */
+typedef struct {
+    uint16_t *px;
+    uint16_t key;
+    lv_image_dsc_t dsc;
+} bgbuf_t;
+static bgbuf_t s_bg, s_prev;
+static bool s_preview;
 static flex_wall_t s_wall = FLEX_WALL_BLACK;
+
+static struct {
+    bgbuf_t out;
+    uint16_t src_key; /* clave de s_bg que se está desenfocando o ya desenfocada */
+    bool ready;
+    flex_blur_t job;
+    uint8_t *small, *tmp;
+    int holds;          /* cajones vivos que muestran s_blur.out: no se libera mientras tanto */
+    uint16_t failed_key; /* fondo para el que no hubo PSRAM: no se reintenta en bucle */
+} s_blur;
+#define BLUR_DIM 165 /* brillo del fondo desenfocado: los iconos y sus bordes se leen encima */
 
 /* flex_wall_t (valor guardado en los ajustes) -> fondo de la referencia */
 static const flex_wp_t kWallToWp[FLEX_WALL_COUNT_] = {
@@ -45,6 +68,7 @@ static const flex_wp_t kWallToWp[FLEX_WALL_COUNT_] = {
     [FLEX_WALL_VIOLETA] = FLEX_WP_VIOLETA,   [FLEX_WALL_NATURALEZA] = FLEX_WP_NATURALEZA,
 };
 static lv_opa_t s_flat_mix; /* tinte del vidrio sobre el negro de la página */
+static void lg_init(void);
 
 static lv_color_t mix(uint32_t fg, uint32_t bg, uint8_t a)
 {
@@ -157,6 +181,7 @@ void watch_theme_init(void)
     lv_style_set_flex_flow(&s_list, LV_FLEX_FLOW_COLUMN);
 
     s_inited = true;
+    lg_init(); /* estilos del rediseño: también al arrancar (sus propiedades viven en el montón) */
 }
 
 static void add_states(lv_obj_t *obj)
@@ -193,57 +218,115 @@ void watch_theme_wallpaper_thumb(flex_wall_t w, uint16_t *buf, int tw, int th)
     flex_wallpaper_render(kWallToWp[w], buf, tw, th);
 }
 
-/* Libera el fondo. Solo se llama mientras se construye la esfera nueva: la
- * vieja, que aún apunta al búfer, se borra en la misma llamada sin dibujarse
- * (ui_nav_replace_root), así que nadie lo lee después. */
-static void drop_wall(void)
+/* ---- Búferes de fondo ---- */
+
+static void bg_set_dsc(bgbuf_t *b)
 {
-    if (s_wall_px) {
-        lv_image_cache_drop(&s_wall_dsc);
-        heap_caps_free(s_wall_px);
-        s_wall_px = NULL;
-        s_wall_px_id = FLEX_WALL_BLACK;
-        ESP_LOGI(TAG, "fondo liberado (negro AMOLED)");
+    b->dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+    b->dsc.header.cf = LV_COLOR_FORMAT_RGB565;
+    b->dsc.header.w = FLEX_SCREEN_W;
+    b->dsc.header.h = FLEX_SCREEN_H;
+    b->dsc.header.stride = FLEX_SCREEN_W * sizeof(uint16_t);
+    b->dsc.data_size = BG_BYTES;
+    b->dsc.data = (const uint8_t *)b->px;
+}
+
+/* Libera un fondo. El de la esfera solo se suelta mientras se construye la
+ * esfera nueva: la vieja, que aún apunta al búfer, se borra en la misma
+ * llamada sin dibujarse (ui_nav_replace_root), así que nadie lo lee después. */
+static void bg_drop(bgbuf_t *b)
+{
+    if (b->px) {
+        lv_image_cache_drop(&b->dsc);
+        heap_caps_free(b->px);
+        b->px = NULL;
+        b->key = KEY_NONE;
     }
 }
 
-/* Deja en s_wall_px el fondo s_wall. false si es el negro o no hay PSRAM. */
-static bool ensure_wall(void)
+extern const uint8_t _binary_face_montana_jpg_start[], _binary_face_montana_jpg_end[];
+extern const uint8_t _binary_face_analogica_jpg_start[], _binary_face_analogica_jpg_end[];
+extern const uint8_t _binary_face_gato_jpg_start[], _binary_face_gato_jpg_end[];
+extern const uint8_t _binary_face_tierra_jpg_start[], _binary_face_tierra_jpg_end[];
+extern const uint8_t _binary_face_flores_jpg_start[], _binary_face_flores_jpg_end[];
+extern const uint8_t _binary_face_taj_jpg_start[], _binary_face_taj_jpg_end[];
+
+static const struct {
+    const char *name;
+    const uint8_t *start, *end;
+} kImages[FLEX_BG_COUNT_] = {
+    [FLEX_BG_MONTANA] = {"montana", _binary_face_montana_jpg_start, _binary_face_montana_jpg_end},
+    [FLEX_BG_ANALOGICA] = {"analogica", _binary_face_analogica_jpg_start, _binary_face_analogica_jpg_end},
+    [FLEX_BG_GATO] = {"gato", _binary_face_gato_jpg_start, _binary_face_gato_jpg_end},
+    [FLEX_BG_TIERRA] = {"tierra", _binary_face_tierra_jpg_start, _binary_face_tierra_jpg_end},
+    [FLEX_BG_FLORES] = {"flores", _binary_face_flores_jpg_start, _binary_face_flores_jpg_end},
+    [FLEX_BG_TAJ] = {"taj", _binary_face_taj_jpg_start, _binary_face_taj_jpg_end},
+};
+
+const uint8_t *watch_theme_image_jpeg(flex_bg_t bg, uint32_t *len)
 {
-    if (s_wall == FLEX_WALL_BLACK) {
-        drop_wall();
+    if (bg <= FLEX_BG_NONE || bg >= FLEX_BG_COUNT_) {
+        *len = 0;
+        return NULL;
+    }
+    *len = (uint32_t)(kImages[bg].end - kImages[bg].start);
+    return kImages[bg].start;
+}
+
+/* Deja en b el fondo key (generado o decodificado). false con KEY_NONE, sin
+ * PSRAM o si el JPEG no se puede decodificar (queda negro y se registra). */
+static bool bg_ensure(bgbuf_t *b, uint16_t key)
+{
+    if (key == KEY_NONE) {
+        bg_drop(b);
         return false;
     }
-    const size_t bytes = (size_t)FLEX_SCREEN_W * FLEX_SCREEN_H * sizeof(uint16_t);
-    if (!s_wall_px) {
-        s_wall_px = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (!s_wall_px) {
-            ESP_LOGW(TAG, "sin PSRAM para el fondo (%u B): fondo negro", (unsigned)bytes);
+    if (!b->px) {
+        b->px = heap_caps_malloc(BG_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!b->px) {
+            ESP_LOGW(TAG, "sin PSRAM para el fondo (%u B): fondo negro", (unsigned)BG_BYTES);
             return false;
         }
-        s_wall_px_id = FLEX_WALL_BLACK;
+        b->key = KEY_NONE;
     }
-    if (s_wall_px_id != s_wall) {
+    if (b->key != key) {
         const int64_t t0 = esp_timer_get_time();
-        flex_wallpaper_render(kWallToWp[s_wall], s_wall_px, FLEX_SCREEN_W, FLEX_SCREEN_H);
-        s_wall_px_id = s_wall;
-        lv_image_cache_drop(&s_wall_dsc); /* mismo descriptor, contenido nuevo */
-        ESP_LOGI(TAG, "fondo \"%s\" generado en PSRAM (%u B) en %d ms", watch_theme_wallpaper_name(s_wall),
-                 (unsigned)bytes, (int)((esp_timer_get_time() - t0) / 1000));
+        lv_image_cache_drop(&b->dsc); /* mismo descriptor, contenido nuevo */
+        if (key & KEY_IMAGE) {
+            const flex_bg_t id = (flex_bg_t)(key & 0xFF);
+            uint32_t n;
+            const uint8_t *jpg = watch_theme_image_jpeg(id, &n);
+            const int r = flex_jpeg_draw(jpg, n, b->px, FLEX_SCREEN_W, FLEX_SCREEN_H, 0, 0, FLEX_SCREEN_W,
+                                         FLEX_SCREEN_H);
+            if (r != 0) {
+                ESP_LOGW(TAG, "fondo \"%s\": JPEG no válido (%d): fondo negro", kImages[id].name, r);
+                bg_drop(b);
+                return false;
+            }
+            ESP_LOGI(TAG, "fondo \"%s\" decodificado en PSRAM (%u B de JPEG) en %d ms", kImages[id].name,
+                     (unsigned)n, (int)((esp_timer_get_time() - t0) / 1000));
+        } else {
+            const flex_wall_t w = (flex_wall_t)key;
+            flex_wallpaper_render(kWallToWp[w], b->px, FLEX_SCREEN_W, FLEX_SCREEN_H);
+            ESP_LOGI(TAG, "fondo \"%s\" generado en PSRAM (%u B) en %d ms", watch_theme_wallpaper_name(w),
+                     (unsigned)BG_BYTES, (int)((esp_timer_get_time() - t0) / 1000));
+        }
+        b->key = key;
     }
-    s_wall_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
-    s_wall_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
-    s_wall_dsc.header.w = FLEX_SCREEN_W;
-    s_wall_dsc.header.h = FLEX_SCREEN_H;
-    s_wall_dsc.header.stride = FLEX_SCREEN_W * sizeof(uint16_t);
-    s_wall_dsc.data_size = bytes;
-    s_wall_dsc.data = (const uint8_t *)s_wall_px;
+    bg_set_dsc(b);
     return true;
+}
+
+/* El búfer en el que se construye ahora (la esfera activa o una vista previa). */
+static bgbuf_t *bg_target(void)
+{
+    return s_preview ? &s_prev : &s_bg;
 }
 
 static bool wall_active(void)
 {
-    return s_wall != FLEX_WALL_BLACK && s_wall_px && s_wall_px_id == s_wall;
+    const bgbuf_t *b = bg_target();
+    return b->px && b->key != KEY_NONE;
 }
 
 bool watch_theme_wall_is_light(int32_t x, int32_t y, int32_t w, int32_t h)
@@ -251,21 +334,154 @@ bool watch_theme_wall_is_light(int32_t x, int32_t y, int32_t w, int32_t h)
     if (!wall_active()) {
         return false;
     }
-    return flex_wallpaper_region_luma(s_wall_px, FLEX_SCREEN_W, FLEX_SCREEN_H, x, y, w, h) > FLEX_WALL_LIGHT_LUMA;
+    return flex_wallpaper_region_luma(bg_target()->px, FLEX_SCREEN_W, FLEX_SCREEN_H, x, y, w, h) >
+           FLEX_WALL_LIGHT_LUMA;
+}
+
+static bool apply_key(lv_obj_t *screen, uint16_t key)
+{
+    lv_obj_set_style_bg_color(screen, flex_color(FLEX_C_BLACK), 0);
+    lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
+    bgbuf_t *b = bg_target();
+    if (!bg_ensure(b, key)) {
+        return false;
+    }
+    lv_obj_t *img = lv_image_create(screen);
+    lv_image_set_src(img, &b->dsc);
+    lv_obj_set_pos(img, 0, 0);
+    lv_obj_remove_flag(img, LV_OBJ_FLAG_CLICKABLE);
+    return true;
 }
 
 bool watch_theme_apply_background(lv_obj_t *screen)
 {
-    lv_obj_set_style_bg_color(screen, flex_color(FLEX_C_BLACK), 0);
-    lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
-    if (!ensure_wall()) {
+    return apply_key(screen, s_wall == FLEX_WALL_BLACK ? KEY_NONE : (uint16_t)s_wall);
+}
+
+bool watch_theme_apply_image(lv_obj_t *screen, flex_bg_t bg)
+{
+    if (bg <= FLEX_BG_NONE || bg >= FLEX_BG_COUNT_) {
+        return apply_key(screen, KEY_NONE);
+    }
+    return apply_key(screen, (uint16_t)(KEY_IMAGE | bg));
+}
+
+void watch_theme_preview_begin(void)
+{
+    s_preview = true;
+}
+
+void watch_theme_preview_end(void)
+{
+    s_preview = false;
+    bg_drop(&s_prev);
+}
+
+/* ---- Desenfoque para el cajón ---- */
+
+static void blur_free_work(void)
+{
+    heap_caps_free(s_blur.small);
+    heap_caps_free(s_blur.tmp);
+    s_blur.small = NULL;
+    s_blur.tmp = NULL;
+}
+
+/* Suelta el desenfoque si ningún cajón lo está mostrando (si no, solo su
+ * memoria de trabajo: el cajón oculto apunta a la imagen). */
+static bool blur_drop(void)
+{
+    blur_free_work();
+    if (s_blur.holds > 0) {
         return false;
     }
-    lv_obj_t *img = lv_image_create(screen);
-    lv_image_set_src(img, &s_wall_dsc);
-    lv_obj_set_pos(img, 0, 0);
-    lv_obj_remove_flag(img, LV_OBJ_FLAG_CLICKABLE);
+    bg_drop(&s_blur.out);
+    s_blur.ready = false;
+    s_blur.src_key = KEY_NONE;
     return true;
+}
+
+void watch_theme_blur_hold(bool on)
+{
+    s_blur.holds += on ? 1 : -1;
+    if (s_blur.holds < 0) {
+        s_blur.holds = 0;
+    }
+}
+
+bool watch_theme_has_background(void)
+{
+    return s_bg.px && s_bg.key != KEY_NONE;
+}
+
+const lv_image_dsc_t *watch_theme_blur_get(void)
+{
+    if (!watch_theme_has_background() || !s_blur.ready || s_blur.src_key != s_bg.key) {
+        return NULL;
+    }
+    return &s_blur.out.dsc;
+}
+
+bool watch_theme_blur_step(int rows)
+{
+    if (!watch_theme_has_background()) {
+        if (s_blur.out.px) {
+            blur_drop(); /* esfera en negro: no hay nada que desenfocar */
+        }
+        return true;
+    }
+    if ((s_blur.ready && s_blur.src_key == s_bg.key) || s_blur.failed_key == s_bg.key) {
+        return true;
+    }
+    if (s_blur.src_key != s_bg.key || !s_blur.small) {
+        /* fondo nuevo (o primera vez): se empieza de cero */
+        s_blur.ready = false;
+        if (!s_blur.out.px) {
+            s_blur.out.px = heap_caps_malloc(BG_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        }
+        if (!s_blur.small) {
+            s_blur.small = heap_caps_malloc(flex_blur_small_bytes(FLEX_SCREEN_W, FLEX_SCREEN_H),
+                                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        }
+        if (!s_blur.tmp) {
+            s_blur.tmp = heap_caps_malloc(flex_blur_tmp_bytes(FLEX_SCREEN_W, FLEX_SCREEN_H),
+                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        }
+        if (!s_blur.out.px || !s_blur.small || !s_blur.tmp) {
+            ESP_LOGW(TAG, "sin PSRAM para el fondo desenfocado: el cajón irá sobre negro");
+            blur_drop();
+            s_blur.failed_key = s_bg.key; /* no se insiste con este fondo: el cajón funciona igual */
+            return true;
+        }
+        lv_image_cache_drop(&s_blur.out.dsc);
+        flex_blur_begin(&s_blur.job, s_bg.px, s_blur.out.px, FLEX_SCREEN_W, FLEX_SCREEN_H, s_blur.small,
+                        s_blur.tmp, BLUR_DIM);
+        s_blur.src_key = s_bg.key;
+        s_blur.failed_key = KEY_NONE;
+    }
+    if (flex_blur_step(&s_blur.job, rows)) {
+        blur_free_work();
+        bg_set_dsc(&s_blur.out);
+        s_blur.ready = true;
+        ESP_LOGI(TAG, "fondo desenfocado listo (%u B en PSRAM)", (unsigned)BG_BYTES);
+        return true;
+    }
+    return false;
+}
+
+size_t watch_theme_release_caches(void)
+{
+    size_t n = 0;
+    if (s_blur.small) {
+        n += flex_blur_small_bytes(FLEX_SCREEN_W, FLEX_SCREEN_H) + flex_blur_tmp_bytes(FLEX_SCREEN_W, FLEX_SCREEN_H);
+    }
+    const bool had = s_blur.out.px != NULL;
+    s_blur.failed_key = KEY_NONE; /* con la memoria liberada se puede volver a intentar */
+    if (blur_drop() && had) {
+        n += BG_BYTES;
+    }
+    lv_image_cache_drop(NULL);
+    return n;
 }
 
 lv_obj_t *watch_theme_glass_card(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h)
@@ -283,7 +499,7 @@ lv_obj_t *watch_theme_glass_card(lv_obj_t *parent, int32_t x, int32_t y, int32_t
          * luma real del fondo que queda debajo (glassTintMix). */
         uint32_t sum = 0;
         int n = 0;
-        flex_glass_region_luma(s_wall_px, FLEX_SCREEN_W, FLEX_SCREEN_H, x, y, w, h, &sum, &n);
+        flex_glass_region_luma(bg_target()->px, FLEX_SCREEN_W, FLEX_SCREEN_H, x, y, w, h, &sum, &n);
         lv_obj_set_style_bg_color(card, flex_color(FLEX_C_GLASS), 0);
         lv_obj_set_style_bg_opa(card, flex_glass_tint_mix(sum, n, rgb_to_565(FLEX_C_GLASS)), 0);
         lv_obj_set_style_border_color(card, flex_color(FLEX_GLASS_EDGE_HI), 0);
@@ -569,4 +785,130 @@ void watch_theme_set_visible(lv_obj_t *obj, bool visible)
     } else {
         lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
     }
+}
+
+/* ---- Liquid Glass de los diseños del usuario ---- */
+
+static lv_style_t s_lg_dark, s_lg_dark_pr, s_lg_light, s_lg_light_pr, s_lg_light_chk, s_glow;
+static lv_grad_dsc_t s_glow_grad;
+static bool s_lg_inited;
+
+static void lg_init(void)
+{
+    if (s_lg_inited) {
+        return;
+    }
+    /* Oscuro: degradado vertical del cristal, borde de luz azulado. */
+    lv_style_init(&s_lg_dark);
+    lv_style_set_bg_color(&s_lg_dark, flex_color(FLEX_LG_DARK_TOP));
+    lv_style_set_bg_grad_color(&s_lg_dark, flex_color(FLEX_LG_DARK_BOT));
+    lv_style_set_bg_grad_dir(&s_lg_dark, LV_GRAD_DIR_VER);
+    lv_style_set_bg_opa(&s_lg_dark, LV_OPA_COVER);
+    lv_style_set_border_width(&s_lg_dark, 2);
+    lv_style_set_border_color(&s_lg_dark, flex_color(FLEX_LG_DARK_EDGE));
+    lv_style_set_border_opa(&s_lg_dark, FLEX_LG_DARK_EDGE_OPA);
+    lv_style_init(&s_lg_dark_pr);
+    lv_style_set_bg_color(&s_lg_dark_pr, mix(FLEX_C_WHITE, FLEX_LG_DARK_TOP, 40));
+    lv_style_set_bg_grad_color(&s_lg_dark_pr, mix(FLEX_C_WHITE, FLEX_LG_DARK_BOT, 40));
+    /* Claro: blanco translúcido sobre el degradado del panel rápido. */
+    lv_style_init(&s_lg_light);
+    lv_style_set_bg_color(&s_lg_light, flex_color(FLEX_C_WHITE));
+    lv_style_set_bg_opa(&s_lg_light, FLEX_LG_LIGHT_FILL_OPA);
+    lv_style_set_border_width(&s_lg_light, 2);
+    lv_style_set_border_color(&s_lg_light, flex_color(FLEX_C_WHITE));
+    lv_style_set_border_opa(&s_lg_light, FLEX_LG_LIGHT_EDGE_OPA);
+    lv_style_init(&s_lg_light_pr);
+    lv_style_set_bg_opa(&s_lg_light_pr, FLEX_LG_LIGHT_FILL_OPA + 50);
+    lv_style_init(&s_lg_light_chk);
+    lv_style_set_bg_color(&s_lg_light_chk, flex_color(FLEX_QP_ACTIVE));
+    lv_style_set_bg_opa(&s_lg_light_chk, 225);
+    lv_style_set_border_opa(&s_lg_light_chk, 190);
+    /* Reflejo: línea fina blanca que se desvanece hacia los lados. */
+    static const lv_color_t gc[3] = {LV_COLOR_MAKE(0xFF, 0xFF, 0xFF), LV_COLOR_MAKE(0xFF, 0xFF, 0xFF),
+                                     LV_COLOR_MAKE(0xFF, 0xFF, 0xFF)};
+    static const lv_opa_t go[3] = {LV_OPA_TRANSP, FLEX_LG_GLOW_OPA, LV_OPA_TRANSP};
+    static const uint8_t gf[3] = {0, 128, 255};
+    lv_grad_init_stops(&s_glow_grad, gc, go, gf, 3);
+    lv_grad_horizontal_init(&s_glow_grad);
+    lv_style_init(&s_glow);
+    lv_style_set_bg_grad(&s_glow, &s_glow_grad);
+    lv_style_set_bg_opa(&s_glow, LV_OPA_COVER);
+    lv_style_set_radius(&s_glow, 1);
+    s_lg_inited = true;
+}
+
+lv_obj_t *watch_theme_lg(lv_obj_t *parent, flex_lg_t kind, int32_t x, int32_t y, int32_t w, int32_t h,
+                         int32_t radius, flex_glow_t glow)
+{
+    lg_init();
+    lv_obj_t *o = lv_obj_create(parent);
+    lv_obj_remove_style_all(o);
+    lv_obj_add_style(o, kind == FLEX_LG_LIGHT ? &s_lg_light : &s_lg_dark, 0);
+    lv_obj_set_style_radius(o, radius, 0);
+    lv_obj_set_pos(o, x, y);
+    lv_obj_set_size(o, w, h);
+    lv_obj_remove_flag(o, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    if (glow != FLEX_GLOW_NONE) {
+        /* Dentro del borde y lejos de las esquinas redondeadas. */
+        lv_obj_t *g = lv_obj_create(o);
+        lv_obj_remove_style_all(g);
+        lv_obj_add_style(g, &s_glow, 0);
+        lv_obj_set_size(g, w * 56 / 100, 2);
+        lv_obj_add_flag(g, LV_OBJ_FLAG_IGNORE_LAYOUT | LV_OBJ_FLAG_FLOATING);
+        lv_obj_remove_flag(g, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_align(g, glow == FLEX_GLOW_TOP ? LV_ALIGN_TOP_MID : LV_ALIGN_BOTTOM_MID, 0,
+                     glow == FLEX_GLOW_TOP ? 1 : -1);
+    }
+    return o;
+}
+
+lv_obj_t *watch_theme_lg_button(lv_obj_t *parent, flex_lg_t kind, int32_t x, int32_t y, int32_t w, int32_t h,
+                                int32_t radius, flex_glow_t glow)
+{
+    lv_obj_t *o = watch_theme_lg(parent, kind, x, y, w, h, radius, glow);
+    if (kind == FLEX_LG_LIGHT) {
+        lv_obj_add_style(o, &s_lg_light_pr, LV_STATE_PRESSED);
+        lv_obj_add_style(o, &s_lg_light_chk, LV_STATE_CHECKED);
+    } else {
+        lv_obj_add_style(o, &s_lg_dark_pr, LV_STATE_PRESSED);
+    }
+    lv_obj_add_style(o, &s_disabled, LV_STATE_DISABLED);
+    lv_obj_add_flag(o, LV_OBJ_FLAG_CLICKABLE);
+    return o;
+}
+
+lv_obj_t *watch_theme_switch(lv_obj_t *parent, int32_t w, int32_t h)
+{
+    lv_obj_t *sw = lv_switch_create(parent);
+    lv_obj_remove_style_all(sw);
+    lv_obj_set_size(sw, w, h);
+    lv_obj_set_style_radius(sw, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(sw, flex_color(FLEX_RD_SWITCH_OFF), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(sw, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(sw, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(sw, flex_color(FLEX_RD_SWITCH_ON), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_opa(sw, LV_OPA_TRANSP, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_opa(sw, LV_OPA_COVER, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_radius(sw, LV_RADIUS_CIRCLE, LV_PART_KNOB);
+    lv_obj_set_style_bg_color(sw, flex_color(FLEX_C_WHITE), LV_PART_KNOB);
+    lv_obj_set_style_bg_opa(sw, LV_OPA_COVER, LV_PART_KNOB);
+    lv_obj_set_style_pad_all(sw, -(h / 10), LV_PART_KNOB); /* el botón casi llena la pista, como en el diseño */
+    lv_obj_set_ext_click_area(sw, 12);
+    return sw;
+}
+
+lv_obj_t *watch_theme_bar(lv_obj_t *parent, int32_t w, int32_t h, uint32_t fill_rgb, uint32_t track_rgb)
+{
+    lv_obj_t *b = lv_bar_create(parent);
+    lv_obj_remove_style_all(b);
+    lv_obj_set_size(b, w, h);
+    lv_bar_set_range(b, 0, 1000);
+    lv_obj_set_style_radius(b, h / 3, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(b, flex_color(track_rgb), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(b, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(b, h / 3, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(b, flex_color(fill_rgb), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_opa(b, LV_OPA_COVER, LV_PART_INDICATOR);
+    lv_obj_remove_flag(b, LV_OBJ_FLAG_CLICKABLE);
+    return b;
 }

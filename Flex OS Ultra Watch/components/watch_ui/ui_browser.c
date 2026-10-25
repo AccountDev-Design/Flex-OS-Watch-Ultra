@@ -31,6 +31,7 @@
 #include <string.h>
 #include "esp_heap_caps.h"
 #include "flex_icons.h"
+#include "flex_jpeg.h"
 #include "misc/cache/instance/lv_image_cache.h"
 #include "watch_browser.h"
 #include "watch_theme.h"
@@ -1460,7 +1461,7 @@ static void tick_cb(lv_timer_t *tm)
         br_net_frame_done(n, BR_FR_SKIPPED);
         return;
     }
-    const int r = ui_jpeg_draw(f.img, f.imgLen, U->buf, PG_W, ph, f.x, f.y, f.w, f.h);
+    const int r = flex_jpeg_draw(f.img, f.imgLen, U->buf, PG_W, ph, f.x, f.y, f.w, f.h);
     br_net_frame_done(n, r == 0 ? BR_FR_DRAWN : BR_FR_BAD);
     if (r != 0) {
         snprintf(U->info, sizeof(U->info), "Imagen ilegible (código %d)", r);
