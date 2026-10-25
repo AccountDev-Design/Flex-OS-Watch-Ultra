@@ -360,6 +360,36 @@ static void suite_faces(const char *out)
     set_face(UI_FACE_DIGITAL);
 }
 
+static void suite_compass(const char *out)
+{
+    /* La escena de la referencia: 10:09, rumbo 315° (aquí relativo), plano */
+    sim_set_time(WATCH_TIME_OK, 2026, 10, 24, 10, 9, 0);
+    memset(&sim_imu, 0, sizeof(sim_imu));
+    sim_imu.state = IMU_RUNNING;
+    sim_imu.samples = 100;
+    sim_imu.acc_mg[2] = 1000;
+    ui_nav_push(ui_compass_create);
+    sim_run(500);
+    sim_imu.heading.valid = true;
+    sim_imu.heading.yaw = 315.0f;
+    sim_imu.heading.drift = 12.0f;
+    sim_imu.heading.bias_ok = true;
+    sim_run(400);
+    EXPECT(sim_find_label(ui_nav_top(), "315° REL") && sim_find_label(ui_nav_top(), "10:09"),
+           "brujula: falta el rumbo relativo o la hora");
+    EXPECT(strcmp(ui_compass_ring_text(0), "INCLINACIÓN 0°") == 0, "brujula: inclinacion (%s)", ui_compass_ring_text(0));
+    shot(out, "rd_brujula");
+    /* Sin IMU: nada inventado */
+    sim_imu.state = IMU_ERROR;
+    sim_run(400);
+    EXPECT(sim_find_label(ui_nav_top(), "--° REL") && strcmp(ui_compass_ring_text(0), "INCLINACIÓN --") == 0,
+           "brujula: sin IMU sigue mostrando datos");
+    shot(out, "rd_brujula_sin_imu");
+    ui_nav_back();
+    sim_run(500);
+    memset(&sim_imu, 0, sizeof(sim_imu));
+}
+
 void sim_suite_redesign(const char *out)
 {
     const int f0 = sim_fails;
@@ -383,6 +413,7 @@ void sim_suite_redesign(const char *out)
     suite_reloj(out);
     suite_storage(out);
     suite_faces(out);
+    suite_compass(out);
 
     EXPECT(sim_timer_count() == timers0, "temporizadores: %d -> %d", timers0, sim_timer_count());
     EXPECT(sim_mem_blocks() == blocks0, "bloques de memoria: %u -> %u", (unsigned)blocks0,

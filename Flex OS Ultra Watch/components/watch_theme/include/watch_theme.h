@@ -143,12 +143,17 @@ bool watch_theme_apply_image(lv_obj_t *screen, flex_bg_t bg);
 const uint8_t *watch_theme_image_jpeg(flex_bg_t bg, uint32_t *len);
 
 /**
- * Vistas previas (selector de esferas): mientras está activo, los fondos que
+ * Vistas previas (selector de esferas): entre begin() y end() los fondos que
  * piden las esferas temporales se generan en un segundo búfer y no pisan el
- * de la esfera activa. end() lo libera.
+ * de la esfera activa. end() solo vuelve al búfer normal (el segundo se
+ * conserva para la siguiente vista previa con el mismo fondo, sin volver a
+ * decodificarlo); release() lo libera (al terminar las vistas previas, y
+ * también watch_theme_release_caches). Usar begin/end en el mismo tick, justo
+ * alrededor de la creación de la esfera temporal.
  */
 void watch_theme_preview_begin(void);
 void watch_theme_preview_end(void);
+void watch_theme_preview_release(void);
 
 /**
  * Fondo actual desenfocado para el cajón de aplicaciones (flex_blur): una

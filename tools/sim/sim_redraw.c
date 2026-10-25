@@ -65,6 +65,10 @@ void sim_suite_redraw(const char *out)
     };
     uint64_t total = 0;
     for (size_t i = 0; i < sizeof(pages) / sizeof(pages[0]); i++) {
+        /* Cada página empieza en el segundo 0: en sus 7 s no cambia el minuto
+         * (si no, la hora de las que la muestran se redibujaría por diseño) */
+        sim_set_time(WATCH_TIME_OK, 2026, 10, 15, 9, 41, 0);
+        sim_run(100);
         if (pages[i].create) {
             ui_nav_push(pages[i].create);
         }
@@ -78,6 +82,8 @@ void sim_suite_redraw(const char *out)
         sim_run(400);
     }
     /* El panel rápido abierto, quieto */
+    sim_set_time(WATCH_TIME_OK, 2026, 10, 15, 9, 41, 0);
+    sim_run(100);
     ui_qp_open();
     const uint64_t qp = idle_px(5000);
     printf("  reposo %-15s %8llu px en 5 s\n", "panel rapido", (unsigned long long)qp);

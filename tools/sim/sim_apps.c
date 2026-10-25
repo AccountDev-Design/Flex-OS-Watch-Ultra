@@ -446,24 +446,55 @@ void sim_suite_apps(const char *out)
     EXPECT(tap_text(ui_nav_top(), "Flex Compass"), "no se abrio Flex Compass");
     EXPECT(sim_imu_users == 1, "Flex Compass no pidio medidas al IMU");
     sim_run(400);
-    EXPECT(sim_find_label(ui_nav_top(), "Norte: requiere magnetómetro") && sim_find_label(ui_nav_top(), "No presente"),
-           "compass: no dice que falta el magnetometro");
-    lv_obj_t *hd = sim_find_label(ui_nav_top(), "Heading");
-    EXPECT(hd && sim_find_label(lv_obj_get_parent(hd), "No disponible"),
-           "compass: muestra un rumbo sin integracion valida del giroscopio");
-    EXPECT(sim_find_label(ui_nav_top(), "Conectado"), "compass: el estado del IMU no es real");
     EXPECT(sim_imu_heading_resets == 1, "compass: no fijo la referencia al abrir");
+    /* Sin integración válida del giroscopio: ningún rumbo ni aguja */
+    EXPECT(sim_find_label(ui_nav_top(), "--° REL"), "compass: muestra un rumbo sin integracion valida del giroscopio");
+    EXPECT(ui_compass_ring_text(0) && strcmp(ui_compass_ring_text(0), "INCLINACIÓN 10°") == 0,
+           "compass: la inclinacion del anillo no es la real (%s)", ui_compass_ring_text(0));
+    EXPECT(strcmp(ui_compass_ring_text(2), "DERIVA --") == 0 && strcmp(ui_compass_ring_text(3), "SIN NORTE") == 0,
+           "compass: el anillo inventa datos sin rumbo");
     /* Rumbo RELATIVO del giroscopio: grados, incertidumbre y nunca "Norte". */
     sim_imu.heading.valid = true;
     sim_imu.heading.yaw = 90.4f;
     sim_imu.heading.drift = 3.2f;
     sim_imu.heading.bias_ok = true;
     sim_run(300);
-    EXPECT(sim_find_label(ui_nav_top(), "90°"), "compass: no muestra el rumbo relativo");
-    EXPECT(sim_find_label(ui_nav_top(), "± 3° · giroscopio calibrado"), "compass: no muestra la incertidumbre");
+    EXPECT(sim_find_label(ui_nav_top(), "90° REL"), "compass: no muestra el rumbo relativo");
+    EXPECT(strcmp(ui_compass_ring_text(2), "DERIVA ±3°") == 0, "compass: no muestra la incertidumbre (%s)",
+           ui_compass_ring_text(2));
+    /* Quieto: nada se redibuja; un temblor por debajo de la histéresis tampoco */
+    sim_imu.heading.yaw = 90.7f;
+    sim_run(300);
+    EXPECT(sim_find_label(ui_nav_top(), "90° REL"), "compass: el grado mostrado tiembla");
+    lint_page("flex compass", out, "f9_compass");
+    /* Mantener pulsada la esfera: nueva referencia */
+    sim_press(205, 262);
+    sim_run(700);
+    sim_release();
+    sim_run(300);
+    EXPECT(sim_imu_heading_resets == 2 && sim_find_label(ui_nav_top(), "0° REL"),
+           "compass: mantener pulsada la esfera no fija la referencia");
+    sim_run(4000); /* se va el aviso */
+    sim_imu.heading.yaw = 90.4f; /* el reloj vuelve a girar */
+    sim_imu.heading.drift = 3.2f;
+    sim_run(300);
+    /* Detalles: requisito del Norte, sensores reales y "Fijar referencia" */
+    sim_tap(205, FLEX_SCREEN_H - 32);
+    sim_run(500);
+    EXPECT(sim_find_label(ui_nav_top(), "Norte: requiere magnetómetro") && sim_find_label(ui_nav_top(), "No presente"),
+           "compass: no dice que falta el magnetometro");
+    lv_obj_t *hd = sim_find_label(ui_nav_top(), "Heading");
     EXPECT(hd && sim_find_label(lv_obj_get_parent(hd), "Relativo (sin Norte)"), "compass: el rumbo no se marca relativo");
-    EXPECT(tap_text(ui_nav_top(), "Fijar referencia") && sim_imu_heading_resets == 2,
+    EXPECT(sim_find_label(ui_nav_top(), "Conectado"), "compass: el estado del IMU no es real");
+    EXPECT(sim_find_label(ui_nav_top(), "90°"), "compass: los detalles no muestran el rumbo relativo");
+    EXPECT(sim_find_label(ui_nav_top(), "± 3° · giroscopio calibrado"), "compass: no muestra la incertidumbre");
+    EXPECT(sim_find_label(ui_nav_top(), "Barómetro") && sim_find_label(ui_nav_top(), "GPS"),
+           "compass: no dice que no hay barometro ni GPS");
+    EXPECT(tap_text(ui_nav_top(), "Fijar referencia") && sim_imu_heading_resets == 3,
            "compass: Fijar referencia no reinicia el rumbo");
+    lint_page("flex compass detalles", out, "f9_compass_detalles");
+    ui_nav_back();
+    sim_run(500);
     lint_page("flex compass", out, "f9_compass");
     ui_nav_back();
     sim_run(500);

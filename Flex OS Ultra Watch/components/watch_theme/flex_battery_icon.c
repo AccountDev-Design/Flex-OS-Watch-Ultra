@@ -9,6 +9,7 @@
 typedef struct {
     flex_batt_kind_t kind;
     int percent;
+    bool mono;
 } batt_icon_t;
 
 static void draw_rect(lv_layer_t *layer, const lv_area_t *a, int32_t radius, lv_color_t bg, lv_opa_t bg_opa,
@@ -47,8 +48,9 @@ static void batt_draw_cb(lv_event_t *e)
     if (bw < 1) {
         bw = 1;
     }
-    const lv_color_t outline = lv_color_hex(flex_batt_outline_rgb(st->kind));
-    const lv_color_t fill = lv_color_hex(flex_batt_fill_rgb(st->kind));
+    const bool warn = st->kind == FLEX_BATT_LOW || st->kind == FLEX_BATT_CRITICAL;
+    const lv_color_t outline = lv_color_hex(st->mono ? FLEX_C_WHITE : flex_batt_outline_rgb(st->kind));
+    const lv_color_t fill = lv_color_hex(st->mono && !warn ? FLEX_C_WHITE : flex_batt_fill_rgb(st->kind));
 
     /* cuerpo */
     lv_area_t body = a;
@@ -118,6 +120,7 @@ lv_obj_t *flex_battery_icon_create(lv_obj_t *parent, int32_t w, int32_t h)
     LV_ASSERT_MALLOC(st);
     st->kind = FLEX_BATT_UNKNOWN;
     st->percent = -1;
+    st->mono = false;
     lv_obj_set_user_data(obj, st);
     lv_obj_add_event_cb(obj, batt_draw_cb, LV_EVENT_DRAW_MAIN, NULL);
     lv_obj_add_event_cb(obj, batt_delete_cb, LV_EVENT_DELETE, NULL);
@@ -148,4 +151,19 @@ bool flex_battery_icon_is(lv_obj_t *obj)
         }
     }
     return false;
+}
+
+flex_batt_kind_t flex_battery_icon_kind(lv_obj_t *icon)
+{
+    const batt_icon_t *st = icon ? lv_obj_get_user_data(icon) : NULL;
+    return st ? st->kind : FLEX_BATT_UNKNOWN;
+}
+
+void flex_battery_icon_set_mono(lv_obj_t *icon, bool mono)
+{
+    batt_icon_t *st = lv_obj_get_user_data(icon);
+    if (st && st->mono != mono) {
+        st->mono = mono;
+        lv_obj_invalidate(icon);
+    }
 }

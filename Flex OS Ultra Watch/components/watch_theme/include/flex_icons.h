@@ -46,6 +46,7 @@ typedef enum {
     FLEX_ICON_ALARM,        /**< despertador (campanas y patas) */
     FLEX_ICON_MOON_SOLID,   /**< luna creciente maciza */
     FLEX_ICON_BATT_LEAF,    /**< batería con hoja: ahorro de energía */
+    FLEX_ICON_GEAR_SOLID,   /**< engranaje macizo (panel rápido) */
     FLEX_ICON_COUNT_
 } flex_icon_t;
 

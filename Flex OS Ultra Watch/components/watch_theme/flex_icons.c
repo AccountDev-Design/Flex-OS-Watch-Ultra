@@ -117,28 +117,24 @@ static void disc(const pen_t *p, int32_t cx, int32_t cy, int32_t r100)
     lv_draw_rect(p->layer, &d, &a);
 }
 
+/* Rectángulo relleno (centésimas de la caja) con radio r100. */
+static void box_fill(const pen_t *p, int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t r100)
+{
+    const lv_area_t a = {px(p, x1), py(p, y1), px(p, x2), py(p, y2)};
+    lv_draw_rect_dsc_t d;
+    lv_draw_rect_dsc_init(&d);
+    d.bg_color = p->color;
+    d.bg_opa = p->opa;
+    d.radius = pr(p, r100, 0);
+    lv_draw_rect(p->layer, &d, &a);
+}
+
 /* Desplazamientos (x, y) en centésimas para 8 direcciones a 45°, con
  * radio 100: cos/sin redondeados, sin coma flotante. */
 static const int8_t DIR8[8][2] = {
     {100, 0}, {71, 71}, {0, 100}, {-71, 71}, {-100, 0}, {-71, -71}, {0, -100}, {71, -71},
 };
 
-
-/* Triángulo en píxeles (coordenadas ya convertidas). */
-static void tri_px(const pen_t *p, float x0, float y0, float x1, float y1, float x2, float y2)
-{
-    lv_draw_triangle_dsc_t d;
-    lv_draw_triangle_dsc_init(&d);
-    d.color = p->color;
-    d.opa = p->opa;
-    d.p[0].x = (lv_value_precise_t)lroundf(x0);
-    d.p[0].y = (lv_value_precise_t)lroundf(y0);
-    d.p[1].x = (lv_value_precise_t)lroundf(x1);
-    d.p[1].y = (lv_value_precise_t)lroundf(y1);
-    d.p[2].x = (lv_value_precise_t)lroundf(x2);
-    d.p[2].y = (lv_value_precise_t)lroundf(y2);
-    lv_draw_triangle(p->layer, &d);
-}
 
 static float fx(const pen_t *p, float c)
 {
@@ -150,85 +146,99 @@ static float fy(const pen_t *p, float c)
     return (float)p->b->y1 + (float)(lv_area_get_height(p->b) - 1) * c / 100.0f;
 }
 
-/* Puntos de intersección de dos circunferencias (en centésimas de la caja). */
-static bool circles_meet(float ax, float ay, float ar, float bx, float by, float br, float *i1x, float *i1y,
-                         float *i2x, float *i2y)
+/* Tramo horizontal [x1, x2) de la fila y, con los píxeles de los extremos
+ * en proporción a lo que cubren (borde suavizado sin costuras). */
+static void hspan(const pen_t *p, float x1, float x2, int32_t y)
 {
-    const float dx = bx - ax, dy = by - ay, d = sqrtf(dx * dx + dy * dy);
-    if (d <= 0.0f || d >= ar + br || d <= fabsf(ar - br)) {
+    if (x2 - x1 <= 0.0f) {
+        return;
+    }
+    lv_draw_rect_dsc_t d;
+    lv_draw_rect_dsc_init(&d);
+    d.bg_color = p->color;
+    const int32_t a = (int32_t)ceilf(x1), b = (int32_t)floorf(x2);
+    if (b > a) {
+        d.bg_opa = p->opa;
+        const lv_area_t r = {a, y, b - 1, y};
+        lv_draw_rect(p->layer, &d, &r);
+    }
+    const float cl = (float)a - x1, cr = x2 - (float)b;
+    if (b < a) { /* el tramo entero cabe en un píxel */
+        d.bg_opa = (lv_opa_t)((float)p->opa * (x2 - x1));
+        const lv_area_t r = {b, y, b, y};
+        lv_draw_rect(p->layer, &d, &r);
+        return;
+    }
+    if (cl > 0.02f) {
+        d.bg_opa = (lv_opa_t)((float)p->opa * cl);
+        const lv_area_t r = {a - 1, y, a - 1, y};
+        lv_draw_rect(p->layer, &d, &r);
+    }
+    if (cr > 0.02f) {
+        d.bg_opa = (lv_opa_t)((float)p->opa * cr);
+        const lv_area_t r = {b, y, b, y};
+        lv_draw_rect(p->layer, &d, &r);
+    }
+}
+
+/* Luna: el disco A menos el disco B (en centésimas de la caja), rellena fila
+ * a fila. Antes se rellenaba con triángulos: cada uno suaviza sus bordes y
+ * entre vecinos quedaban costuras visibles a tamaño grande (rayas). */
+static void crescent(const pen_t *p, float ax, float ay, float ar, float bx, float by, float br)
+{
+    const float s = (float)(p->side - 1) / 100.0f;
+    const float Ax = fx(p, ax), Ay = fy(p, ay), Ar = ar * s;
+    const float Bx = fx(p, bx), By = fy(p, by), Br = br * s;
+    const int32_t y0 = (int32_t)floorf(Ay - Ar), y1 = (int32_t)ceilf(Ay + Ar);
+    for (int32_t y = y0; y <= y1; y++) {
+        const float yc = (float)y + 0.5f, da = yc - Ay;
+        if (da * da >= Ar * Ar) {
+            continue;
+        }
+        const float ha = sqrtf(Ar * Ar - da * da);
+        float l = Ax - ha, r = Ax + ha;
+        const float db = yc - By;
+        if (db * db < Br * Br) {
+            const float hb = sqrtf(Br * Br - db * db), bl = Bx - hb, brr = Bx + hb;
+            /* A menos B: lo que queda a cada lado del hueco */
+            hspan(p, l, bl < r ? bl : r, y);
+            hspan(p, brr > l ? brr : l, r, y);
+        } else {
+            hspan(p, l, r, y);
+        }
+    }
+}
+
+/* Intervalo de la fila (centro yc) dentro del disco (cx, cy, r); false si no la toca. */
+static bool disc_row(float cx, float cy, float r, float yc, float *l, float *rr)
+{
+    const float d = yc - cy;
+    if (d * d >= r * r) {
         return false;
     }
-    const float a = (ar * ar - br * br + d * d) / (2.0f * d), h = sqrtf(ar * ar - a * a);
-    const float mx = ax + a * dx / d, my = ay + a * dy / d;
-    *i1x = mx + h * dy / d;
-    *i1y = my - h * dx / d;
-    *i2x = mx - h * dy / d;
-    *i2y = my + h * dx / d;
+    const float h = sqrtf(r * r - d * d);
+    *l = cx - h;
+    *rr = cx + h;
     return true;
 }
 
-/* Arco de la circunferencia (cx, cy, r) de i1 a i2 por el lado de toward. */
-static void arc_pts(float cx, float cy, float r, float i1x, float i1y, float i2x, float i2y, float tx, float ty,
-                    int n, float *xs, float *ys)
-{
-    float a1 = atan2f(i1y - cy, i1x - cx), a2 = atan2f(i2y - cy, i2x - cx);
-    float span = a2 - a1;
-    while (span <= 0.0f) {
-        span += 6.2831853f;
-    }
-    /* ¿El arco a1 -> a2 (sentido positivo) pasa por el lado de toward? */
-    const float am = a1 + span / 2.0f;
-    const float mx = cx + r * cosf(am), my = cy + r * sinf(am);
-    const float ox = cx - r * cosf(am), oy = cy - r * sinf(am);
-    if ((mx - tx) * (mx - tx) + (my - ty) * (my - ty) > (ox - tx) * (ox - tx) + (oy - ty) * (oy - ty)) {
-        span -= 6.2831853f; /* el otro lado */
-    }
-    for (int k = 0; k < n; k++) {
-        const float a = a1 + span * (float)k / (float)(n - 1);
-        xs[k] = cx + r * cosf(a);
-        ys[k] = cy + r * sinf(a);
-    }
-}
-
-/* Región entre dos arcos que unen los mismos extremos (luna o lente), con una
- * tira de triángulos. Todo en centésimas de la caja. */
-#define STRIP_N 18
-static void fill_between(const pen_t *p, const float *ax, const float *ay, const float *bx, const float *by)
-{
-    for (int k = 0; k + 1 < STRIP_N; k++) {
-        tri_px(p, fx(p, ax[k]), fy(p, ay[k]), fx(p, ax[k + 1]), fy(p, ay[k + 1]), fx(p, bx[k]), fy(p, by[k]));
-        tri_px(p, fx(p, bx[k]), fy(p, by[k]), fx(p, ax[k + 1]), fy(p, ay[k + 1]), fx(p, bx[k + 1]),
-               fy(p, by[k + 1]));
-    }
-}
-
-/* Luna: el disco A menos el disco B. */
-static void crescent(const pen_t *p, float ax, float ay, float ar, float bx, float by, float br)
-{
-    float i1x, i1y, i2x, i2y;
-    if (!circles_meet(ax, ay, ar, bx, by, br, &i1x, &i1y, &i2x, &i2y)) {
-        return;
-    }
-    float oxs[STRIP_N], oys[STRIP_N], ixs[STRIP_N], iys[STRIP_N];
-    /* borde exterior: el arco de A lejos de B; interior: el arco de B dentro de A */
-    arc_pts(ax, ay, ar, i1x, i1y, i2x, i2y, 2 * ax - bx, 2 * ay - by, STRIP_N, oxs, oys);
-    arc_pts(bx, by, br, i1x, i1y, i2x, i2y, ax, ay, STRIP_N, ixs, iys);
-    fill_between(p, oxs, oys, ixs, iys);
-}
-
-/* Contorno de una hoja (lente entre dos circunferencias) de grosor w100. */
-static void leaf_outline(const pen_t *p, float t1x, float t1y, float t2x, float t2y, float bulge, int32_t w100)
+/* Hoja rellena: la lente (intersección de dos discos) entre las puntas t1 y t2
+ * con la panza dada; fila a fila como la luna. Centésimas de la caja. */
+static void lens_fill(const pen_t *p, float t1x, float t1y, float t2x, float t2y, float bulge)
 {
     const float mx = (t1x + t2x) / 2, my = (t1y + t2y) / 2;
     const float dx = t2x - t1x, dy = t2y - t1y, L = sqrtf(dx * dx + dy * dy);
     const float nx = -dy / L, ny = dx / L, h = L / 2;
     const float r = (h * h + bulge * bulge) / (2 * bulge), c = r - bulge;
-    for (int s = -1; s <= 1; s += 2) {
-        const float cx = mx + nx * c * (float)s, cy = my + ny * c * (float)s;
-        float xs[STRIP_N], ys[STRIP_N];
-        arc_pts(cx, cy, r, t1x, t1y, t2x, t2y, mx - nx * (float)s * r, my - ny * (float)s * r, STRIP_N, xs, ys);
-        for (int k = 0; k + 1 < STRIP_N; k++) {
-            line(p, (int32_t)xs[k], (int32_t)ys[k], (int32_t)xs[k + 1], (int32_t)ys[k + 1], w100);
+    const float s = (float)(p->side - 1) / 100.0f;
+    const float ax = fx(p, mx + nx * c), ay = fy(p, my + ny * c), bx = fx(p, mx - nx * c), by = fy(p, my - ny * c);
+    const float R = r * s;
+    const float top = fminf(fy(p, t1y), fy(p, t2y)) - bulge * s, bot = fmaxf(fy(p, t1y), fy(p, t2y)) + bulge * s;
+    for (int32_t y = (int32_t)floorf(top); y <= (int32_t)ceilf(bot); y++) {
+        float l1, r1, l2, r2;
+        const float yc = (float)y + 0.5f;
+        if (disc_row(ax, ay, R, yc, &l1, &r1) && disc_row(bx, by, R, yc, &l2, &r2)) {
+            hspan(p, fmaxf(l1, l2), fminf(r1, r2), y);
         }
     }
 }
@@ -420,13 +430,10 @@ void flex_icon_draw2(lv_layer_t *layer, flex_icon_t icon, const lv_area_t *box, 
         line(&p, 32, 14, 32, 86, 18);
         line(&p, 68, 14, 68, 86, 18);
         break;
-    case FLEX_ICON_STOP: {
-        static const int32_t a[6] = {18, 18, 82, 18, 82, 82};
-        static const int32_t b[6] = {18, 18, 82, 82, 18, 82};
-        tri(&p, a);
-        tri(&p, b);
+    case FLEX_ICON_STOP:
+        /* Un rectángulo: con dos triángulos se veía la costura de la diagonal. */
+        box_fill(&p, 18, 18, 82, 82, 6);
         break;
-    }
     case FLEX_ICON_FLAG: {
         line(&p, 24, 8, 24, 92, 9);
         static const int32_t f[6] = {28, 10, 86, 30, 28, 50};
@@ -465,17 +472,29 @@ void flex_icon_draw2(lv_layer_t *layer, flex_icon_t icon, const lv_area_t *box, 
         /* Luna creciente maciza (disco menos disco desplazado arriba a la derecha). */
         crescent(&p, 46, 54, 44, 70, 34, 38);
         break;
+    case FLEX_ICON_GEAR_SOLID:
+        /* Engranaje macizo con hueco de verdad (se ve el fondo): anillo grueso
+         * y 8 dientes redondeados. */
+        arc(&p, 50, 50, 37, 21, 0, 360, false);
+        for (int k = 0; k < 8; k++) {
+            line(&p, 50 + DIR8[k][0] * 33 / 100, 50 + DIR8[k][1] * 33 / 100, 50 + DIR8[k][0] * 40 / 100,
+                 50 + DIR8[k][1] * 40 / 100, 17);
+        }
+        break;
     case FLEX_ICON_BATT_LEAF: {
-        /* Batería (contorno y polo) con una hoja delante: ahorro de energía. */
-        line(&p, 6, 28, 78, 28, 6);
-        line(&p, 78, 28, 78, 76, 6);
-        line(&p, 78, 76, 6, 76, 6);
-        line(&p, 6, 76, 6, 28, 6);
-        line(&p, 86, 44, 86, 60, 9);
-        disc(&p, 16, 40, 3);
-        disc(&p, 22, 58, 2);
-        leaf_outline(&p, 46, 96, 70, 16, 14, 5);
-        line(&p, 49, 90, 68, 22, 4);
+        /* Batería (contorno, polo y carga) con una hoja rellena delante y su
+         * nervio en el segundo color: ahorro de energía. */
+        line(&p, 6, 30, 74, 30, 7);
+        line(&p, 74, 30, 74, 74, 7);
+        line(&p, 74, 74, 6, 74, 7);
+        line(&p, 6, 74, 6, 30, 7);
+        line(&p, 83, 45, 83, 59, 9);
+        box_fill(&p, 14, 38, 34, 66, 3); /* carga */
+        lens_fill(&p, 34, 94, 84, 16, 22);
+        const pen_t p2 = {layer, box, p.side, color2, opa};
+        line(&p2, 42, 84, 76, 26, 3); /* nervio */
+        line(&p2, 54, 64, 70, 62, 2);
+        line(&p2, 62, 50, 60, 36, 2);
         break;
     }
     default:

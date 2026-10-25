@@ -60,11 +60,33 @@ static const lv_image_dsc_t *preview(int i)
     if (!strip) {
         return NULL;
     }
-    lv_obj_t *item = lv_obj_get_child(strip, i);
-    lv_obj_t *card = lv_obj_get_child(item, 0);
+    lv_obj_t *card = lv_obj_get_child(strip, i);
     lv_obj_t *img = lv_obj_get_child(card, 0);
     const lv_image_dsc_t *d = lv_image_get_src(img);
     return d && d->data ? d : NULL;
+}
+
+/* Miniatura del selector rediseñado: 276x358 (design/referencias/editor_esferas.png) */
+static bool thumb_ok(int i)
+{
+    const lv_image_dsc_t *d = preview(i);
+    return d && d->header.w == 276 && d->header.h == 358;
+}
+
+/* Desliza el carrusel una tarjeta (dir > 0: a la siguiente). */
+static void swipe(int dir)
+{
+    sim_drag(dir > 0 ? 300 : 110, 250, dir > 0 ? 110 : 300, 252, 8, 16);
+    sim_release();
+    sim_run(700);
+}
+
+/* Centra la esfera i deslizando, como lo haría el usuario. */
+static void center(int i)
+{
+    for (int k = 0; k < UI_FACE_COUNT_ && ui_face_editor_centered() >= 0 && ui_face_editor_centered() != i; k++) {
+        swipe(i > ui_face_editor_centered() ? 1 : -1);
+    }
 }
 
 void sim_suite_faces(const char *out)
@@ -130,38 +152,63 @@ void sim_suite_faces(const char *out)
     sim_run(500);
     memset(&sim_imu, 0, sizeof(sim_imu));
 
-    /* ---- Mantener pulsada la esfera: selector ---- */
+    /* ---- Mantener pulsada la esfera: selector (zoom desde la esfera) ---- */
     set_face(UI_FACE_DIGITAL);
+    const uint32_t made0 = ui_face_editor_previews_made();
     sim_press(205, 300);
-    sim_run(700);
+    sim_run(560); /* pulsación larga (400 ms) y la mitad del zoom */
+    EXPECT(ui_nav_depth() == 2 && ui_face_editor_centered() < 0, "mantener pulsado: no empezo el zoom");
+    /* durante el zoom solo existe la captura de la esfera (nada se renderiza mientras anima) */
+    EXPECT(ui_face_editor_previews_made() - made0 == 1 && thumb_ok(UI_FACE_DIGITAL),
+           "selector: la tarjeta centrada no es la captura de la esfera");
+    sim_save(out, "f10_selector_zoom");
     sim_release();
     sim_run(400);
-    EXPECT(ui_nav_depth() == 2 && sim_find_label(ui_nav_top(), "Esferas"), "mantener pulsado no abrio el selector");
-    sim_run(UI_FACE_COUNT_ * 40 + 200); /* vistas previas, de una en una */
-    int previews = 0;
-    for (int i = 0; i < UI_FACE_COUNT_; i++) {
-        const lv_image_dsc_t *d = preview(i);
-        previews += d && d->header.w == FLEX_SCREEN_W / 2 && d->header.h == FLEX_SCREEN_H / 2;
-    }
-    EXPECT(previews == UI_FACE_COUNT_, "selector: %d de %d vistas previas renderizadas", previews, UI_FACE_COUNT_);
+    EXPECT(ui_nav_depth() == 2 && ui_face_editor_centered() == UI_FACE_DIGITAL, "mantener pulsado no abrio el selector");
+    sim_run(6 * 60 + 300); /* las vecinas, de una en una */
+    /* Ventana deslizante: la centrada y dos a cada lado, ni una más */
+    EXPECT(thumb_ok(0) && thumb_ok(1) && thumb_ok(2) && !preview(3) && ui_face_editor_thumbs() == 3,
+           "selector: ventana de vistas previas incorrecta (%d)", ui_face_editor_thumbs());
+    EXPECT(sim_find_label(ui_nav_top(), "Digital"), "selector: falta el nombre de la centrada");
     sim_check_glyphs(ui_nav_top(), "selector");
     sim_lint("selector de esferas");
     sim_save(out, "f10_selector");
-    /* Aplicar la analógica: se guarda y la esfera se rehace */
-    lv_obj_t *name = sim_find_label(ui_nav_top(), "Analógica");
-    lv_obj_t *item = clickable_of(name);
-    EXPECT(item, "selector: no hay Analogica");
-    if (item) {
-        lv_obj_scroll_to_view(item, LV_ANIM_OFF);
-        sim_run(100);
-        lv_area_t a;
-        lv_obj_get_coords(item, &a);
-        sim_tap((a.x1 + a.x2) / 2, a.y1 + 100);
-        sim_run(600);
+    /* Recorrer hasta el final: nunca más de 5 miniaturas vivas */
+    int most = 0;
+    for (int k = 0; k < UI_FACE_COUNT_; k++) {
+        swipe(1);
+        sim_run(6 * 60);
+        most = ui_face_editor_thumbs() > most ? ui_face_editor_thumbs() : most;
     }
+    EXPECT(ui_face_editor_centered() == UI_FACE_COUNT_ - 1 && most <= 5 && thumb_ok(UI_FACE_COUNT_ - 1) &&
+               !preview(0),
+           "selector: al recorrer (centrada %d, %d miniaturas como mucho)", ui_face_editor_centered(), most);
+    sim_save(out, "f10_selector_final");
+    /* Aplicar la analógica: crece hasta llenar la pantalla, se guarda y la esfera se rehace */
+    center(UI_FACE_ANALOG);
+    sim_run(6 * 60);
+    EXPECT(ui_face_editor_centered() == UI_FACE_ANALOG, "selector: no se centro la analogica");
+    sim_tap(205, 250);
+    sim_run(150);
+    sim_save(out, "f10_selector_aplicar");
+    sim_run(600);
     EXPECT(face_setting() == UI_FACE_ANALOG, "selector: no aplico la analogica (%d)", face_setting());
-    EXPECT(ui_nav_depth() == 1, "selector: no volvio a la esfera");
+    EXPECT(ui_nav_depth() == 1 && !ui_nav_busy(), "selector: no volvio a la esfera");
     sim_save(out, "f10_esfera_analogica_aplicada");
+    /* Una vecina tocada se centra, no se aplica */
+    sim_press(205, 300);
+    sim_run(700);
+    sim_release();
+    sim_run(600);
+    EXPECT(ui_face_editor_centered() == UI_FACE_ANALOG, "selector: no se abrio en la esfera actual");
+    sim_tap(380, 250);
+    sim_run(700);
+    EXPECT(ui_nav_depth() == 2 && ui_face_editor_centered() == UI_FACE_MODULAR && face_setting() == UI_FACE_ANALOG,
+           "selector: tocar la vecina no la centro (o la aplico)");
+    sim_drag(FLEX_SCREEN_W - 4, 300, 100, 300, 12, 20); /* borde derecho: sale sin cambiar */
+    sim_release();
+    sim_run(700);
+    EXPECT(ui_nav_depth() == 1 && face_setting() == UI_FACE_ANALOG, "selector: salir cambio la esfera");
 
     /* ---- Desde Ajustes > Pantalla > Esfera: mismo selector, vuelve a la esfera ---- */
     ui_nav_push(ui_settings_create);
@@ -174,18 +221,36 @@ void sim_suite_faces(const char *out)
         lv_obj_send_event(row, LV_EVENT_CLICKED, NULL);
         sim_run(600);
     }
-    EXPECT(sim_find_label(ui_nav_top(), "Esferas"), "Pantalla > Esfera no abrio el selector");
-    sim_run(UI_FACE_COUNT_ * 40 + 200);
-    item = clickable_of(sim_find_label(ui_nav_top(), "Liquid Glass"));
-    if (item) {
-        lv_obj_send_event(item, LV_EVENT_CLICKED, NULL);
-        sim_run(600);
-    }
+    EXPECT(ui_face_editor_centered() == UI_FACE_ANALOG, "Pantalla > Esfera no abrio el selector");
+    sim_run(6 * 60 + 300);
+    center(UI_FACE_GLASS);
+    sim_run(6 * 60);
+    sim_tap(205, 250);
+    sim_run(900);
     EXPECT(face_setting() == UI_FACE_GLASS && ui_nav_depth() == 1,
            "desde Ajustes: no aplico o no volvio a la esfera (estilo %d, profundidad %d)", face_setting(),
            ui_nav_depth());
 
+    /* ---- El fondo de la esfera activa no cambia por las vistas previas ----
+     * (antes una vista previa con otro fondo reescribía el de la activa) */
+    set_face(UI_FACE_TAJ);
+    sim_save(out, "f10_taj_antes");
+    const uint16_t px0 = sim_fb[300 * SIM_W + 200];
+    sim_press(205, 300);
+    sim_run(700);
+    sim_release();
+    sim_run(6 * 60 + 600); /* genera Tierra, Flores (otros fondos) */
+    EXPECT(ui_face_editor_thumbs() == 3, "selector: vistas previas de las vecinas del Taj (%d)", ui_face_editor_thumbs());
+    sim_drag(FLEX_SCREEN_W - 4, 300, 100, 300, 12, 20);
+    sim_release();
+    sim_run(800);
+    lv_obj_invalidate(ui_nav_page(0));
+    sim_run(100);
+    EXPECT(ui_nav_depth() == 1 && sim_fb[300 * SIM_W + 200] == px0,
+           "selector: el fondo de la esfera activa cambio tras las vistas previas");
+
     /* ---- Ahorro de energía: esfera mínima en negro ---- */
+    sim_set_time(WATCH_TIME_OK, 2026, 10, 15, 10, 9, 30); /* el recorrido del selector ha llevado su tiempo */
     set_face(UI_FACE_PARALLAX);
     ui_psave_set(true);
     sim_run(1100);
@@ -209,8 +274,8 @@ void sim_suite_faces(const char *out)
         sim_press(205, 300);
         sim_run(700);
         sim_release();
-        sim_run(round % 2 ? 60 : UI_FACE_COUNT_ * 40 + 200); /* a veces con las vistas previas a medias */
-        EXPECT(sim_find_label(ui_nav_top(), "Esferas"), "regresion %d: el selector no se abrio", round);
+        sim_run(round % 2 ? 300 : 6 * 60 + 300); /* a veces con las vistas previas a medias */
+        EXPECT(ui_face_editor_centered() == UI_FACE_PARALLAX, "regresion %d: el selector no se abrio", round);
         if (round % 3 == 0) {
             sim_drag(4, 300, 300, 300, 12, 20); /* borde izquierdo: al cajón */
         } else if (round % 3 == 1) {
@@ -220,8 +285,7 @@ void sim_suite_faces(const char *out)
         }
         sim_release();
         sim_run(600);
-        EXPECT(!ui_nav_busy() && !sim_find_label(ui_nav_top(), "Esferas"), "regresion %d: no se salio del selector",
-               round);
+        EXPECT(!ui_nav_busy() && ui_face_editor_centered() < 0, "regresion %d: no se salio del selector", round);
         ui_nav_discard_suspended();
         ui_nav_home();
         sim_run(400);

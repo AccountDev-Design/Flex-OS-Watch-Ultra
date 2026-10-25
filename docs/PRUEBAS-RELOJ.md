@@ -174,6 +174,32 @@ enseña la dirección y el código). Para T160-T161, una Flex Account en la web 
 | T160-T162 | Vincular la Flex Account (producción), fotos de Flex Cloud Web, subida del reloj, Automático apagando y encendiendo el P4 |
 | T163-T166 | Sin Wi-Fi y vuelta, ir a la esfera durante una descarga, abrir y cerrar 10 veces (PSRAM en Device Care), HTTPS real. Copiar la línea «fin: … pila libre mínima» |
 
+## 15. Rediseño 2026-10 (`REDISENO-2026-10.md`)
+
+Compara cada pantalla con su referencia de `design/referencias/` y `design/faces/` y manda una foto del reloj. Marca
+OK, FALLO o NO REALIZADA.
+
+| # | Prueba | Resultado esperado |
+|---|---|---|
+| T167 | En la esfera, deslizar hacia abajo desde el centro | El cajón en panal baja siguiendo al dedo, con el fondo desenfocado. Deslizar hacia arriba vuelve a la esfera |
+| T168 | En el cajón, arrastrar en diagonal y en círculos 30 s; soltar con impulso | Sin tirones ni saltos; la lente sigue al dedo; nunca dos iconos iguales a la vista; al parar, la celda se centra sin rebotes. Anotar si se nota lento |
+| T169 | Tocar un icono; tocar entre dos iconos; arrastrar y soltar sobre un icono | Abre solo con el toque; entre iconos no abre nada; un arrastre no abre |
+| T170 | Reloj: las cuatro pestañas | Como las referencias. Formato cambia 12/24 h y se mantiene tras reiniciar |
+| T171 | Cronómetro 1 min con 3 parciales; temporizador de 00:00:10 | El cronómetro coincide con otro reloj; el temporizador avisa a los 10 s |
+| T172 | Crear una alarma para dentro de 2 min y apagar otra con su interruptor | "Próxima" correcta; suena la activa, no la apagada |
+| T173 | Ajustes > Almacenamiento | Memoria interna 32 MB, PSRAM y categorías creíbles (comparar con el explorador). "Optimizar" no borra nada (comprobar Notas y Galería después) |
+| T174 | Elegir cada una de las 6 esferas nuevas | Fondos nítidos, textos enteros (nada cortado por las esquinas), batería y clima reales; "Tierra" sin clima no muestra nada inventado |
+| T175 | Reiniciar con una esfera nueva elegida | Vuelve la misma esfera |
+| T176 | Mantener pulsada la esfera sin moverse | La esfera se aleja hasta su tarjeta (zoom). Moviendo el dedo no se abre |
+| T177 | En el selector, recorrer las 11 esferas despacio y deprisa | Las tarjetas aparecen con su vista previa sin congelar el desplazamiento. Copiar las líneas `selector:` del registro si las hay |
+| T178 | Tocar la tarjeta centrada; tocar una vecina; salir por el borde derecho | Aplica con zoom y vuelve a la esfera; la vecina solo se centra; salir no cambia la esfera |
+| T179 | Abrir y cerrar el selector 15 veces, alternando con el cajón | Sin reinicios. PSRAM libre en Device Care igual al principio y al final (anotar los dos valores) |
+| T180 | Flex Compass: girar el reloj 90° sobre la mesa y volver | "90° REL" aprox. y vuelta a ~0°; la cuña crece al moverse; mantener pulsada la esfera fija la referencia |
+| T181 | Flex Compass: inclinar el reloj | "INCLINACIÓN" y "ALABEO" cambian; los detalles dicen magnetómetro, barómetro y GPS "No presente" |
+| T182 | Panel rápido: cada mosaico | Wi-Fi y Bluetooth se encienden y apagan (cian = encendido); AOD no se puede con el ahorro; Reloj abre la app; la batería abre Ajustes > Batería |
+| T183 | Panel rápido: brillo de un extremo a otro | El brillo cambia en vivo, mínimo 10 %, y se mantiene tras reiniciar |
+| T184 | 10 min de uso normal por todas las pantallas nuevas | Sin reinicios ni pantallas en blanco. Copiar el registro serie completo |
+
 ## Qué enviarme
 
 - El registro serie completo de la sesión.

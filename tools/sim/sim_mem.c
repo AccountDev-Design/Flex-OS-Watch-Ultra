@@ -19,14 +19,6 @@
 uint32_t ui_face_editor_previews_made(void);
 void sim_br_reset(void);
 
-static lv_obj_t *clickable_of(lv_obj_t *o)
-{
-    while (o && !lv_obj_has_flag(o, LV_OBJ_FLAG_CLICKABLE)) {
-        o = lv_obj_get_parent(o);
-    }
-    return o;
-}
-
 static bool has_prefix(lv_obj_t *root, const char *prefix)
 {
     if (lv_obj_check_type(root, &lv_label_class) &&
@@ -104,21 +96,23 @@ void sim_suite_mem(const char *out)
         /* durante la apertura (ui_nav ocupada) no se renderiza ninguna */
         EXPECT(ui_face_editor_previews_made() == made0 || !ui_nav_busy(),
                "selector %d: vista previa durante la transicion", round);
-        sim_run(UI_FACE_COUNT_ * 50 + 300);
-        EXPECT(ui_face_editor_previews_made() - made0 == UI_FACE_COUNT_, "selector %d: %u vistas previas", round,
-               (unsigned)(ui_face_editor_previews_made() - made0));
+        sim_run(6 * 60 + 300);
+        /* la esfera actual (su captura al mantenerla pulsada) y la ventana a su alrededor */
+        const int c0 = ui_face_editor_centered();
+        const int want = 1 + (c0 + 1 < UI_FACE_COUNT_) + (c0 + 2 < UI_FACE_COUNT_) + (c0 >= 1) + (c0 >= 2);
+        EXPECT(c0 >= 0 && (int)(ui_face_editor_previews_made() - made0) == want && ui_face_editor_thumbs() == want,
+               "selector %d: %u vistas previas, %d vivas (esperadas %d)", round,
+               (unsigned)(ui_face_editor_previews_made() - made0), ui_face_editor_thumbs(), want);
         /* recorrer */
         for (int k = 0; k < 3; k++) {
             sim_drag(300, 250, 80, 252, 8, 16);
             sim_release();
             sim_run(500);
+            EXPECT(ui_face_editor_thumbs() <= 5, "selector %d: %d miniaturas vivas", round, ui_face_editor_thumbs());
         }
         /* elegir (una ronda de cada tres) o salir con un gesto */
         if (round % 3 == 0) {
-            lv_obj_t *it = clickable_of(sim_find_label(ui_nav_top(), ui_face_name(round % UI_FACE_COUNT_)));
-            if (it) {
-                lv_obj_send_event(it, LV_EVENT_CLICKED, NULL);
-            }
+            sim_tap(205, 250);
         } else if (round % 3 == 1) {
             sim_drag(4, 300, 300, 300, 12, 20);
             sim_release();
@@ -145,13 +139,18 @@ void sim_suite_mem(const char *out)
     sim_mem_psram_block = 200 * 1024;
     const uint32_t m2 = ui_face_editor_previews_made();
     open_editor();
-    sim_run(UI_FACE_COUNT_ * 50 + 300);
-    EXPECT(sim_find_label(ui_nav_top(), "Esferas") && ui_face_editor_previews_made() == m2,
+    sim_run(6 * 60 + 300);
+    EXPECT(ui_face_editor_centered() >= 0 && ui_face_editor_previews_made() == m2 && ui_face_editor_thumbs() == 0,
            "selector sin PSRAM: genero vistas previas o no se abrio");
-    lv_obj_t *it = clickable_of(sim_find_label(ui_nav_top(), "Digital"));
-    if (it) {
-        lv_obj_send_event(it, LV_EVENT_CLICKED, NULL);
+    /* el carrusel funciona sin miniaturas; se vuelve a la Digital del principio */
+    for (int k = 0; k < UI_FACE_COUNT_ && ui_face_editor_centered() > 0; k++) {
+        sim_drag(110, 250, 300, 252, 8, 16);
+        sim_release();
+        sim_run(700);
     }
+    EXPECT(ui_face_editor_centered() == UI_FACE_DIGITAL && ui_face_editor_thumbs() == 0,
+           "selector sin PSRAM: no se pudo recorrer");
+    sim_tap(205, 250); /* sin miniatura: se aplica sin zoom */
     sim_run(600);
     EXPECT(ui_nav_depth() == 1, "selector sin PSRAM: elegir no volvio a la esfera");
     sim_mem_psram_block = 6900u * 1024;

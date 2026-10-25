@@ -24,6 +24,16 @@ bool flex_battery_icon_set(lv_obj_t *icon, flex_batt_kind_t kind, int percent);
 /** ¿obj es un indicador de flex_battery_icon_create()? (verificación de la interfaz) */
 bool flex_battery_icon_is(lv_obj_t *obj);
 
+/** Tipo de vista que muestra ahora (pruebas y diagnóstico). */
+flex_batt_kind_t flex_battery_icon_kind(lv_obj_t *icon);
+
+/**
+ * Monocromo blanco (sobre fondos de color, p. ej. el panel rápido rediseñado):
+ * contorno y relleno blancos; el nivel bajo y el crítico conservan su color
+ * de aviso y el glifo (rayo, completado, tachado) sigue diciendo el estado.
+ */
+void flex_battery_icon_set_mono(lv_obj_t *icon, bool mono);
+
 #ifdef __cplusplus
 }
 #endif

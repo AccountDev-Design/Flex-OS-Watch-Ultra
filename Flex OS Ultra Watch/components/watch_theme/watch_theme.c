@@ -374,6 +374,11 @@ void watch_theme_preview_begin(void)
 void watch_theme_preview_end(void)
 {
     s_preview = false;
+}
+
+void watch_theme_preview_release(void)
+{
+    s_preview = false;
     bg_drop(&s_prev);
 }
 
@@ -474,6 +479,10 @@ size_t watch_theme_release_caches(void)
     size_t n = 0;
     if (s_blur.small) {
         n += flex_blur_small_bytes(FLEX_SCREEN_W, FLEX_SCREEN_H) + flex_blur_tmp_bytes(FLEX_SCREEN_W, FLEX_SCREEN_H);
+    }
+    if (s_prev.px && !s_preview) {
+        bg_drop(&s_prev); /* fondo de la última vista previa del selector */
+        n += BG_BYTES;
     }
     const bool had = s_blur.out.px != NULL;
     s_blur.failed_key = KEY_NONE; /* con la memoria liberada se puede volver a intentar */
@@ -789,7 +798,7 @@ void watch_theme_set_visible(lv_obj_t *obj, bool visible)
 
 /* ---- Liquid Glass de los diseños del usuario ---- */
 
-static lv_style_t s_lg_dark, s_lg_dark_pr, s_lg_light, s_lg_light_pr, s_lg_light_chk, s_glow;
+static lv_style_t s_lg_dark, s_lg_dark_pr, s_lg_light, s_lg_light_pr, s_lg_light_chk, s_lg_light_dis, s_glow;
 static lv_grad_dsc_t s_glow_grad;
 static bool s_lg_inited;
 
@@ -819,6 +828,9 @@ static void lg_init(void)
     lv_style_set_border_opa(&s_lg_light, FLEX_LG_LIGHT_EDGE_OPA);
     lv_style_init(&s_lg_light_pr);
     lv_style_set_bg_opa(&s_lg_light_pr, FLEX_LG_LIGHT_FILL_OPA + 50);
+    lv_style_init(&s_lg_light_dis); /* no disponible: más transparente (no el gris del vidrio oscuro) */
+    lv_style_set_bg_opa(&s_lg_light_dis, FLEX_LG_LIGHT_FILL_OPA / 2);
+    lv_style_set_border_opa(&s_lg_light_dis, FLEX_LG_LIGHT_EDGE_OPA / 2);
     lv_style_init(&s_lg_light_chk);
     lv_style_set_bg_color(&s_lg_light_chk, flex_color(FLEX_QP_ACTIVE));
     lv_style_set_bg_opa(&s_lg_light_chk, 225);
@@ -869,10 +881,11 @@ lv_obj_t *watch_theme_lg_button(lv_obj_t *parent, flex_lg_t kind, int32_t x, int
     if (kind == FLEX_LG_LIGHT) {
         lv_obj_add_style(o, &s_lg_light_pr, LV_STATE_PRESSED);
         lv_obj_add_style(o, &s_lg_light_chk, LV_STATE_CHECKED);
+        lv_obj_add_style(o, &s_lg_light_dis, LV_STATE_DISABLED);
     } else {
         lv_obj_add_style(o, &s_lg_dark_pr, LV_STATE_PRESSED);
+        lv_obj_add_style(o, &s_disabled, LV_STATE_DISABLED);
     }
-    lv_obj_add_style(o, &s_disabled, LV_STATE_DISABLED);
     lv_obj_add_flag(o, LV_OBJ_FLAG_CLICKABLE);
     return o;
 }

@@ -7,11 +7,15 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 # Opciones de LVGL que el código necesita sea cual sea el sdkconfig existente
 # (sdkconfig.defaults solo cuenta al generar un sdkconfig nuevo):
 #  - LV_USE_SNAPSHOT=1: vistas previas reales del selector de esferas;
+#  - LV_USE_ARCLABEL=1: rótulo curvo "Batería" de la esfera Ultra (rediseño
+#    2026-10; activo por defecto en LVGL 9.5, se fija por si un sdkconfig
+#    antiguo lo apagó);
 #  - LV_USE_PERF_MONITOR=0: nunca el medidor de FPS/CPU en la interfaz
 #    normal. Solo para medir (pruebas T9/T42), y a propósito:
 #      idf.py -DFLEX_PERF_MONITOR=1 build   (con CONFIG_LV_USE_PERF_MONITOR=y)
 # lv_conf_internal.h respeta una definición previa (#ifndef).
 idf_build_set_property(COMPILE_DEFINITIONS "LV_USE_SNAPSHOT=1" APPEND)
+idf_build_set_property(COMPILE_DEFINITIONS "LV_USE_ARCLABEL=1" APPEND)
 # Asignador de LVGL propio (components/watch_display/lv_mem_watch.c): objetos,
 # estilos y estado de las páginas en PSRAM, no en la RAM interna que necesitan
 # Wi-Fi, BLE, lwIP y las pilas de las tareas.

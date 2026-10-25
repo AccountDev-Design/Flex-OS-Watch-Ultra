@@ -19,6 +19,10 @@
  * En listas con desplazamiento, solo se juzga la parte que se ve dentro de la
  * lista (una fila puede asomar cortada por el borde recto de la lista al
  * desplazarse, nunca por la esquina del panel).
+ * Excepción: una tarjeta de carrusel horizontal que asoma por un lado (su caja
+ * sale de la pantalla por ese lado, p. ej. las vecinas del selector de
+ * esferas) ya se ve cortada por ese borde; en ese lado la esquina del panel
+ * solo continúa el corte y no se juzga. El otro lado, y arriba y abajo, sí.
  *
  * Residuos: sim_check_residue() compara la imagen actual con la de un
  * redibujado completo; si difieren, alguna animación dejó píxeles viejos.
@@ -184,7 +188,8 @@ static void check_surface(lv_obj_t *o, const char *where)
         const int32_t x2 = (int32_t)floor(c.x2 - in + 0.5);
         const int32_t sl = flex_safe_left(y, y, 0) - 1, sr = flex_safe_right(y, y, 0) + 1;
         const int32_t lx = x1 > vis.x1 ? x1 : vis.x1, rx = x2 < vis.x2 ? x2 : vis.x2;
-        if (lx < sl || rx > sr) {
+        const bool cut_l = c.x1 < 0, cut_r = c.x2 > SIM_W - 1; /* asoma por ese lado */
+        if ((lx < sl && !cut_l) || (rx > sr && !cut_r)) {
             char extra[96];
             snprintf(extra, sizeof(extra), " (fila y=%d: x %d..%d, visible %d..%d)", (int)y, (int)lx, (int)rx,
                      (int)sl, (int)sr);

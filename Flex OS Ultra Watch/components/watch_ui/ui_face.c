@@ -468,7 +468,7 @@ static void long_press_cb(lv_event_t *e)
 {
     (void)e;
     if (!s_moved && ui_nav_depth() == 1 && !ui_nav_busy() && !ui_qp_active()) {
-        ui_face_editor_open(false);
+        ui_face_editor_open_zoom(); /* la captura y el zoom, fuera de este evento */
     }
 }
 

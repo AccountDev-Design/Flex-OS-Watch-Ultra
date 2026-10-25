@@ -2,18 +2,22 @@
  * ui_qp — panel rápido: cortina que baja desde el borde superior de la
  * esfera siguiendo al dedo.
  *
+ * Rediseño 2026-10 (diseño del usuario: design/referencias/panel_rapido.png):
+ * degradado turquesa-verde, cabecera con hora, fecha y batería, seis mosaicos
+ * de vidrio claro solo con icono y la barra de brillo con relleno cian. Cada
+ * mosaico enseña el estado REAL de su servicio: activo = relleno cian
+ * (LV_STATE_CHECKED), no disponible = más transparente (LV_STATE_DISABLED).
  * Solo lleva controles con función real:
- *  - Brillo: control real del panel (DCS 0x51), mínimo 10 %, con el envío
- *    limitado durante el arrastre. No se guarda hasta F4.1 (NVS).
+ *  - Wi-Fi: tocarlo lo enciende o lo apaga (watch_net, F5.1).
+ *  - Bluetooth: enciende o apaga el enlace con Flex Phone (watch_phone, F5.5).
  *  - Ajustes: cierra el panel y abre la página de Ajustes.
- *  - Batería: el % y el estado reales (de la caché de ui_system); abre
- *    Ajustes > Batería.
- *  - Wi-Fi: tocarlo lo enciende o lo apaga; debajo, la red o el estado real
- *    (watch_net, F5.1). Activo (acento) con el Wi-Fi encendido.
- *  - Bluetooth: enciende o apaga el enlace con Flex Phone (watch_phone,
- *    F5.5); debajo, el teléfono conectado o el estado real del enlace.
- *  - Ahorro: Flex Ultra Power Saving (ui_psave.c), con su estado real.
- *  - AOD: pantalla siempre activa (ui_aod.c); no disponible con el ahorro.
+ *  - AOD (luna): pantalla siempre activa (ui_aod.c); no disponible con el ahorro.
+ *  - Ahorro (batería con hoja): Flex Ultra Power Saving (ui_psave.c).
+ *  - Reloj: cierra el panel y abre la app Reloj.
+ *  - Brillo: control real del panel (DCS 0x51), mínimo 10 %, con el envío
+ *    limitado durante el arrastre (ui_bright.c).
+ *  - Batería de la cabecera: % y estado reales (de la caché de ui_system; el
+ *    icono lleva el rayo o el enchufe); tocarla abre Ajustes > Batería.
  *
  * Gestos (ui_gesture.c): arrastrar hacia abajo desde la franja superior de
  * la esfera, o desde el borde superior de CUALQUIER página (ui_nav), abre;
@@ -45,17 +49,20 @@
 #define QP_PULL_H   64          /* franja de la esfera que abre el panel */
 #define QP_TICK_MS  1000
 
-/* Geometría del contenido (px del panel de 410x502) */
-#define HDR_Y       24          /* fila de hora y batería */
-#define TILE_X0     16
-#define TILE_GAP    12
-#define TILE_W      ((QP_W - 2 * TILE_X0 - TILE_GAP) / 2)
-#define TILE_H      88
-#define TILE_Y0     70
-#define TILE_Y1     (TILE_Y0 + TILE_H + TILE_GAP)
-#define TILE_Y2     (TILE_Y1 + TILE_H + TILE_GAP)
-#define SLIDER_Y    (TILE_Y2 + TILE_H + 14)
-#define HANDLE_H    56          /* zona táctil del asa inferior */
+/* Geometría del contenido (px del panel de 410x502, medida en la referencia;
+ * la cabecera baja hasta donde las esquinas redondeadas dejan verla) */
+#define HDR_Y       22          /* fila de hora y batería */
+#define TILE_X0     30
+#define TILE_GAP    10
+#define TILE_W      170
+#define TILE_H      98
+#define TILE_R      38
+#define TILE_Y0     66
+#define TILE_DY     (TILE_H + 10)
+#define SLIDER_Y    (TILE_Y0 + 3 * TILE_DY + 4)
+#define SLIDER_H    60
+#define HANDLE_H    44          /* zona táctil del asa inferior */
+#define C_CLOCK_HANDS 0x63C5B4  /* agujas del reloj macizo: el tono del mosaico */
 
 typedef enum {
     QP_CLOSED = 0,
@@ -76,17 +83,8 @@ static struct {
     lv_obj_t *date;
     lv_obj_t *batt_icon;
     lv_obj_t *batt_pct;
-    lv_obj_t *batt_tile_icon;
-    lv_obj_t *batt_tile_pct;
-    lv_obj_t *batt_tile_state;
-    lv_obj_t *wifi_tile;
-    lv_obj_t *wifi_sub;
-    lv_obj_t *bt_tile;
-    lv_obj_t *bt_sub;
-    lv_obj_t *ps_tile;
-    lv_obj_t *ps_sub;
-    lv_obj_t *aod_tile;
-    lv_obj_t *aod_sub;
+    lv_obj_t *tile[UI_QP_TILES];
+    lv_obj_t *aod_icon;
     lv_timer_t *timer;
     ui_drag_t drag;
     ui_page_create_t after_close; /* página que se abre al terminar de cerrar */
@@ -115,6 +113,17 @@ static void fit_header(void)
     }
 }
 
+static void set_checked(lv_obj_t *o, bool on)
+{
+    if (o && on != lv_obj_has_state(o, LV_STATE_CHECKED)) {
+        if (on) {
+            lv_obj_add_state(o, LV_STATE_CHECKED);
+        } else {
+            lv_obj_remove_state(o, LV_STATE_CHECKED);
+        }
+    }
+}
+
 static void update(void)
 {
     wt_datetime_t dt;
@@ -139,67 +148,26 @@ static void update(void)
         lv_label_set_text(s_qp.date, d);
         fit_header();
     }
-    if (s_qp.wifi_tile) {
-        watch_net_status_t ns;
-        watch_net_get(&ns);
-        const char *sub = ns.state == NET_CONNECTED ? ns.ssid : watch_net_state_text(&ns);
-        if (strcmp(lv_label_get_text(s_qp.wifi_sub), sub) != 0) {
-            lv_label_set_text(s_qp.wifi_sub, sub);
-        }
-        if (ns.enabled != lv_obj_has_state(s_qp.wifi_tile, LV_STATE_CHECKED)) {
-            if (ns.enabled) {
-                lv_obj_add_state(s_qp.wifi_tile, LV_STATE_CHECKED);
-            } else {
-                lv_obj_remove_state(s_qp.wifi_tile, LV_STATE_CHECKED);
-            }
-        }
+    if (!s_qp.root) {
+        return;
     }
-    if (s_qp.ps_tile) {
-        const bool on = ui_psave_active();
-        if (on != lv_obj_has_state(s_qp.ps_tile, LV_STATE_CHECKED)) {
-            if (on) {
-                lv_obj_add_state(s_qp.ps_tile, LV_STATE_CHECKED);
-            } else {
-                lv_obj_remove_state(s_qp.ps_tile, LV_STATE_CHECKED);
-            }
-            lv_label_set_text(s_qp.ps_sub, on ? "Activado" : "Desactivado");
-        }
-        watch_settings_t ws;
-        watch_settings_get(&ws);
-        const bool aod = ui_aod_enabled();
-        if (aod != lv_obj_has_state(s_qp.aod_tile, LV_STATE_CHECKED)) {
-            if (aod) {
-                lv_obj_add_state(s_qp.aod_tile, LV_STATE_CHECKED);
-            } else {
-                lv_obj_remove_state(s_qp.aod_tile, LV_STATE_CHECKED);
-            }
-        }
-        const char *asub = on ? "No con ahorro" : (ws.aod ? "Activada" : "Desactivada");
-        if (strcmp(lv_label_get_text(s_qp.aod_sub), asub) != 0) {
-            lv_label_set_text(s_qp.aod_sub, asub);
-        }
+    watch_net_status_t ns;
+    watch_net_get(&ns);
+    set_checked(s_qp.tile[UI_QP_WIFI], ns.enabled);
+    watch_phone_status_t ps;
+    watch_phone_get(&ps);
+    set_checked(s_qp.tile[UI_QP_BT], ps.enabled);
+    const bool on = ui_psave_active();
+    set_checked(s_qp.tile[UI_QP_PSAVE], on);
+    set_checked(s_qp.tile[UI_QP_AOD], ui_aod_enabled());
+    if (on != lv_obj_has_state(s_qp.tile[UI_QP_AOD], LV_STATE_DISABLED)) {
         if (on) {
-            lv_obj_add_state(s_qp.aod_tile, LV_STATE_DISABLED);
+            lv_obj_add_state(s_qp.tile[UI_QP_AOD], LV_STATE_DISABLED); /* no con el ahorro */
         } else {
-            lv_obj_remove_state(s_qp.aod_tile, LV_STATE_DISABLED);
+            lv_obj_remove_state(s_qp.tile[UI_QP_AOD], LV_STATE_DISABLED);
         }
+        flex_icon_set_color(s_qp.aod_icon, on ? 0xB8E6DC : FLEX_C_WHITE);
     }
-    if (s_qp.bt_tile) {
-        watch_phone_status_t ps;
-        watch_phone_get(&ps);
-        const char *sub = ps.link == FLP_LS_READY && ps.peer_name[0] ? ps.peer_name : ui_phone_chip(&ps, NULL);
-        if (strcmp(lv_label_get_text(s_qp.bt_sub), sub) != 0) {
-            lv_label_set_text(s_qp.bt_sub, sub);
-        }
-        if (ps.enabled != lv_obj_has_state(s_qp.bt_tile, LV_STATE_CHECKED)) {
-            if (ps.enabled) {
-                lv_obj_add_state(s_qp.bt_tile, LV_STATE_CHECKED);
-            } else {
-                lv_obj_remove_state(s_qp.bt_tile, LV_STATE_CHECKED);
-            }
-        }
-    }
-
 }
 
 static void update_battery(const watch_power_snapshot_t *snap)
@@ -216,15 +184,11 @@ static void update_battery(const watch_power_snapshot_t *snap)
     s_qp.last_level = (int)blv;
     const flex_batt_kind_t kind = ui_batt_kind(bst, blv);
     flex_battery_icon_set(s_qp.batt_icon, kind, pct);
-    flex_battery_icon_set(s_qp.batt_tile_icon, kind, pct);
     if (pct >= 0) {
         lv_label_set_text_fmt(s_qp.batt_pct, "%d %%", pct);
-        lv_label_set_text_fmt(s_qp.batt_tile_pct, "%d %%", pct);
     } else {
         lv_label_set_text(s_qp.batt_pct, "--");
-        lv_label_set_text(s_qp.batt_tile_pct, "--");
     }
-    lv_label_set_text(s_qp.batt_tile_state, ui_batt_state_text(bst));
     fit_header();
 }
 
@@ -240,23 +204,14 @@ static void power_cb(lv_obj_t *root, const watch_power_snapshot_t *snap)
     update_battery(snap);
 }
 
-static lv_obj_t *tile(lv_obj_t *parent, int32_t x, int32_t y, flex_icon_t icon, uint32_t accent,
-                      const char *title, const char *sub, lv_obj_t **sub_out)
+/* Mosaico de vidrio claro con un icono blanco centrado. */
+static lv_obj_t *tile(lv_obj_t *parent, int i, flex_icon_t icon, int32_t size, lv_event_cb_t cb)
 {
-    lv_obj_t *t = watch_theme_tile(parent, x, y, TILE_W, TILE_H);
-    lv_obj_t *ic = flex_icon_create(t, icon, 28, accent);
-    lv_obj_set_pos(ic, 0, 0);
-    lv_obj_t *l = watch_theme_label(t, FLEX_FONT_BODY, FLEX_C_TXT, title);
-    lv_label_set_long_mode(l, LV_LABEL_LONG_MODE_DOTS);
-    lv_obj_set_width(l, TILE_W - 32 - 40);
-    lv_obj_set_pos(l, 40, -1);
-    lv_obj_t *s = watch_theme_label(t, FLEX_FONT_SMALL, FLEX_C_TXT2, sub);
-    lv_label_set_long_mode(s, LV_LABEL_LONG_MODE_DOTS);
-    lv_obj_set_width(s, TILE_W - 32);
-    lv_obj_align(s, LV_ALIGN_BOTTOM_LEFT, 0, 2);
-    if (sub_out) {
-        *sub_out = s;
-    }
+    const int32_t x = TILE_X0 + (i % 2) * (TILE_W + TILE_GAP), y = TILE_Y0 + (i / 2) * TILE_DY;
+    lv_obj_t *t = watch_theme_lg_button(parent, FLEX_LG_LIGHT, x, y, TILE_W, TILE_H, TILE_R, FLEX_GLOW_NONE);
+    lv_obj_t *ic = flex_icon_create(t, icon, size, FLEX_C_WHITE);
+    lv_obj_center(ic);
+    lv_obj_add_event_cb(t, cb, LV_EVENT_CLICKED, NULL);
     return t;
 }
 
@@ -272,21 +227,15 @@ static lv_obj_t *row_box(lv_obj_t *parent)
     return b;
 }
 
-/* Wi-Fi: tocar el mosaico lo enciende o lo apaga (QSID_WIFI es QT_TOGGLE). */
+/* Wi-Fi: tocar el mosaico lo enciende o lo apaga (QSID_WIFI es QT_TOGGLE).
+ * Respuesta en el mismo toque; el refresco (1 s) pone después el estado real. */
 static void wifi_cb(lv_event_t *e)
 {
     (void)e;
     watch_net_status_t ns;
     watch_net_get(&ns);
     watch_net_set_enabled(!ns.enabled);
-    /* Respuesta en el mismo toque; el refresco (1 s) pone después el estado real. */
-    if (ns.enabled) {
-        lv_obj_remove_state(s_qp.wifi_tile, LV_STATE_CHECKED);
-        lv_label_set_text(s_qp.wifi_sub, "Apagado");
-    } else {
-        lv_obj_add_state(s_qp.wifi_tile, LV_STATE_CHECKED);
-        lv_label_set_text(s_qp.wifi_sub, "Encendiendo");
-    }
+    set_checked(s_qp.tile[UI_QP_WIFI], !ns.enabled);
 }
 
 /* Bluetooth: tocar el mosaico enciende o apaga el enlace con Flex Phone. */
@@ -296,13 +245,7 @@ static void bt_cb(lv_event_t *e)
     watch_phone_status_t ps;
     watch_phone_get(&ps);
     watch_phone_set_enabled(!ps.enabled);
-    if (ps.enabled) {
-        lv_obj_remove_state(s_qp.bt_tile, LV_STATE_CHECKED);
-        lv_label_set_text(s_qp.bt_sub, "Apagado");
-    } else {
-        lv_obj_add_state(s_qp.bt_tile, LV_STATE_CHECKED);
-        lv_label_set_text(s_qp.bt_sub, "Buscando");
-    }
+    set_checked(s_qp.tile[UI_QP_BT], !ps.enabled);
 }
 
 /* Flex Ultra Power Saving: el estado real lo pone update() en el mismo toque. */
@@ -335,14 +278,8 @@ static void destroy(void)
         lv_timer_delete(s_qp.timer);
         s_qp.timer = NULL;
     }
-    s_qp.wifi_tile = NULL;
-    s_qp.wifi_sub = NULL;
-    s_qp.bt_tile = NULL;
-    s_qp.bt_sub = NULL;
-    s_qp.ps_tile = NULL;
-    s_qp.ps_sub = NULL;
-    s_qp.aod_tile = NULL;
-    s_qp.aod_sub = NULL;
+    memset(s_qp.tile, 0, sizeof(s_qp.tile));
+    s_qp.aod_icon = NULL;
     if (s_qp.root) {
         lv_obj_delete_async(s_qp.root);
         s_qp.root = NULL;
@@ -394,6 +331,7 @@ static void close_drag_cb(lv_event_t *e);
 static void handle_cb(lv_event_t *e);
 static void settings_cb(lv_event_t *e);
 static void battery_cb(lv_event_t *e);
+static void clock_cb(lv_event_t *e);
 
 static void build(void)
 {
@@ -407,20 +345,18 @@ static void build(void)
     lv_obj_remove_style_all(root);
     lv_obj_set_size(root, QP_W, QP_H);
     lv_obj_set_pos(root, 0, -QP_H);
-    /* Velo opaco. La referencia deja pasar algo de fondo porque detrás hay
-     * un fondo desenfocado; aquí no se desenfoca (coste) y con 245/255 la
-     * esfera se leía como un fantasma a través de los controles (vista
-     * previa). Opaco, además, LVGL deja de dibujar la esfera bajo el panel. */
-    lv_obj_set_style_bg_color(root, flex_color(FLEX_C_PAGE), 0);
+    /* Degradado horizontal opaco: LVGL no dibuja la esfera bajo el panel.
+     * Sin radio: un rectángulo opaco que cubre la pantalla entera (con radio,
+     * las esquinas obligaban a redibujar la esfera en cada cuadro). Una línea
+     * abajo marca el borde mientras baja siguiendo al dedo. */
+    lv_obj_set_style_bg_color(root, flex_color(FLEX_QP_GRAD_L), 0);
+    lv_obj_set_style_bg_grad_color(root, flex_color(FLEX_QP_GRAD_R), 0);
+    lv_obj_set_style_bg_grad_dir(root, LV_GRAD_DIR_HOR, 0);
     lv_obj_set_style_bg_opa(root, LV_OPA_COVER, 0);
-    /* Sin radio: un rectángulo opaco que cubre la pantalla entera permite a
-     * LVGL no dibujar la esfera debajo (con radio, las esquinas obligaban a
-     * redibujarla en cada cuadro). Una línea abajo marca el borde mientras
-     * baja siguiendo al dedo. */
     lv_obj_set_style_border_width(root, 2, 0);
     lv_obj_set_style_border_side(root, LV_BORDER_SIDE_BOTTOM, 0);
-    lv_obj_set_style_border_color(root, flex_color(FLEX_C_DIVIDER), 0);
-    lv_obj_set_style_border_opa(root, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(root, flex_color(FLEX_C_WHITE), 0);
+    lv_obj_set_style_border_opa(root, FLEX_LG_LIGHT_EDGE_OPA, 0);
     lv_obj_remove_flag(root, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(root, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK);
     lv_obj_add_event_cb(root, close_drag_cb, LV_EVENT_PRESSED, NULL);
@@ -432,7 +368,7 @@ static void build(void)
     /* Cabecera: hora y fecha corta a la izquierda, % y batería a la
      * derecha, dentro de lo que dejan ver las esquinas redondeadas a esa
      * altura (en la foto del reloj el icono de batería quedaba cortado). */
-    const int32_t hh = lv_font_get_line_height(FLEX_FONT_TITLE);
+    const int32_t hh = lv_font_get_line_height(FLEX_FONT_S32);
     const int32_t hx = flex_safe_left(HDR_Y, HDR_Y + hh - 1, FLEX_SAFE_MARGIN);
     lv_obj_t *hdr = row_box(root);
     s_qp.hdr = hdr;
@@ -444,42 +380,32 @@ static void build(void)
     lv_obj_set_size(left, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_flex_align(left, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
     lv_obj_set_style_pad_column(left, 10, 0);
-    s_qp.time = watch_theme_label(left, FLEX_FONT_TITLE, FLEX_C_TXT, "--:--");
-    s_qp.date = watch_theme_label(left, FLEX_FONT_SMALL, FLEX_C_TXT2, "");
-    lv_obj_set_style_pad_bottom(s_qp.date, 3, 0);
+    s_qp.time = watch_theme_label(left, FLEX_FONT_S32, FLEX_C_WHITE, "--:--");
+    s_qp.date = watch_theme_label(left, FLEX_FONT_S20, FLEX_C_WHITE, "");
+    lv_obj_set_style_pad_bottom(s_qp.date, 4, 0);
     lv_obj_t *right = row_box(hdr);
     s_qp.hdr_right = right;
     lv_obj_set_size(right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_style_pad_column(right, 8, 0);
-    s_qp.batt_pct = watch_theme_label(right, FLEX_FONT_SMALL, FLEX_C_TXT, "--");
-    s_qp.batt_icon = flex_battery_icon_create(right, 37, 17);
+    lv_obj_set_style_pad_column(right, 6, 0);
+    lv_obj_add_flag(right, LV_OBJ_FLAG_CLICKABLE); /* abre Ajustes > Batería */
+    lv_obj_set_ext_click_area(right, 10);
+    lv_obj_add_event_cb(right, battery_cb, LV_EVENT_CLICKED, NULL);
+    s_qp.batt_pct = watch_theme_label(right, FLEX_FONT_S32, FLEX_C_WHITE, "--");
+    s_qp.batt_icon = flex_battery_icon_create(right, 46, 22);
+    flex_battery_icon_set_mono(s_qp.batt_icon, true);
 
-    /* Mosaicos */
-    s_qp.wifi_tile = tile(root, TILE_X0, TILE_Y0, FLEX_ICON_WIFI, FLEX_C_CAT_NET, "Wi-Fi", "", &s_qp.wifi_sub);
-    lv_obj_add_event_cb(s_qp.wifi_tile, wifi_cb, LV_EVENT_CLICKED, NULL);
-    s_qp.bt_tile = tile(root, TILE_X0 + TILE_W + TILE_GAP, TILE_Y0, FLEX_ICON_BLUETOOTH, FLEX_C_CAT_NET,
-                        "Bluetooth", "", &s_qp.bt_sub);
-    lv_obj_add_event_cb(s_qp.bt_tile, bt_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *batt = tile(root, TILE_X0, TILE_Y1, FLEX_ICON_BOLT, FLEX_C_CAT_GREEN, "--", "",
-                          &s_qp.batt_tile_state);
-    s_qp.batt_tile_pct = lv_obj_get_child(batt, 1);
-    lv_obj_add_event_cb(batt, battery_cb, LV_EVENT_CLICKED, NULL); /* abre Ajustes > Batería */
-    /* El rayo diría "cargando" aunque descargue: el mosaico usa el indicador
-     * real, el mismo de la esfera. */
-    lv_obj_delete(lv_obj_get_child(batt, 0));
-    s_qp.batt_tile_icon = flex_battery_icon_create(batt, 32, 16);
-    lv_obj_move_to_index(s_qp.batt_tile_icon, 0);
-    lv_obj_set_pos(s_qp.batt_tile_icon, 0, 6);
-    lv_obj_t *set = tile(root, TILE_X0 + TILE_W + TILE_GAP, TILE_Y1, FLEX_ICON_GEAR, FLEX_C_CAT_BLUE,
-                         "Ajustes", "Pantalla, batería", NULL);
-    lv_obj_add_event_cb(set, settings_cb, LV_EVENT_CLICKED, NULL);
-    s_qp.ps_tile = tile(root, TILE_X0, TILE_Y2, FLEX_ICON_BOLT, FLEX_C_WARN, "Ahorro", "", &s_qp.ps_sub);
-    lv_obj_add_event_cb(s_qp.ps_tile, psave_cb, LV_EVENT_CLICKED, NULL);
-    s_qp.aod_tile = tile(root, TILE_X0 + TILE_W + TILE_GAP, TILE_Y2, FLEX_ICON_MOON, FLEX_C_CAT_SUN,
-                         "AOD", "", &s_qp.aod_sub);
-    lv_obj_add_event_cb(s_qp.aod_tile, aod_cb, LV_EVENT_CLICKED, NULL);
+    /* Mosaicos (orden de la referencia) */
+    s_qp.tile[UI_QP_WIFI] = tile(root, 0, FLEX_ICON_WIFI, 66, wifi_cb);
+    s_qp.tile[UI_QP_BT] = tile(root, 1, FLEX_ICON_BLUETOOTH, 70, bt_cb);
+    s_qp.tile[UI_QP_SETTINGS] = tile(root, 2, FLEX_ICON_GEAR_SOLID, 64, settings_cb);
+    s_qp.tile[UI_QP_AOD] = tile(root, 3, FLEX_ICON_MOON_SOLID, 60, aod_cb);
+    s_qp.aod_icon = lv_obj_get_child(s_qp.tile[UI_QP_AOD], 0);
+    s_qp.tile[UI_QP_PSAVE] = tile(root, 4, FLEX_ICON_BATT_LEAF, 84, psave_cb);
+    flex_icon_set_color2(lv_obj_get_child(s_qp.tile[UI_QP_PSAVE], 0), C_CLOCK_HANDS); /* nervios de la hoja */
+    s_qp.tile[UI_QP_CLOCK] = tile(root, 5, FLEX_ICON_CLOCK_SOLID, 64, clock_cb);
+    flex_icon_set_color2(lv_obj_get_child(s_qp.tile[UI_QP_CLOCK], 0), C_CLOCK_HANDS);
 
-    ui_bright_create(root, TILE_X0, SLIDER_Y, QP_W - 2 * TILE_X0);
+    ui_bright_create_light(root, TILE_X0, SLIDER_Y, 2 * TILE_W + TILE_GAP, SLIDER_H);
 
     /* Asa inferior: tocarla cierra el panel; arrastrar desde ella hacia
      * arriba también (los eventos suben a la cortina). */
@@ -494,8 +420,8 @@ static void build(void)
     lv_obj_remove_style_all(pill);
     lv_obj_set_size(pill, 44, 5);
     lv_obj_set_style_radius(pill, 3, 0);
-    lv_obj_set_style_bg_color(pill, flex_color(FLEX_C_TXT2), 0);
-    lv_obj_set_style_bg_opa(pill, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(pill, flex_color(FLEX_C_WHITE), 0);
+    lv_obj_set_style_bg_opa(pill, LV_OPA_70, 0);
     lv_obj_align(pill, LV_ALIGN_CENTER, 0, 4);
     lv_obj_remove_flag(pill, LV_OBJ_FLAG_CLICKABLE);
 
@@ -596,7 +522,27 @@ static void battery_cb(lv_event_t *e)
     }
 }
 
+static void clock_cb(lv_event_t *e)
+{
+    (void)e;
+    if (s_qp.st == QP_OPEN) {
+        s_qp.after_close = ui_reloj_create;
+        animate_to(false, FLEX_ANIM_APP_CLOSE_MS);
+    }
+}
+
 /* ---- API ---- */
+
+lv_obj_t *ui_qp_tile(ui_qp_tile_t t)
+{
+    return t >= 0 && t < UI_QP_TILES ? s_qp.tile[t] : NULL;
+}
+
+lv_obj_t *ui_qp_battery(void)
+{
+    return s_qp.hdr_right && s_qp.root ? s_qp.hdr_right : NULL;
+}
+
 
 void ui_qp_attach(lv_obj_t *face_page)
 {

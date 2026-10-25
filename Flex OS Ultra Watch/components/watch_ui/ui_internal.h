@@ -68,6 +68,11 @@ bool ui_nav_back(void);
 void ui_nav_home(void);
 /** El cajón de aplicaciones baja desde arriba (gesto hacia abajo en la esfera). */
 bool ui_nav_push_from_top(ui_page_create_t create);
+/** Sin animación de navegación: la página anima su propia entrada o salida
+ * (selector de esferas). */
+bool ui_nav_push_instant(ui_page_create_t create);
+bool ui_nav_back_instant(void);
+void ui_nav_home_instant(void);
 /** Abre una página que sube siguiendo al dedo (cajón desde el borde inferior
  * de la esfera): begin al reconocerse el gesto, move con el recorrido, end al
  * soltar (commit: se completa; si no, baja y se borra). */
@@ -158,6 +163,9 @@ lv_obj_t *ui_timer_view(lv_obj_t *page);
 lv_obj_t *ui_calc_create(lv_obj_t *parent);     /**< app Calculadora (F9.2) */
 lv_obj_t *ui_calendar_create(lv_obj_t *parent); /**< app Calendario (F9.3) */
 lv_obj_t *ui_compass_create(lv_obj_t *parent);  /**< app Flex Compass (F9.4) */
+/** Textos del anillo naranja de la brújula abierta (0..3: inclinación, alabeo,
+ * deriva, "SIN NORTE"; se dibujan, no son etiquetas). Para las pruebas. */
+const char *ui_compass_ring_text(int i);
 lv_obj_t *ui_devcare_create(lv_obj_t *parent);  /**< app Device Care (F9.5) */
 lv_obj_t *ui_wifi_create(lv_obj_t *parent);     /**< Ajustes > Wi-Fi (F5.1) */
 lv_obj_t *ui_wifi_password_create(lv_obj_t *parent);
@@ -265,6 +273,8 @@ lv_obj_t *ui_touchtest_create(lv_obj_t *parent);
 
 /** Control de brillo compartido (panel rápido y Pantalla), de w x 64 px. */
 lv_obj_t *ui_bright_create(lv_obj_t *parent, int32_t x, int32_t y, int32_t w);
+/** El mismo control con el estilo claro del panel rápido rediseñado. */
+lv_obj_t *ui_bright_create_light(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h);
 
 /** Temporizador ligado a una página: se borra con ella. */
 lv_timer_t *ui_page_timer(lv_obj_t *page, lv_timer_cb_t cb, uint32_t period_ms, void *user_data);
@@ -322,10 +332,17 @@ lv_obj_t *ui_analog_create(lv_obj_t *parent, int32_t d, bool aod);
 void ui_analog_set(lv_obj_t *dial, int hour, int minute, int second);
 /** Selector de esferas (mantener pulsada la esfera o Ajustes > Pantalla). */
 lv_obj_t *ui_face_editor_create(lv_obj_t *parent);
-/** Abre el selector; from_settings: al aplicar vuelve a la esfera. */
+/** Abre el selector deslizando; from_settings: al aplicar vuelve a la esfera. */
 void ui_face_editor_open(bool from_settings);
+/** Desde la esfera (pulsación larga): en el siguiente tick, fuera del evento
+ * táctil, captura la esfera y abre el selector con un zoom hasta su tarjeta. */
+void ui_face_editor_open_zoom(void);
 /** Vistas previas renderizadas desde el arranque (diagnóstico y pruebas). */
 uint32_t ui_face_editor_previews_made(void);
+/** Esfera centrada en el selector a la vista y quieto (-1 si no lo está). */
+int ui_face_editor_centered(void);
+/** Miniaturas vivas en el selector abierto (ventana deslizante). */
+int ui_face_editor_thumbs(void);
 
 /* ---- Panel rápido (ui_qp) ---- */
 /** Arrastre hacia abajo que abre el panel (franja superior de cualquier página). */
@@ -339,6 +356,11 @@ bool ui_qp_is_open(void);
 /** El panel existe (abierto, abriéndose, arrastrándose o cerrándose). */
 bool ui_qp_active(void);
 lv_obj_t *ui_qp_obj(void);
+/** Mosaicos del panel rápido abierto (o NULL): para las pruebas y el diagnóstico. */
+typedef enum { UI_QP_WIFI = 0, UI_QP_BT, UI_QP_SETTINGS, UI_QP_AOD, UI_QP_PSAVE, UI_QP_CLOCK, UI_QP_TILES } ui_qp_tile_t;
+lv_obj_t *ui_qp_tile(ui_qp_tile_t t);
+/** Batería de la cabecera del panel (% e icono; tocarla abre Ajustes > Batería). */
+lv_obj_t *ui_qp_battery(void);
 
 /** Splash de arranque activo (watch_ui_boot_splash). */
 bool ui_splash_active(void);

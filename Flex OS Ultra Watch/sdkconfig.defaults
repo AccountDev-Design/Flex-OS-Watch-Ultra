@@ -57,6 +57,8 @@ CONFIG_LV_LOG_LEVEL_WARN=y
 # Vistas previas del selector de esferas (lv_snapshot). También se fuerza en
 # CMakeLists.txt para los sdkconfig ya generados.
 CONFIG_LV_USE_SNAPSHOT=y
+# Rótulo curvo de la esfera Ultra (lv_arclabel). También en CMakeLists.txt.
+CONFIG_LV_USE_ARCLABEL=y
 CONFIG_LV_BUILD_EXAMPLES=n
 
 # ---------------------------------------------------------------------------

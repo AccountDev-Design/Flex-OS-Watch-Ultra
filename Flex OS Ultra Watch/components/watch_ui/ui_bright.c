@@ -54,7 +54,7 @@ static void event_cb(lv_event_t *e)
     apply(sl, b, code != LV_EVENT_VALUE_CHANGED);
 }
 
-lv_obj_t *ui_bright_create(lv_obj_t *parent, int32_t x, int32_t y, int32_t w)
+static lv_obj_t *create(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h, bool light)
 {
     const watch_ui_boot_info_t *bi = ui_boot_info();
     const int cur = bi->brightness_get ? bi->brightness_get() : -1;
@@ -62,27 +62,43 @@ lv_obj_t *ui_bright_create(lv_obj_t *parent, int32_t x, int32_t y, int32_t w)
     lv_obj_t *sl = lv_slider_create(parent);
     lv_obj_remove_style_all(sl);
     lv_obj_set_pos(sl, x, y);
-    lv_obj_set_size(sl, w, BRIGHT_H);
-    lv_obj_set_style_bg_color(sl, flex_color(FLEX_C_GLASS), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(sl, LV_OPA_70, LV_PART_MAIN);
-    lv_obj_set_style_radius(sl, BRIGHT_H / 2, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(sl, flex_color(FLEX_C_ACCENT), LV_PART_INDICATOR);
+    lv_obj_set_size(sl, w, h);
+    if (light) {
+        /* Panel rápido rediseñado: vidrio claro y relleno cian (design/referencias/panel_rapido.png) */
+        lv_obj_set_style_bg_color(sl, flex_color(FLEX_C_WHITE), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(sl, FLEX_LG_LIGHT_FILL_OPA, LV_PART_MAIN);
+        lv_obj_set_style_border_width(sl, 2, LV_PART_MAIN);
+        lv_obj_set_style_border_color(sl, flex_color(FLEX_C_WHITE), LV_PART_MAIN);
+        lv_obj_set_style_border_opa(sl, FLEX_LG_LIGHT_EDGE_OPA, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(sl, flex_color(FLEX_QP_ACTIVE), LV_PART_INDICATOR);
+    } else {
+        lv_obj_set_style_bg_color(sl, flex_color(FLEX_C_GLASS), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(sl, LV_OPA_70, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(sl, flex_color(FLEX_C_ACCENT), LV_PART_INDICATOR);
+    }
+    lv_obj_set_style_radius(sl, h / 2, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(sl, LV_OPA_COVER, LV_PART_INDICATOR);
-    lv_obj_set_style_radius(sl, BRIGHT_H / 2, LV_PART_INDICATOR);
+    lv_obj_set_style_radius(sl, h / 2, LV_PART_INDICATOR);
     lv_obj_set_style_bg_opa(sl, LV_OPA_40, LV_PART_INDICATOR | LV_STATE_DISABLED);
     lv_slider_set_range(sl, UI_BRIGHT_MIN, UI_BRIGHT_MAX);
 
-    lv_obj_t *sun = flex_icon_create(sl, FLEX_ICON_SUN, 28, FLEX_C_TXT);
-    lv_obj_align(sun, LV_ALIGN_LEFT_MID, 18, 0);
-    lv_obj_t *val = watch_theme_label(sl, FLEX_FONT_BODY, FLEX_C_TXT, "");
+    lv_obj_t *sun = flex_icon_create(sl, FLEX_ICON_SUN, light ? 44 : 28, light ? FLEX_C_WHITE : FLEX_C_TXT);
+    lv_obj_align(sun, LV_ALIGN_LEFT_MID, light ? 20 : 18, 0);
+    lv_obj_t *val = watch_theme_label(sl, light ? FLEX_FONT_S20 : FLEX_FONT_BODY, light ? FLEX_C_WHITE : FLEX_C_TXT,
+                                      "");
     lv_obj_align(val, LV_ALIGN_RIGHT_MID, -20, 0);
 
     if (!bi->brightness_set || cur < 0) {
         lv_slider_set_value(sl, UI_BRIGHT_MIN, LV_ANIM_OFF);
         lv_obj_add_state(sl, LV_STATE_DISABLED);
         lv_label_set_text(val, "No disponible");
-        lv_obj_set_style_text_color(val, flex_color(FLEX_C_MUTE), 0);
+        if (!light) {
+            lv_obj_set_style_text_color(val, flex_color(FLEX_C_MUTE), 0);
+        }
         return sl;
+    }
+    if (light) {
+        lv_obj_add_flag(val, LV_OBJ_FLAG_HIDDEN); /* el diseño enseña solo la barra */
     }
     bright_t *b = lv_malloc_zeroed(sizeof(*b));
     LV_ASSERT_MALLOC(b);
@@ -95,4 +111,14 @@ lv_obj_t *ui_bright_create(lv_obj_t *parent, int32_t x, int32_t y, int32_t w)
     lv_obj_add_event_cb(sl, event_cb, LV_EVENT_PRESS_LOST, b);
     lv_obj_add_event_cb(sl, event_cb, LV_EVENT_DELETE, b);
     return sl;
+}
+
+lv_obj_t *ui_bright_create(lv_obj_t *parent, int32_t x, int32_t y, int32_t w)
+{
+    return create(parent, x, y, w, BRIGHT_H, false);
+}
+
+lv_obj_t *ui_bright_create_light(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    return create(parent, x, y, w, h, true);
 }

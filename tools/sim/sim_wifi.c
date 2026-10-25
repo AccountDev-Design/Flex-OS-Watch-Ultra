@@ -189,22 +189,24 @@ void sim_suite_wifi(const char *out)
     /* Panel rápido: el mosaico enciende y apaga, y dice el estado */
     ui_qp_open();
     sim_run(600);
-    lv_obj_t *qp = ui_qp_obj();
-    lv_obj_t *wl = qp ? sim_find_label(qp, "Wi-Fi") : NULL;
-    lv_obj_t *tile = wl ? lv_obj_get_parent(wl) : NULL;
-    EXPECT(tile && !lv_obj_has_state(tile, LV_STATE_DISABLED) && sim_find_label(tile, "Apagado"),
+    lv_obj_t *tile = ui_qp_tile(UI_QP_WIFI);
+    watch_net_status_t qns;
+    watch_net_get(&qns);
+    EXPECT(tile && !lv_obj_has_state(tile, LV_STATE_DISABLED) && !lv_obj_has_state(tile, LV_STATE_CHECKED) &&
+               !qns.enabled,
            "panel: el mosaico Wi-Fi no funciona");
     click(tile);
     EXPECT(tile && lv_obj_has_state(tile, LV_STATE_CHECKED), "panel: el mosaico no responde al toque");
     sim_run(1100);
-    EXPECT(tile && lv_obj_has_state(tile, LV_STATE_CHECKED) && sim_find_label(tile, "Buscando redes"),
-           "panel: el mosaico no enciende el Wi-Fi");
+    watch_net_get(&qns);
+    EXPECT(tile && lv_obj_has_state(tile, LV_STATE_CHECKED) && qns.enabled && qns.state != NET_OFF,
+           "panel: el mosaico no enciende el Wi-Fi (estado %d)", (int)qns.state);
     sim_lint("panel con wifi");
     click(tile);
     EXPECT(tile && !lv_obj_has_state(tile, LV_STATE_CHECKED), "panel: el mosaico no apaga al toque");
     sim_run(1100);
-    EXPECT(tile && !lv_obj_has_state(tile, LV_STATE_CHECKED) && sim_find_label(tile, "Apagado"),
-           "panel: el mosaico no apaga");
+    watch_net_get(&qns);
+    EXPECT(tile && !lv_obj_has_state(tile, LV_STATE_CHECKED) && !qns.enabled, "panel: el mosaico no apaga");
     ui_qp_close();
     sim_run(800);
 

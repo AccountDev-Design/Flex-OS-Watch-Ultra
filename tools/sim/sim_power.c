@@ -4,6 +4,7 @@
  */
 #include <stdio.h>
 
+#include "flex_battery_icon.h"
 #include "sim.h"
 #include "ui_internal.h"
 
@@ -68,7 +69,13 @@ void sim_suite_power(const char *out)
     sim_release();
     sim_scenario(70, 3950, BATT_STATE_EXTERNAL_IDLE, BATT_LEVEL_NORMAL, true);
     int waited = 0;
-    while (waited <= 500 && !sim_find_label(ui_qp_obj(), "Externa sin carga")) {
+    lv_obj_t *qbi = NULL; /* icono de batería de la cabecera del panel */
+    for (uint32_t k = 0; ui_qp_battery() && k < lv_obj_get_child_count(ui_qp_battery()); k++) {
+        lv_obj_t *c = lv_obj_get_child(ui_qp_battery(), (int32_t)k);
+        qbi = flex_battery_icon_is(c) ? c : qbi;
+    }
+    EXPECT(qbi, "el panel no tiene el icono de bateria");
+    while (waited <= 500 && qbi && flex_battery_icon_kind(qbi) != FLEX_BATT_EXTERNAL) {
         sim_run(5);
         waited += 5;
     }

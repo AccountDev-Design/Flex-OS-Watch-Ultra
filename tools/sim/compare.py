@@ -11,8 +11,8 @@ REF = ROOT / "design" / "referencias"
 PAIRS = [
     ("reloj_hora", "rd_reloj_hora"), ("reloj_cronometro", "rd_reloj_cronometro"),
     ("reloj_alarmas", "rd_reloj_alarmas"), ("reloj_temporizador", "rd_reloj_temporizador"),
-    ("almacenamiento", "rd_almacenamiento"), ("panel_rapido", "rd_panel"), ("brujula", "rd_brujula"),
-    ("editor_esferas", "rd_editor"),
+    ("almacenamiento", "rd_almacenamiento"), ("panel_rapido", "f3_panel"), ("brujula", "rd_brujula"),
+    ("editor_esferas", "f10_selector_final"),
 ]
 # Esferas: la captura original (design/faces) recortada como en tools/faces/gen_faces.py
 FACES = [("montana", "rd_esfera_montana"), ("analogica", "rd_esfera_ultra"), ("gato", "rd_esfera_luna"),

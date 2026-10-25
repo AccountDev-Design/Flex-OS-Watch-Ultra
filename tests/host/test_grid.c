@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "flex_blur.h"
+#include "flex_thumb.h"
 #include "flex_tokens.h"
 #include "ui_grid_logic.h"
 
@@ -235,10 +236,96 @@ static void test_blur(void)
     free(tmp);
 }
 
+
+/* ---- Miniaturas del selector de esferas (flex_thumb) ---- */
+
+static uint16_t rgb565(int r, int g, int b)
+{
+    return (uint16_t)((r << 11) | (g << 5) | b);
+}
+
+static void test_thumb(void)
+{
+    enum { SW = 410, SH = 502, DW = 276, DH = 358, R = 26 };
+    uint16_t *src = malloc((size_t)SW * SH * 2), *dst = malloc((size_t)DW * DH * 2);
+    void *sc = malloc(flex_thumb_scratch_bytes(DW));
+    CHECK(src && dst && sc);
+    if (!src || !dst || !sc) {
+        free(src);
+        free(dst);
+        free(sc);
+        return;
+    }
+    /* Color liso: igual dentro, negro fuera de las esquinas redondeadas */
+    for (int i = 0; i < SW * SH; i++) {
+        src[i] = rgb565(20, 40, 10);
+    }
+    CHECK_EQ(flex_thumb_cover(src, SW, SH, SW, dst, DW, DH, R, sc), 0);
+    CHECK_EQ(dst[(DH / 2) * DW + DW / 2], rgb565(20, 40, 10));
+    CHECK_EQ(dst[R * DW + 1], rgb565(20, 40, 10));     /* borde recto */
+    CHECK_EQ(dst[0], 0);                                 /* esquina */
+    CHECK_EQ(dst[DW - 1], 0);
+    CHECK_EQ(dst[(DH - 1) * DW], 0);
+    CHECK_EQ(dst[(DH - 1) * DW + DW - 1], 0);
+    /* Escala uniforme (sin deformar): llena en vertical (358/502) y recorta
+     * en horizontal lo mismo a cada lado. Una franja blanca en x 0..11 (lo
+     * recortado: (410 - 276 * 502 / 358) / 2 = 11,5) no debe verse. */
+    for (int y = 0; y < SH; y++) {
+        for (int x = 0; x < SW; x++) {
+            src[y * SW + x] = (x < 11 || x >= SW - 11) ? rgb565(31, 63, 31) : rgb565(0, 0, 0);
+        }
+    }
+    CHECK_EQ(flex_thumb_cover(src, SW, SH, SW, dst, DW, DH, 0, sc), 0);
+    int lit = 0;
+    for (int y = 0; y < DH; y++) {
+        lit += dst[y * DW] != 0 || dst[y * DW + DW - 1] != 0;
+    }
+    CHECK_EQ(lit, 0);
+    /* Media del área: un degradado horizontal sigue creciendo sin saltos */
+    for (int y = 0; y < SH; y++) {
+        for (int x = 0; x < SW; x++) {
+            src[y * SW + x] = rgb565(0, x * 63 / (SW - 1), 0);
+        }
+    }
+    CHECK_EQ(flex_thumb_cover(src, SW, SH, SW, dst, DW, DH, 0, sc), 0);
+    int prev = (dst[(DH / 2) * DW] >> 5) & 0x3F, jumps = 0;
+    for (int x = 1; x < DW; x++) {
+        const int g = (dst[(DH / 2) * DW + x] >> 5) & 0x3F;
+        jumps += g < prev || g - prev > 2;
+        prev = g;
+    }
+    CHECK_EQ(jumps, 0);
+    /* Un patrón de líneas de 1 px se promedia: con una reducción de 1,4x cada
+     * píxel cubre 1,4 líneas, así que salen grises (de ~0,29 a ~0,71), nunca el
+     * blanco o el negro puros que daría tomar un píxel de cada tantos. */
+    for (int y = 0; y < SH; y++) {
+        for (int x = 0; x < SW; x++) {
+            src[y * SW + x] = (x & 1) ? rgb565(31, 63, 31) : 0;
+        }
+    }
+    CHECK_EQ(flex_thumb_cover(src, SW, SH, SW, dst, DW, DH, 0, sc), 0);
+    int lo = 63, hi = 0;
+    for (int x = 4; x < DW - 4; x++) {
+        const int g = (dst[(DH / 2) * DW + x] >> 5) & 0x3F;
+        lo = g < lo ? g : lo;
+        hi = g > hi ? g : hi;
+    }
+    CHECK(lo >= 12 && hi <= 51);
+    /* Entradas imposibles: no escribe nada */
+    CHECK_EQ(flex_thumb_cover(src, SW, SH, SW, dst, SW + 1, DH, 0, sc), -1);
+    CHECK_EQ(flex_thumb_cover(src, SW, SH, SW, dst, 50, 60, 0, sc), -1); /* más de 3 veces */
+    CHECK_EQ(flex_thumb_cover(NULL, SW, SH, SW, dst, DW, DH, 0, sc), -1);
+    CHECK_EQ(flex_thumb_cover(src, SW, SH, SW, dst, DW, DH, 0, NULL), -1); /* sin búfer de trabajo */
+    free(src);
+    free(dst);
+    free(sc);
+}
+
 void test_grid_all(void)
 {
     test_torus();
     test_layout();
     test_physics();
     test_blur();
+    test_thumb();
 }

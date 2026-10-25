@@ -99,6 +99,7 @@ simulados**: sirven para probar la interfaz, no el hardware.
 ## Documentación
 
 - [docs/ROADMAP.md](docs/ROADMAP.md): hoja de ruta y progreso global
+- [docs/REDISENO-2026-10.md](docs/REDISENO-2026-10.md): rediseño 2026-10 (cajón en panal, Reloj, Almacenamiento, 6 esferas, selector, Flex Compass y panel rápido), con las comparaciones con las referencias
 - [docs/F10-EXPERIENCIA.md](docs/F10-EXPERIENCIA.md): gestos, cajón en panal, esferas, AOD, ahorro de energía, rumbo relativo y estabilidad del Wi-Fi
 - [docs/FLEX-PHONE-INTEGRACION.md](docs/FLEX-PHONE-INTEGRACION.md): Flex Phone ↔ reloj: dispositivos, BLE v2 y navegador por el teléfono
 - [docs/F6-NAVEGADOR.md](docs/F6-NAVEGADOR.md): navegador por renderizado remoto (FBP/1)

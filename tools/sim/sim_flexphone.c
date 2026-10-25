@@ -307,16 +307,12 @@ void sim_suite_phone(const char *out)
     sim_run(300);
     ui_qp_open();
     sim_run(600);
-    lv_obj_t *qp = ui_qp_obj();
-    lv_obj_t *bl = qp ? sim_find_label(qp, "Bluetooth") : NULL;
-    lv_obj_t *tile = bl ? lv_obj_get_parent(bl) : NULL;
+    lv_obj_t *tile = ui_qp_tile(UI_QP_BT);
     EXPECT(tile && lv_obj_has_state(tile, LV_STATE_CHECKED) && !lv_obj_has_state(tile, LV_STATE_DISABLED),
            "panel: Bluetooth no está activo");
     click(tile);
     sim_run(400);
-    EXPECT(tile && !lv_obj_has_state(tile, LV_STATE_CHECKED) && sim_find_label(tile, "Apagado") &&
-               st().link == FLP_LS_OFF,
-           "panel: no apaga el enlace");
+    EXPECT(tile && !lv_obj_has_state(tile, LV_STATE_CHECKED) && st().link == FLP_LS_OFF, "panel: no apaga el enlace");
     sim_lint("panel con bluetooth");
     sim_save(out, "f5_panel_bluetooth");
     click(tile);

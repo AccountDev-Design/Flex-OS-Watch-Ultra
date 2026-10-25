@@ -567,6 +567,18 @@ bool ui_nav_push_from_top(ui_page_create_t create)
     return push(create, true, true);
 }
 
+/* Sin desplazamiento: la página aparece ya en su sitio y es ella la que anima
+ * su entrada (el selector de esferas, que sale de la esfera con un zoom). */
+bool ui_nav_push_instant(ui_page_create_t create)
+{
+    if (!push(create, true, false)) {
+        return false;
+    }
+    lv_anim_delete(&s_nav, nav_v_cb);
+    finish();
+    return true;
+}
+
 /* ---- Abrir arrastrando (cajón desde la esfera) ----
  * La página nueva sube desde el borde inferior (o baja desde arriba)
  * siguiendo al dedo; al soltar se completa (PUSHING) o vuelve por donde vino y
@@ -666,6 +678,33 @@ void ui_nav_home(void)
     s_nav.reveal = s_nav.pages[0];
     s_nav.dir = 1;
     animate(NAV_POPPING, 0, FLEX_SCREEN_W, FLEX_ANIM_APP_CLOSE_MS);
+}
+
+/* Vuelve un nivel (o a la esfera) sin animación: la página de arriba ya ha
+ * hecho su propia salida (el zoom del selector hasta la esfera elegida). */
+bool ui_nav_back_instant(void)
+{
+    if (s_nav.op == NAV_DRAGGING) {
+        return false;
+    }
+    settle_now();
+    if (s_nav.depth < 2) {
+        return false;
+    }
+    s_nav.reveal = under_page();
+    s_nav.op = NAV_POPPING;
+    finish();
+    return true;
+}
+
+void ui_nav_home_instant(void)
+{
+    if (s_nav.op == NAV_DRAGGING) {
+        return;
+    }
+    settle_now();
+    while (s_nav.depth > 1 && ui_nav_back_instant()) {
+    }
 }
 
 bool ui_nav_suspend(bool animated)
