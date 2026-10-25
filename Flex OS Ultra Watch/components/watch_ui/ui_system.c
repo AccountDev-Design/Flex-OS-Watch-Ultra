@@ -48,6 +48,7 @@ static void sys_tick(lv_timer_t *t)
     ui_screen_tick(); /* apagado por inactividad y botón lateral */
     ui_notif_watch_tick(ui_screen_is_on()); /* aviso al llegar una notificación del teléfono */
     ui_ota_watch_tick(); /* versión nueva o aviso tras actualizar (F7) */
+    ui_wb_watch_tick(ui_screen_is_on()); /* Bienestar: pausa, reanudación y fin automáticos */
     if (!s_sys.power_ok) {
         return;
     }

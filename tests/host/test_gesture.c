@@ -144,9 +144,66 @@ static void test_commit_and_timing(void)
     CHECK(mono);
 }
 
+/* Gesto de Bienestar: borde derecho de la esfera hacia la izquierda. Pasos
+ * de 16 ms (el táctil). */
+static bool edge(int32_t x0, int32_t x1, int32_t dy, int steps, uint32_t hold_ms, bool strict, int32_t back_px)
+{
+    ui_edge_swipe_t g;
+    uint32_t t = 1000;
+    const int32_t y0 = 250;
+    ui_edge_swipe_press(&g, x0, y0, t, 410, strict);
+    t += hold_ms;
+    for (int i = 1; i <= steps; i++) {
+        t += 16;
+        ui_edge_swipe_move(&g, x0 + (x1 - x0) * i / steps, y0 + dy * i / steps, t);
+    }
+    if (back_px) {
+        t += 16;
+        ui_edge_swipe_move(&g, x1 + back_px / 2, y0 + dy, t);
+        t += 16;
+        return ui_edge_swipe_release(&g, x1 + back_px, y0 + dy, t);
+    }
+    t += 16;
+    return ui_edge_swipe_release(&g, x1, y0 + dy, t);
+}
+
+static void test_edge_swipe(void)
+{
+    /* Desde la franja del borde, un arrastre largo: sí */
+    CHECK(edge(405, 150, 0, 12, 0, false, 0));
+    /* Desde el centro: no (aunque sea largo y rápido) */
+    CHECK(!edge(300, 40, 0, 8, 0, false, 0));
+    CHECK(!edge(410 - UI_EDGE_W - 1, 100, 0, 8, 0, false, 0));
+    CHECK(edge(410 - UI_EDGE_W, 100, 0, 8, 0, false, 0));
+    /* El dedo esperó apoyado en el borde antes de moverse: no */
+    CHECK(!edge(405, 150, 0, 12, 600, false, 0));
+    /* Corto y lento: no (20 % del ancho) */
+    CHECK(!edge(405, 323, 0, 20, 0, false, 0));
+    /* Lanzamiento rápido del 30 %: sí; en modo estricto (entrenamiento), no */
+    CHECK(edge(405, 282, 0, 3, 0, false, 0));
+    CHECK(!edge(405, 282, 0, 3, 0, true, 0));
+    /* Estricto: hace falta la mitad del ancho y empezar antes */
+    CHECK(!edge(405, 222, 0, 14, 0, true, 0)); /* 45 % */
+    CHECK(edge(405, 190, 0, 14, 0, true, 0));  /* 52 % */
+    CHECK(!edge(405, 150, 0, 12, 350, true, 0)); /* esperó 350 ms */
+    CHECK(edge(405, 150, 0, 12, 350, false, 0)); /* sin entrenamiento, 350 ms vale */
+    /* En diagonal: no */
+    CHECK(!edge(405, 250, 140, 12, 0, false, 0));
+    /* Hacia la derecha o vertical: no es este gesto */
+    CHECK(!edge(405, 409, 0, 4, 0, false, 0));
+    CHECK(!edge(405, 405, -200, 10, 0, false, 0));
+    /* Volver atrás rápido al final: cancela */
+    CHECK(!edge(405, 200, 0, 12, 0, false, 60));
+    /* Un toque en la franja no es un gesto */
+    ui_edge_swipe_t g;
+    ui_edge_swipe_press(&g, 404, 250, 0, 410, false);
+    CHECK(!ui_edge_swipe_release(&g, 404, 251, 80));
+}
+
 void test_gesture_all(void)
 {
     test_drag_basics();
     test_velocity();
     test_commit_and_timing();
+    test_edge_swipe();
 }

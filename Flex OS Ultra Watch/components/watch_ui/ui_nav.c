@@ -23,6 +23,13 @@
  *        abrir otra vez esa app desde el cajón (ui_nav_resume);
  *      · borde SUPERIOR hacia abajo: panel rápido (ui_qp) encima de la
  *        página, que sigue debajo tal cual.
+ *  - En la ESFERA (la raíz), el borde derecho hacia la izquierda abre las
+ *    tarjetas de Bienestar siguiendo al dedo (ui_wb_cards_create). Es el
+ *    único gesto de ese borde en la esfera (allí no hay "atrás"); en una app
+ *    el mismo borde sigue siendo "atrás". El gesto lo valida
+ *    ui_edge_swipe (franja de UI_EDGE_W px, arranque rápido, recorrido
+ *    mínimo; más estricto con un entrenamiento en marcha) y la franja queda
+ *    entre la del panel rápido y la del cajón, sin pisarlas.
  *  - Una página puede marcarse "con cambios sin guardar" (ui_nav_set_dirty):
  *    atrás y salir al cajón no la descartan a la primera; avisan y hay que
  *    repetir el gesto. Ir a la esfera no pierde nada (suspende).
@@ -43,6 +50,11 @@
 #define NAV_EDGE_BOTTOM  30   /* franja inferior (por debajo de teclados y botones) */
 #define NAV_EDGE_TOP     22   /* franja superior (encima del botón de la cabecera) */
 #define NAV_DIRTY_MS     3000 /* ventana para repetir el gesto y descartar */
+/* Franja de Bienestar en la esfera: por debajo de la del panel rápido
+ * (QP_PULL_H, 64 px, ui_qp.c) y por encima de la del cajón (FACE_PULL_H,
+ * 56 px, ui_apps.c). */
+#define NAV_ROOT_EDGE_TOP    64
+#define NAV_ROOT_EDGE_BOTTOM 56
 
 typedef enum {
     NAV_IDLE = 0,
@@ -69,6 +81,9 @@ static struct {
     nav_op_t drag_commit; /* lo que hace el arrastre en curso si se completa */
     bool vertical;        /* la animación mueve la página en Y */
     bool drag_from_top;   /* apertura arrastrada: la página baja desde arriba */
+    bool drag_side;       /* apertura arrastrada desde el borde derecho (Bienestar) */
+    ui_edge_swipe_t wb;   /* gesto de Bienestar en la esfera */
+    bool wb_opening;
     int8_t dir;           /* +1: la de arriba sale por la derecha; -1: por la izquierda */
     lv_obj_t *reveal;     /* página que se descubre debajo */
     bool reveal_temp;     /* cajón creado para el gesto "salir" (no está en la pila) */
@@ -82,6 +97,7 @@ static struct {
 
 static bool do_replace_root(ui_page_create_t root);
 static void add_edges(lv_obj_t *page, bool is_drawer);
+static void add_root_edge(lv_obj_t *root);
 
 static lv_obj_t *top_page(void)
 {
@@ -249,6 +265,7 @@ static void finish(void)
     s_nav.reveal_temp = false;
     s_nav.vertical = false;
     s_nav.drag_from_top = false;
+    s_nav.drag_side = false;
     s_nav.dir = 1;
     if (s_nav.root_pending) {
         ui_page_create_t root = s_nav.root_pending;
@@ -479,6 +496,65 @@ static void add_edges(lv_obj_t *page, bool drawer)
     edge_strip(page, 0, 0, FLEX_SCREEN_W, NAV_EDGE_TOP, ui_qp_pull_cb, NULL);
 }
 
+/* ---- Gesto de Bienestar en la esfera ---- */
+
+static void root_edge_cb(lv_event_t *e)
+{
+    const lv_event_code_t code = lv_event_get_code(e);
+    lv_indev_t *indev = lv_indev_active();
+    if (!indev) {
+        return;
+    }
+    lv_point_t p;
+    lv_indev_get_point(indev, &p);
+    const uint32_t now = lv_tick_get();
+    ui_edge_swipe_t *g = &s_nav.wb;
+    if (code == LV_EVENT_PRESSED) {
+        s_nav.wb_opening = false;
+        ui_edge_swipe_press(g, p.x, p.y, now, FLEX_SCREEN_W, ui_wb_gesture_strict());
+        if (s_nav.depth != 1 || s_nav.op != NAV_IDLE || ui_qp_active()) {
+            g->drag.state = UI_DRAG_REJECTED; /* solo en la esfera y sin otra cosa en marcha */
+        }
+        return;
+    }
+    if (code == LV_EVENT_PRESSING) {
+        if (ui_edge_swipe_move(g, p.x, p.y, now) != UI_DRAG_ACTIVE) {
+            return;
+        }
+        if (!s_nav.wb_opening) {
+            if (s_nav.depth != 1 || s_nav.op != NAV_IDLE || ui_qp_active()) {
+                g->drag.state = UI_DRAG_REJECTED;
+                return;
+            }
+            ui_face_moved(); /* la esfera no ofrece la pulsación larga */
+            s_nav.wb_opening = ui_nav_drag_open_begin_side(ui_wb_cards_create);
+            if (!s_nav.wb_opening) {
+                g->drag.state = UI_DRAG_REJECTED;
+                return;
+            }
+        }
+        ui_nav_drag_open_move(g->drag.travel);
+        return;
+    }
+    /* RELEASED o PRESS_LOST (un dedo que se pierde nunca completa) */
+    const int32_t travel = g->drag.travel;
+    const bool commit = ui_edge_swipe_release(g, p.x, p.y, now) && code == LV_EVENT_RELEASED;
+    if (s_nav.wb_opening) {
+        s_nav.wb_opening = false;
+        ui_nav_drag_open_end(commit, travel);
+    }
+}
+
+static void add_root_edge(lv_obj_t *root)
+{
+    if (!root) {
+        return;
+    }
+    lv_obj_t *s = edge_strip(root, FLEX_SCREEN_W - UI_EDGE_W, NAV_ROOT_EDGE_TOP, UI_EDGE_W,
+                             FLEX_SCREEN_H - NAV_ROOT_EDGE_TOP - NAV_ROOT_EDGE_BOTTOM, root_edge_cb, NULL);
+    lv_obj_move_foreground(s); /* encima del contenido de la esfera */
+}
+
 /* ---- API ---- */
 
 lv_obj_t *ui_page_new(lv_obj_t *parent)
@@ -519,6 +595,7 @@ lv_obj_t *ui_nav_start(ui_page_create_t root)
     s_nav.pages[0] = root(s_nav.screen);
     s_nav.creates[0] = root;
     s_nav.depth = s_nav.pages[0] ? 1 : 0;
+    add_root_edge(s_nav.pages[0]);
     return s_nav.screen;
 }
 
@@ -618,15 +695,54 @@ bool ui_nav_drag_open_begin_dir(ui_page_create_t create, bool from_top)
     return true;
 }
 
+/* Igual desde el borde derecho: la página entra hacia la izquierda con el
+ * dedo y la de debajo se desplaza con el mismo paralaje que al abrir. */
+bool ui_nav_drag_open_begin_side(ui_page_create_t create)
+{
+    if (!s_nav.screen || s_nav.op != NAV_IDLE || s_nav.depth >= NAV_MAX_DEPTH) {
+        return false;
+    }
+    lv_obj_t *page = create(s_nav.screen);
+    if (!page) {
+        return false;
+    }
+    add_edges(page, false);
+    lv_obj_move_to_index(page, s_nav.depth);
+    s_nav.reveal = top_page();
+    s_nav.pages[s_nav.depth] = page;
+    s_nav.creates[s_nav.depth] = create;
+    s_nav.depth++;
+    s_nav.dir = 1;
+    s_nav.vertical = false;
+    s_nav.drag_side = true;
+    s_nav.op = NAV_DRAGGING;
+    show(s_nav.reveal, true);
+    place(FLEX_SCREEN_W);
+    return true;
+}
+
 void ui_nav_drag_open_move(int32_t travel)
 {
-    if (s_nav.op == NAV_DRAGGING && s_nav.vertical) {
+    if (s_nav.op == NAV_DRAGGING && s_nav.drag_side) {
+        place(FLEX_SCREEN_W - LV_CLAMP(0, travel, FLEX_SCREEN_W));
+    } else if (s_nav.op == NAV_DRAGGING && s_nav.vertical) {
         place(drag_open_y(travel));
     }
 }
 
 void ui_nav_drag_open_end(bool commit, int32_t travel)
 {
+    if (s_nav.op == NAV_DRAGGING && s_nav.drag_side) {
+        travel = LV_CLAMP(0, travel, FLEX_SCREEN_W);
+        if (commit) {
+            animate(NAV_PUSHING, FLEX_SCREEN_W - travel, 0,
+                    ui_drag_remaining_ms(travel, FLEX_SCREEN_W, FLEX_ANIM_APP_OPEN_MS, true));
+        } else {
+            animate(NAV_POPPING, FLEX_SCREEN_W - travel, FLEX_SCREEN_W,
+                    ui_drag_remaining_ms(travel, FLEX_SCREEN_W, FLEX_ANIM_APP_CLOSE_MS, false));
+        }
+        return;
+    }
     if (s_nav.op != NAV_DRAGGING || !s_nav.vertical) {
         return;
     }
@@ -678,6 +794,46 @@ void ui_nav_home(void)
     s_nav.reveal = s_nav.pages[0];
     s_nav.dir = 1;
     animate(NAV_POPPING, 0, FLEX_SCREEN_W, FLEX_ANIM_APP_CLOSE_MS);
+}
+
+bool ui_nav_back_to(ui_page_create_t create)
+{
+    if (s_nav.op == NAV_DRAGGING || !create) {
+        return false;
+    }
+    int k = -1;
+    for (int i = s_nav.depth - 2; i >= 0 && k < 0; i--) {
+        if (s_nav.creates[i] == create) {
+            k = i;
+        }
+    }
+    if (k < 0) {
+        return false;
+    }
+    settle_now();
+    if (k >= s_nav.depth - 1) {
+        return true;
+    }
+    /* Como ui_nav_home: las intermedias se borran ya y la de arriba sale
+     * animada sobre la elegida. */
+    lv_obj_t *top = top_page();
+    ui_page_create_t top_create = s_nav.creates[s_nav.depth - 1];
+    for (int i = k + 1; i < s_nav.depth - 1; i++) {
+        lv_obj_delete(s_nav.pages[i]);
+        s_nav.pages[i] = NULL;
+        s_nav.creates[i] = NULL;
+    }
+    s_nav.pages[k + 1] = top;
+    s_nav.creates[k + 1] = top_create;
+    for (int i = k + 2; i < NAV_MAX_DEPTH; i++) {
+        s_nav.pages[i] = NULL;
+        s_nav.creates[i] = NULL;
+    }
+    s_nav.depth = k + 2;
+    s_nav.reveal = s_nav.pages[k];
+    s_nav.dir = 1;
+    animate(NAV_POPPING, 0, FLEX_SCREEN_W, FLEX_ANIM_APP_CLOSE_MS);
+    return true;
 }
 
 /* Vuelve un nivel (o a la esfera) sin animación: la página de arriba ya ha
@@ -830,6 +986,7 @@ static bool do_replace_root(ui_page_create_t root)
     if (!page) {
         return false;
     }
+    add_root_edge(page);
     /* Mismo sitio y visibilidad que la raíz anterior (debajo de las páginas
      * abiertas, que no se tocan). */
     lv_obj_move_to_index(page, 0);

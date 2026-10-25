@@ -64,6 +64,9 @@ bool ui_nav_push(ui_page_create_t create);
 bool ui_nav_push_opts(ui_page_create_t create, bool edge_gesture);
 /** Vuelve a la página anterior (190 ms). false en la raíz. */
 bool ui_nav_back(void);
+/** Vuelve hasta la página más cercana creada con create (una sola animación;
+ * las intermedias se cierran). false si no hay ninguna debajo. */
+bool ui_nav_back_to(ui_page_create_t create);
 /** Vuelve a la raíz (la esfera) con una sola animación; cierra las páginas. */
 void ui_nav_home(void);
 /** El cajón de aplicaciones baja desde arriba (gesto hacia abajo en la esfera). */
@@ -79,6 +82,8 @@ void ui_nav_home_instant(void);
 bool ui_nav_drag_open_begin(ui_page_create_t create);
 /** Igual, eligiendo el borde: from_top = la página baja desde arriba. */
 bool ui_nav_drag_open_begin_dir(ui_page_create_t create, bool from_top);
+/** Igual desde el borde derecho de la esfera (tarjetas de Bienestar). */
+bool ui_nav_drag_open_begin_side(ui_page_create_t create);
 void ui_nav_drag_open_move(int32_t travel);
 void ui_nav_drag_open_end(bool commit, int32_t travel);
 /** A la esfera SIN cerrar la app: sus páginas quedan suspendidas (ocultas,
@@ -248,6 +253,13 @@ lv_obj_t *ui_timer_create(lv_obj_t *parent);
 lv_obj_t *ui_alarms_create(lv_obj_t *parent);
 lv_obj_t *ui_alarm_edit_create(lv_obj_t *parent);
 lv_obj_t *ui_sensors_create(lv_obj_t *parent); /* F4.4 */
+/* Bienestar (ui_wb_*.c; servicio en watch_activity) */
+lv_obj_t *ui_wb_create(lv_obj_t *parent);       /**< app Bienestar (cajón) */
+lv_obj_t *ui_wb_cards_create(lv_obj_t *parent); /**< tarjetas: gesto desde el borde derecho de la esfera */
+/** Cada 100 ms (ui_system): avisos de pausa, reanudación y fin automáticos. */
+void ui_wb_watch_tick(bool screen_on);
+/** Hay un entrenamiento en marcha: el gesto de las tarjetas es más estricto. */
+bool ui_wb_gesture_strict(void);
 lv_obj_t *ui_storage_create(lv_obj_t *parent);         /**< Almacenamiento (diseño del usuario) */
 lv_obj_t *ui_storage_details_create(lv_obj_t *parent); /**< sus detalles: LittleFS, pruebas y formateo (F4.6) */
 /** Rodillo con el estilo del sistema (3 filas visibles, la elegida resaltada). */

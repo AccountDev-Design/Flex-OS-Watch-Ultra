@@ -22,7 +22,9 @@ INC := -I$(FW)/components/watch_power/include \
        -I$(FW)/components/watch_files/include \
        -I$(FW)/components/watch_weather/include \
        -I$(FW)/components/watch_browser/include \
-       -I$(FW)/components/watch_ota/include
+       -I$(FW)/components/watch_ota/include \
+       -I$(FW)/components/watch_activity/include
+ACT_DIR := $(FW)/components/watch_activity
 SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test_power_sched.c test_safe.c \
        test_settings.c $(FW)/components/watch_settings/ws_logic.c \
        test_clock.c $(FW)/components/watch_ui/ui_clock_logic.c \
@@ -42,6 +44,9 @@ SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test
        test_br_backend.c $(FW)/components/watch_browser/br_backend.c \
        test_ota.c ota_fake.c $(FW)/components/watch_ota/ota_core.c $(FW)/components/watch_ota/ota_sig.c \
        test_weather.c $(FW)/components/watch_weather/wx_logic.c $(FW)/components/watch_weather/wx_core.c \
+       test_activity.c $(ACT_DIR)/act_catalog.c $(ACT_DIR)/act_steps.c $(ACT_DIR)/act_session.c \
+       $(ACT_DIR)/act_metrics.c $(ACT_DIR)/act_engine.c $(ACT_DIR)/act_store.c \
+       $(FW)/components/watch_ui/ui_wb_logic.c \
        $(FW)/components/watch_power/battery_model.c \
        $(FW)/components/watch_power/battery_alerts.c \
        $(FW)/components/watch_power/power_sched.c \

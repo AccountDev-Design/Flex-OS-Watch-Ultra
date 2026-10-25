@@ -69,6 +69,7 @@ void sim_run(uint32_t ms)
     for (uint32_t t = 0; t < ms; t += 5) {
         s_ms += 5;
         lv_timer_handler();
+        sim_wb_service(s_ms); /* la tarea de Bienestar del reloj, en el mismo reloj simulado */
     }
 }
 
@@ -573,6 +574,7 @@ static int real_main(int argc, char **argv)
         {"relay", sim_suite_relay},
         {"ota", sim_suite_ota},
         {"galeria", sim_suite_gallery},
+        {"bienestar", sim_suite_wellness},
         {"reposo", sim_suite_redraw},
         {"memoria", sim_suite_mem},
         {"mono", sim_suite_monkey},      {"visual", sim_suite_visual}, {"banco", sim_suite_bench},

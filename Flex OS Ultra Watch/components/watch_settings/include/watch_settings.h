@@ -34,6 +34,8 @@ typedef ws_settings_t watch_settings_t;
 /** Bloques binarios guardados junto a los ajustes. */
 typedef enum {
     WS_BLOB_ALARMS = 0,
+    WS_BLOB_WELLNESS,   /**< Bienestar: ajustes, objetivos y datos personales (act_config) */
+    WS_BLOB_WB_STATE,   /**< Bienestar: día en curso y sesión, solo si no hay LittleFS */
     WS_BLOB_COUNT,
 } ws_blob_id_t;
 

@@ -37,6 +37,7 @@ CFLAGS := -std=gnu11 -O1 -g -Wall $(SANFLAGS) -DLV_CONF_INCLUDE_SIMPLE -DLV_LVGL
           -I$(FW)/components/watch_browser/include \
           -I$(FW)/components/watch_ota/include \
           -I$(FW)/components/watch_gallery/include \
+          -I$(FW)/components/watch_activity/include \
           -I../../tests/host
 
 LVGL_SRC := $(shell find $(LVGL_DIR)/src -name '*.c')
@@ -74,13 +75,14 @@ APP_SRC := $(wildcard sim_*.c) \
            $(filter-out $(FW)/components/watch_gallery/watch_gallery.c,$(wildcard $(FW)/components/watch_gallery/*.c)) \
            ../../tests/host/gal_fake.c \
            ../../tests/host/gal_fake_eco.c \
-           $(FW)/components/watch_diag/flash_probe_logic.c
+           $(FW)/components/watch_diag/flash_probe_logic.c \
+           $(filter-out $(FW)/components/watch_activity/watch_activity.c,$(wildcard $(FW)/components/watch_activity/*.c))
 
 LVGL_OBJ := $(patsubst $(LVGL_DIR)/%.c,$(BUILD)/lvgl/%.o,$(LVGL_SRC))
 
 # Iconos originales de las apps: el mismo .incbin alineado que genera
 # components/watch_theme/CMakeLists.txt para el firmware.
-ICONS := reloj calend calc clima musica notas flexphone nav brujula devcare almacen paint flexstore ajustes sensores galeria
+ICONS := reloj calend calc clima musica notas flexphone nav brujula devcare almacen paint flexstore ajustes sensores galeria bienestar
 ICON_BINS := $(foreach n,$(ICONS),$(FW)/assets/icons/app_$(n).bin)
 ICON_ASM := $(BUILD)/flex_app_icons_data.S
 

@@ -125,6 +125,17 @@ size_t sim_mem_used(void);
 /** Bloques de memoria de LVGL vivos: no depende de la fragmentación. */
 uint32_t sim_mem_blocks(void);
 
+/* Bienestar simulado (sim_wellness.c): motor real, muestras sintéticas */
+#include "act_metrics.h"
+#include "act_engine.h"
+void sim_wb_service(uint32_t now_ms);
+void sim_wb_reset(const act_config_t *cfg, bool storage);
+/** Perfil de movimiento: spm > 0 caminar/correr, 0 quieto, < 0 gestos sueltos. */
+void sim_wb_motion(double spm, double amp);
+void sim_wb_imu(bool present);
+const act_engine_t *sim_wb_engine(void);
+extern int sim_wb_state_saves;
+
 /* Baterías de pruebas */
 void sim_suite_relay(const char *out);
 void sim_suite_boot(const char *out);
@@ -148,6 +159,7 @@ void sim_suite_notes(const char *out);
 void sim_suite_weather(const char *out);
 void sim_suite_browser(const char *out);
 void sim_suite_ota(const char *out);
+void sim_suite_wellness(const char *out);
 void sim_suite_gallery(const char *out);
 void sim_suite_grid(const char *out);
 void sim_suite_redesign(const char *out);

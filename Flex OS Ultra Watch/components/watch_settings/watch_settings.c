@@ -21,7 +21,7 @@ static const char *TAG = "watch_settings";
 #define NOTE_CHANGE (1u << 0)
 #define NOTE_FLUSH  (1u << 1)
 
-static const char *const s_blob_key[WS_BLOB_COUNT] = {"alarms"};
+static const char *const s_blob_key[WS_BLOB_COUNT] = {"alarms", "bienestar", "bien_estado"};
 
 typedef struct {
     uint8_t data[WS_BLOB_HDR + WS_BLOB_MAX];

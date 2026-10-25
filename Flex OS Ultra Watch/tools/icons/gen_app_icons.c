@@ -314,7 +314,8 @@ enum {
     IC_AJUSTES, IC_CALC, IC_CALEND, IC_CAMARA, IC_CLIMA, IC_FLEXSTORE, IC_FLEXPHONE, IC_DEVCARE, IC_MUSICA,
     /* Solo en el reloj (no existe en APP_REG): diseño nuevo con el lenguaje de
      * la referencia (base de iconBase + glifo blanco con sus primitivas). */
-    IC_W_SENSORES = 100
+    IC_W_SENSORES = 100,
+    IC_W_BIENESTAR, /* Bienestar: tres anillos (mover, ejercicio, pasos) */
 };
 
 /* iconBase, estilo "Plano" (Icons.h:77-86) */
@@ -533,6 +534,24 @@ static void drawAppIcon(int id, int x, int y, int S)
         arcStroke(cx, cy, S * 0.29f, 145, 215, 3, WHITE);
         arcStroke(cx, cy, S * 0.29f, -35, 35, 3, WHITE);
     } break;
+    case IC_W_BIENESTAR: {
+        /* Bienestar: los tres anillos de la app (mover, ejercicio, pasos) con
+         * su pista atenuada, empezando arriba, sobre base oscura. */
+        iconBase(x, y, S, rgb565(22, 22, 28), 22);
+        static const struct {
+            int r;
+            float end;
+            col_t on, off;
+        } kR[3] = {
+            {24, 205.0f, rgb565(255, 59, 107), rgb565(72, 16, 34)},
+            {17, 150.0f, rgb565(182, 243, 58), rgb565(44, 60, 16)},
+            {10, 95.0f, rgb565(58, 221, 235), rgb565(14, 54, 60)},
+        };
+        for (int k = 0; k < 3; k++) {
+            fillRing(cx, cy, kR[k].r + 3, 5, kR[k].off);
+            arcStroke((float)cx - 0.5f, (float)cy - 0.5f, (float)kR[k].r + 0.5f, -90.0f, kR[k].end, 5, kR[k].on);
+        }
+    } break;
     default:
         break; /* Modo PC, Juegos y Cámara: excluidos en el reloj (docs/INVENTARIO-APPS.md) */
     }
@@ -548,7 +567,7 @@ static const struct {
     {IC_AJUSTES, "app_ajustes"},     {IC_CALC, "app_calc"},           {IC_CALEND, "app_calend"},
     {IC_CLIMA, "app_clima"},         {IC_FLEXSTORE, "app_flexstore"}, {IC_FLEXPHONE, "app_flexphone"},
     {IC_DEVCARE, "app_devcare"},     {IC_MUSICA, "app_musica"},       {IC_W_SENSORES, "app_sensores"},
-    {IC_GALERIA, "app_galeria"},
+    {IC_GALERIA, "app_galeria"},     {IC_W_BIENESTAR, "app_bienestar"},
 };
 
 static int write_file(const char *dir, const char *name, const char *ext, const void *data, size_t n)

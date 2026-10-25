@@ -9,10 +9,12 @@
  *   3. táctil FT3168 (watch_touch)        — si falla, se sigue sin táctil
  *   4. AXP2101 en solo lectura (watch_power) — si falla, batería "sin datos"
  *   5. RTC PCF85063 (watch_time; lo escribe solo al poner en hora) — si falla, hora "no disponible"
- *   6. IMU QMI8658 (watch_imu; en reposo hasta que la app Sensores lo pida)
+ *   6. IMU QMI8658 (watch_imu; en reposo hasta que alguien lo pida)
  *   7. sonda de flash de solo lectura (watch_diag) y, si la permite, LittleFS
  *      en "storage" (watch_storage: monta; nunca formatea solo)
- *   8. interfaz: del splash a la esfera (watch_ui)
+ *   8. Bienestar (watch_activity): pasos y entrenamientos en segundo plano;
+ *      abre el flujo de muestras del IMU si el seguimiento está activado
+ *   9. interfaz: del splash a la esfera (watch_ui)
  * El Wi-Fi (watch_net) arranca tras los ajustes y solo enciende la radio si el
  * usuario la dejó encendida. Flex Phone (watch_phone, Bluetooth LE) igual: la
  * pila BLE no se inicia hasta que el usuario enciende el enlace.
@@ -23,6 +25,7 @@
 #include "esp_system.h"
 #include "driver/gpio.h"
 #include "bsp/esp-bsp.h"
+#include "watch_activity.h"
 #include "watch_diag.h"
 #include "watch_display.h"
 #include "watch_imu.h"
@@ -222,6 +225,13 @@ void app_main(void)
     err = watch_storage_start(&sf);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "almacenamiento: %s", esp_err_to_name(err));
+    }
+
+    /* Bienestar: después del IMU, la hora y el almacenamiento (restaura el día
+     * y la sesión guardados antes de contar nada). Sin él, el reloj sigue. */
+    err = watch_activity_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Bienestar no disponible: %s", esp_err_to_name(err));
     }
 
     if (watch_display_lock(0)) {

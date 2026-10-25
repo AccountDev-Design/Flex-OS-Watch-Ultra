@@ -132,3 +132,58 @@ int32_t ui_ease_out_cubic_permille(int32_t u)
     const int64_t q = 1000 - u;
     return (int32_t)(1000 - q * q * q / 1000000);
 }
+
+/* ---- Gesto de Bienestar ---- */
+
+static int32_t iabs(int32_t v)
+{
+    return v < 0 ? -v : v;
+}
+
+void ui_edge_swipe_press(ui_edge_swipe_t *g, int32_t x, int32_t y, uint32_t t_ms, int32_t screen_w, bool strict)
+{
+    ui_drag_init(&g->drag, UI_AXIS_X, -1, screen_w);
+    ui_drag_press(&g->drag, x, y, t_ms);
+    g->t_press = t_ms;
+    g->max_off = 0;
+    g->strict = strict;
+    if (x < screen_w - UI_EDGE_W) {
+        g->drag.state = UI_DRAG_REJECTED; /* no empezó en el borde */
+    }
+}
+
+ui_drag_state_t ui_edge_swipe_move(ui_edge_swipe_t *g, int32_t x, int32_t y, uint32_t t_ms)
+{
+    if (g->drag.state == UI_DRAG_REJECTED || g->drag.state == UI_DRAG_IDLE) {
+        return g->drag.state;
+    }
+    const ui_drag_state_t before = g->drag.state;
+    const ui_drag_state_t st = ui_drag_move(&g->drag, x, y, t_ms);
+    const int32_t off = iabs(y - g->drag.y0);
+    g->max_off = off > g->max_off ? off : g->max_off;
+    if (before == UI_DRAG_PENDING && st == UI_DRAG_ACTIVE &&
+        t_ms - g->t_press > (g->strict ? UI_EDGE_START_STRICT_MS : UI_EDGE_START_MS)) {
+        g->drag.state = UI_DRAG_REJECTED; /* el dedo esperó apoyado: no es un deslizamiento */
+    }
+    return g->drag.state;
+}
+
+bool ui_edge_swipe_release(ui_edge_swipe_t *g, int32_t x, int32_t y, uint32_t t_ms)
+{
+    const ui_drag_state_t st = ui_edge_swipe_move(g, x, y, t_ms);
+    const int32_t v = ui_drag_velocity(&g->drag);
+    const int32_t travel = g->drag.travel, span = g->drag.span;
+    g->drag.state = UI_DRAG_IDLE;
+    if (st != UI_DRAG_ACTIVE || span <= 0 || v <= -UI_DRAG_BACKFLING_PX_S) {
+        return false;
+    }
+    if (g->max_off > UI_EDGE_OFF_AXIS_PX && g->max_off * 2 > travel) {
+        return false; /* en diagonal */
+    }
+    const int64_t pct100 = (int64_t)travel * 100;
+    if (pct100 >= (int64_t)span * (g->strict ? UI_EDGE_STRICT_PCT : UI_EDGE_COMMIT_PCT)) {
+        return true;
+    }
+    return !g->strict && v >= UI_DRAG_FLING_PX_S && pct100 >= (int64_t)span * UI_EDGE_MIN_PCT &&
+           t_ms - g->t_press <= UI_EDGE_FLING_MS;
+}

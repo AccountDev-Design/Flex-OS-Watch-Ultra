@@ -73,14 +73,15 @@ static const app_entry_t kApps[] = {
     {FLEX_APP_DEVICE_CARE, ui_devcare_create},
     {FLEX_APP_ALMACENAMIENTO, ui_storage_create},
     {FLEX_APP_AJUSTES, ui_settings_create},
+    {FLEX_APP_BIENESTAR, ui_wb_create},
 };
 #define APPS_N ((int)(sizeof(kApps) / sizeof(kApps[0])))
 
 /* Hueco del toro -> índice en kApps (-1 = vacío). Con la celda (0,0) en el
  * centro se ven el centro, el anillo de 6 a 1 paso y el de 6 a raíz de 3
  * pasos (13 huecos); los huecos 2, 8 y 10 caen en el anillo a 2 pasos, que en
- * reposo queda fuera de la zona visible: ahí van una app y los dos huecos
- * vacíos (14 apps en 16 huecos). Por ángulo, empezando a la derecha:
+ * reposo queda fuera de la zona visible: ahí van dos apps y el hueco
+ * vacío (15 apps en 16 huecos). Por ángulo, empezando a la derecha:
  *   anillo 1:     1 (1,0)  13 (1,-1)  12 (0,-1)  3 (-1,0)  7 (-1,1)  4 (0,1)
  *   anillo raíz 3: 14 (2,-1)  9 (1,-2)  15 (-1,-1)  6 (-2,1)  11 (-1,2)  5 (1,1) */
 static const int8_t kSlotApp[GRID_SLOTS] = {
@@ -98,7 +99,7 @@ static const int8_t kSlotApp[GRID_SLOTS] = {
     [11] = 12, /* Almacenamiento */
     [5] = 13,  /* Ajustes */
     [2] = 5,   /* Paint (se ve al desplazarse) */
-    [8] = -1,
+    [8] = 14,  /* Bienestar (se ve al desplazarse; también con el gesto de la esfera) */
     [10] = -1,
 };
 

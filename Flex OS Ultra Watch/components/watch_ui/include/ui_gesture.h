@@ -80,6 +80,41 @@ uint32_t ui_drag_remaining_ms(int32_t travel, int32_t span, uint32_t full_ms, bo
 /** Curva de la referencia (appTrP): ease-out cúbico, 1 - (1 - u)^3, en milésimas. */
 int32_t ui_ease_out_cubic_permille(int32_t u_permille);
 
+/* ---- Gesto de Bienestar: desde el borde DERECHO de la esfera hacia la
+ * izquierda. En una app ese borde es "atrás" (ui_nav); en la esfera estaba
+ * libre. Además de lo de ui_drag (eje, sentido, umbral de movimiento):
+ *  - tiene que empezar en la franja de UI_EDGE_W px junto al borde;
+ *  - el dedo tiene que empezar a moverse pronto (un dedo apoyado en el borde
+ *    que luego se arrastra despacio no es este gesto);
+ *  - completa con UI_EDGE_COMMIT_PCT del ancho, o con un lanzamiento rápido
+ *    que recorra al menos UI_EDGE_MIN_PCT y dure poco;
+ *  - un arrastre en diagonal (mucho desvío vertical) no completa;
+ *  - en modo estricto (entrenamiento en marcha: la muñeca se mueve y suda)
+ *    hace falta medio ancho de recorrido, empezar antes y no vale el
+ *    lanzamiento. */
+#define UI_EDGE_W              24
+#define UI_EDGE_START_MS       400
+#define UI_EDGE_START_STRICT_MS 300
+#define UI_EDGE_MIN_PCT        25
+#define UI_EDGE_COMMIT_PCT     35
+#define UI_EDGE_STRICT_PCT     50
+#define UI_EDGE_FLING_MS       600
+#define UI_EDGE_OFF_AXIS_PX    48
+
+typedef struct {
+    ui_drag_t drag;
+    uint32_t t_press;
+    int32_t max_off;   /* mayor desvío vertical */
+    bool strict;
+} ui_edge_swipe_t;
+
+/** Pulsación: fuera de la franja del borde derecho el gesto queda rechazado. */
+void ui_edge_swipe_press(ui_edge_swipe_t *g, int32_t x, int32_t y, uint32_t t_ms, int32_t screen_w, bool strict);
+/** UI_DRAG_ACTIVE solo si el gesto es válido hasta ahora. */
+ui_drag_state_t ui_edge_swipe_move(ui_edge_swipe_t *g, int32_t x, int32_t y, uint32_t t_ms);
+/** Al soltar: true si se completa. */
+bool ui_edge_swipe_release(ui_edge_swipe_t *g, int32_t x, int32_t y, uint32_t t_ms);
+
 #ifdef __cplusplus
 }
 #endif
