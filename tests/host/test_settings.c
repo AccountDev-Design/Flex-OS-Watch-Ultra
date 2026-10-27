@@ -161,8 +161,41 @@ static void test_power_fields(void)
     CHECK_EQ(ws_dim_level(WS_DIM_MED, 3), 3);
 }
 
+/* Multimedia: destino, volumen y calidad de la grabadora */
+static void test_media_fields(void)
+{
+    ws_settings_t s;
+    ws_defaults(&s);
+    CHECK_EQ(s.media_dest, WS_DEST_WATCH); /* lo seguro: la memoria del reloj */
+    CHECK_EQ(s.media_vol, WS_MEDIA_VOL_DEF);
+    CHECK_EQ(s.rec_quality, WS_REC_STANDARD);
+    CHECK(!ws_normalize(&s));
+    s.media_dest = WS_DEST_SD;
+    s.media_vol = 0;
+    s.rec_quality = WS_REC_VOICE;
+    CHECK(!ws_normalize(&s)); /* valores válidos: no se tocan */
+    CHECK_EQ(s.media_dest, WS_DEST_SD);
+    s.media_dest = 9;
+    s.media_vol = 101;
+    s.rec_quality = 4;
+    CHECK(ws_normalize(&s));
+    CHECK_EQ(s.media_dest, WS_DEST_WATCH);
+    CHECK_EQ(s.media_vol, 100);
+    CHECK_EQ(s.rec_quality, WS_REC_STANDARD);
+    ws_settings_t t = s;
+    t.media_dest = WS_DEST_SD;
+    CHECK(!ws_equal(&s, &t));
+    t = s;
+    t.media_vol = 1;
+    CHECK(!ws_equal(&s, &t));
+    t = s;
+    t.rec_quality = WS_REC_VOICE;
+    CHECK(!ws_equal(&s, &t));
+}
+
 void test_settings_all(void)
 {
+    test_media_fields();
     test_power_fields();
     test_defaults();
     test_normalize();

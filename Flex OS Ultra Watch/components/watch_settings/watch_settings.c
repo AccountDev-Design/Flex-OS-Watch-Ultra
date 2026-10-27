@@ -123,6 +123,15 @@ static void load(void)
     if (nvs_get_u8(h, "glass", &u8) == ESP_OK) {
         s_cur.glass = u8;
     }
+    if (nvs_get_u8(h, "m_dest", &u8) == ESP_OK) {
+        s_cur.media_dest = u8;
+    }
+    if (nvs_get_u8(h, "m_vol", &u8) == ESP_OK) {
+        s_cur.media_vol = u8;
+    }
+    if (nvs_get_u8(h, "rec_q", &u8) == ESP_OK) {
+        s_cur.rec_quality = u8;
+    }
     s_saved = s_cur; /* lo que hay guardado, antes de normalizar */
     if (ws_normalize(&s_cur)) {
         ESP_LOGW(TAG, "valores guardados fuera de rango: corregidos");
@@ -166,6 +175,9 @@ static esp_err_t write_changed(nvs_handle_t h, const watch_settings_t *n, const 
     SET(n->ps_bright != o->ps_bright, nvs_set_u8(h, "ps_bright", n->ps_bright));
     SET(n->ps_flags != o->ps_flags, nvs_set_u8(h, "ps_flags", n->ps_flags));
     SET(n->glass != o->glass, nvs_set_u8(h, "glass", n->glass));
+    SET(n->media_dest != o->media_dest, nvs_set_u8(h, "m_dest", n->media_dest));
+    SET(n->media_vol != o->media_vol, nvs_set_u8(h, "m_vol", n->media_vol));
+    SET(n->rec_quality != o->rec_quality, nvs_set_u8(h, "rec_q", n->rec_quality));
 #undef SET
     return err;
 }

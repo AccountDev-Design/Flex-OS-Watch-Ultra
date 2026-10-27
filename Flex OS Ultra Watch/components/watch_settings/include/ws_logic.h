@@ -59,7 +59,20 @@ typedef struct {
     uint8_t ps_flags;    /**< WS_PS_PREV_*: AOD y radios antes de activarlo */
     /* Flex Liquid Glass Engine */
     uint8_t glass;       /**< WS_GLASS_*: calidad de los efectos de vidrio */
+    /* Multimedia (docs/MULTIMEDIA.md) */
+    uint8_t media_dest;  /**< WS_DEST_*: dónde se guarda lo nuevo. Nunca cambia solo */
+    uint8_t media_vol;   /**< volumen del altavoz, % (0..100) */
+    uint8_t rec_quality; /**< WS_REC_*: calidad de la grabadora */
 } ws_settings_t;
+
+/* Dónde se guardan las grabaciones, las fotos y lo que llega por la web. Si
+ * la microSD elegida no está lista, la operación se detiene y lo dice: nunca
+ * se guarda en otro sitio sin preguntar. */
+enum { WS_DEST_WATCH = 0, WS_DEST_SD, WS_DEST_COUNT };
+/* Grabadora: voz (16 kHz, 32 KB/s) o estándar (24 kHz, 48 KB/s; el perfil de
+ * fábrica de la placa). Mono, PCM de 16 bits. */
+enum { WS_REC_VOICE = 0, WS_REC_STANDARD, WS_REC_COUNT };
+#define WS_MEDIA_VOL_DEF 60
 
 /* Calidad de los efectos de vidrio (flex_glass): automática (Premium y baja
  * sola si el reloj no llega), o fija. El ahorro de energía usa Ligero. */

@@ -29,6 +29,7 @@
 #include "watch_diag.h"
 #include "watch_display.h"
 #include "watch_imu.h"
+#include "watch_media.h"
 #include "watch_net.h"
 #include "watch_phone.h"
 #include "watch_weather.h"
@@ -225,6 +226,13 @@ void app_main(void)
     err = watch_storage_start(&sf);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "almacenamiento: %s", esp_err_to_name(err));
+    }
+
+    /* microSD: su propia tarea sondea la ranura (sin tarjeta no pasa nada) y
+     * nunca formatea sola. Sin ella, el reloj sigue con la memoria interna. */
+    err = watch_media_start();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "microSD no disponible: %s", esp_err_to_name(err));
     }
 
     /* Bienestar: después del IMU, la hora y el almacenamiento (restaura el día

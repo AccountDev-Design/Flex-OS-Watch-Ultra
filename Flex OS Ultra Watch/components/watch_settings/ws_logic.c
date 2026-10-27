@@ -25,6 +25,9 @@ void ws_defaults(ws_settings_t *s)
     s->ps_bright = 0;
     s->ps_flags = 0;
     s->glass = WS_GLASS_AUTO;
+    s->media_dest = WS_DEST_WATCH;
+    s->media_vol = WS_MEDIA_VOL_DEF;
+    s->rec_quality = WS_REC_STANDARD;
 }
 
 int ws_dim_level(uint8_t dim, int user_percent)
@@ -106,6 +109,15 @@ bool ws_normalize(ws_settings_t *s)
     if (s->glass >= WS_GLASS_COUNT) {
         s->glass = WS_GLASS_AUTO;
     }
+    if (s->media_dest >= WS_DEST_COUNT) {
+        s->media_dest = WS_DEST_WATCH;
+    }
+    if (s->media_vol > 100) {
+        s->media_vol = 100;
+    }
+    if (s->rec_quality >= WS_REC_COUNT) {
+        s->rec_quality = WS_REC_STANDARD;
+    }
     return !ws_equal(&before, s);
 }
 
@@ -115,7 +127,8 @@ bool ws_equal(const ws_settings_t *a, const ws_settings_t *b)
            a->tz_min == b->tz_min && a->wallpaper == b->wallpaper && a->face == b->face && a->aod == b->aod &&
            a->pshift == b->pshift && a->dim == b->dim && a->psave == b->psave &&
            a->psave_radio == b->psave_radio && a->ps_bright == b->ps_bright && a->ps_flags == b->ps_flags &&
-           a->glass == b->glass;
+           a->glass == b->glass && a->media_dest == b->media_dest && a->media_vol == b->media_vol &&
+           a->rec_quality == b->rec_quality;
 }
 
 int64_t ws_commit_deadline(int64_t first_dirty_ms, int64_t last_change_ms)

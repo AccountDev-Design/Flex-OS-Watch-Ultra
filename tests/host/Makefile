@@ -23,7 +23,8 @@ INC := -I$(FW)/components/watch_power/include \
        -I$(FW)/components/watch_weather/include \
        -I$(FW)/components/watch_browser/include \
        -I$(FW)/components/watch_ota/include \
-       -I$(FW)/components/watch_activity/include
+       -I$(FW)/components/watch_activity/include \
+       -I$(FW)/components/watch_media/include
 ACT_DIR := $(FW)/components/watch_activity
 SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test_power_sched.c test_safe.c \
        test_settings.c $(FW)/components/watch_settings/ws_logic.c \
@@ -31,6 +32,8 @@ SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test
        test_screen.c $(FW)/components/watch_ui/ui_screen_logic.c \
        test_imu.c $(FW)/components/watch_imu/qmi8658.c $(FW)/components/watch_imu/imu_heading.c \
        test_storage.c $(FW)/components/watch_storage/stg_logic.c $(FW)/components/watch_storage/stg_usage.c \
+       test_media.c $(FW)/components/watch_media/wm_sd_logic.c $(FW)/components/watch_media/wm_fsclass.c \
+       $(FW)/components/watch_media/wm_path.c \
        test_apps.c $(FW)/components/watch_ui/apps_logic.c \
        test_grid.c $(FW)/components/watch_ui/ui_grid_logic.c test_glass.c \
        $(FW)/components/watch_theme/flex_thumb.c \
