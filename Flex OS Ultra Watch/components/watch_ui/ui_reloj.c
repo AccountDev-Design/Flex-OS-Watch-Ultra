@@ -2,17 +2,19 @@
  * ui_reloj — app Reloj (IC_RELOJ de Flex OS Ultra) con el diseño del usuario
  * (design/referencias/reloj_*.png, docs/REDISENO-2026-10.md):
  *
- *  - barra de pestañas de vidrio arriba con cuatro iconos (hora, cronómetro,
- *    alarmas, temporizador) y la pestaña activa resaltada en azul, que se
- *    desliza al cambiar;
+ *  - barra de pestañas de vidrio (FLEX_GLASS_BAR) arriba con cuatro iconos
+ *    (hora, cronómetro, alarmas, temporizador) y una lente de vidrio
+ *    (FLEX_GLASS_LENS) que se desliza a la pestaña activa, cuyo icono se tiñe
+ *    de azul (tinte selectivo: solo lo activo);
  *  - debajo, la vista de la pestaña: una sola a la vez (se crea al elegirla y
  *    se borra al dejarla, con sus temporizadores); el estado vive en
  *    ui_clock_core, así que el cronómetro y el temporizador siguen contando
  *    y nada se pierde al cambiar de pestaña o salir de la app.
  *
- * Vista Hora: la hora real en grande (League Spartan Bold), la fecha larga y
- * dos tarjetas de vidrio: "Fecha" (abre Fecha y hora) y "Formato" (cambia
- * entre 12 y 24 h, el ajuste real). Sin hora fiable, "--:--" y el motivo.
+ * Vista Hora: la hora real en grande (Outfit Regular: el tamaño da el
+ * énfasis, no el grosor), la fecha larga en gris y dos tarjetas de contenido
+ * discretas (FLEX_GLASS_CARD): "Fecha" (abre Fecha y hora) y "Formato"
+ * (cambia entre 12 y 24 h, el ajuste real). Sin hora fiable, "--:--".
  *
  * Se vuelve con los gestos de borde (no hay cabecera en el diseño).
  */
@@ -30,8 +32,10 @@
 #define TAB_Y         37
 #define TAB_W         368
 #define TAB_H         52
-#define TAB_ICON      44
-#define TAB_ANIM_MS   180
+#define TAB_ICON      36
+#define TAB_ANIM_MS   200
+#define TAB_LENS_H    (TAB_H - 10)
+#define C_TAB_ACTIVE  0x5E8BFF /* icono de la pestaña activa (tinte azul) */
 
 /* Centros de los iconos y ancho del resaltado medidos en las referencias (no
  * son equidistantes; la primera y la última pestaña llegan al extremo). */
@@ -50,15 +54,11 @@ typedef struct {
 
 static int s_last_tab; /* la app vuelve a la última pestaña usada */
 
-/* x del resaltado en coordenadas de la barra (dentro de su borde de 2 px) */
+/* x de la lente en coordenadas de la barra (dentro de su borde de 1 px y
+ * con 4 px de aire) */
 static int32_t hi_x(int tab)
 {
-    return LV_CLAMP(TAB_X + 2, kTabCx[tab] - kTabHiW[tab] / 2, TAB_X + TAB_W - 2 - kTabHiW[tab]) - TAB_X - 2;
-}
-
-static void hi_w_cb(void *var, int32_t v)
-{
-    lv_obj_set_width(var, v);
+    return LV_CLAMP(TAB_X + 5, kTabCx[tab] - kTabHiW[tab] / 2, TAB_X + TAB_W - 5 - kTabHiW[tab]) - TAB_X - 1;
 }
 
 static lv_obj_t *build_view(lv_obj_t *page, int tab)
@@ -75,11 +75,6 @@ static lv_obj_t *build_view(lv_obj_t *page, int tab)
     }
 }
 
-static void hi_x_cb(void *var, int32_t v)
-{
-    lv_obj_set_x(var, v);
-}
-
 static void select_tab(reloj_t *r, int tab, bool animate)
 {
     if (tab == r->tab && r->view) {
@@ -94,26 +89,10 @@ static void select_tab(reloj_t *r, int tab, bool animate)
     r->view = build_view(r->page, tab);
     lv_obj_move_to_index(r->view, 0); /* debajo de la barra y de los bordes */
     for (int i = 0; i < UI_RELOJ_TABS; i++) {
-        flex_icon_set_color2(r->icons[i], i == tab ? FLEX_RD_TAB_ACTIVE : FLEX_RD_TAB_BOT);
+        flex_icon_set_color(r->icons[i], i == tab ? C_TAB_ACTIVE : FLEX_GLASS_TXT);
+        flex_icon_set_color2(r->icons[i], i == tab ? FLEX_C_BLACK : 0x1C1C1E);
     }
-    lv_anim_delete(r->hi, hi_x_cb);
-    lv_anim_delete(r->hi, hi_w_cb);
-    if (animate && old >= 0) {
-        lv_anim_t a;
-        lv_anim_init(&a);
-        lv_anim_set_var(&a, r->hi);
-        lv_anim_set_exec_cb(&a, hi_x_cb);
-        lv_anim_set_values(&a, lv_obj_get_x(r->hi), hi_x(tab));
-        lv_anim_set_duration(&a, TAB_ANIM_MS);
-        lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
-        lv_anim_start(&a); /* ligadas al resaltado: se borran con la página */
-        lv_anim_set_exec_cb(&a, hi_w_cb);
-        lv_anim_set_values(&a, lv_obj_get_width(r->hi), kTabHiW[tab]);
-        lv_anim_start(&a);
-    } else {
-        lv_obj_set_x(r->hi, hi_x(tab));
-        lv_obj_set_width(r->hi, kTabHiW[tab]);
-    }
+    flex_glass_lens_move(r->hi, hi_x(tab), kTabHiW[tab], animate && old >= 0 ? TAB_ANIM_MS : 0);
 }
 
 static void tab_cb(lv_event_t *e)
@@ -165,26 +144,17 @@ lv_obj_t *ui_reloj_page(lv_obj_t *parent, int tab)
     r->page = page;
     r->tab = -1;
 
-    /* Barra de pestañas: vidrio oscuro con degradado gris y reflejo inferior */
-    lv_obj_t *bar = watch_theme_lg(page, FLEX_LG_DARK, TAB_X, TAB_Y, TAB_W, TAB_H, TAB_H / 2, FLEX_GLOW_BOTTOM);
-    lv_obj_set_style_bg_color(bar, flex_color(FLEX_RD_TAB_TOP), 0);
-    lv_obj_set_style_bg_grad_color(bar, flex_color(FLEX_RD_TAB_BOT), 0);
-    lv_obj_set_style_border_color(bar, flex_color(0x9A9A9A), 0);
+    /* Barra de pestañas (vidrio fino) con la lente de la pestaña activa */
+    lv_obj_t *bar = flex_glass_panel(page, FLEX_GLASS_BAR, TAB_X, TAB_Y, TAB_W, TAB_H, LV_RADIUS_CIRCLE);
     lv_obj_add_flag(bar, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(bar, tab_cb, LV_EVENT_CLICKED, r);
-    r->hi = lv_obj_create(bar);
-    lv_obj_remove_style_all(r->hi);
-    lv_obj_set_size(r->hi, kTabHiW[0], TAB_H - 8);
-    lv_obj_set_style_radius(r->hi, (TAB_H - 8) / 2, 0);
-    lv_obj_set_style_bg_color(r->hi, flex_color(0x6B85FF), 0);
-    lv_obj_set_style_bg_grad_color(r->hi, flex_color(FLEX_RD_TAB_ACTIVE), 0);
-    lv_obj_set_style_bg_grad_dir(r->hi, LV_GRAD_DIR_VER, 0);
-    lv_obj_set_style_bg_opa(r->hi, LV_OPA_COVER, 0);
-    lv_obj_remove_flag(r->hi, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_pos(r->hi, hi_x(tab < 0 || tab >= UI_RELOJ_TABS ? 0 : tab), 2);
+    r->hi = flex_glass_lens(bar, TAB_LENS_H);
+    const int t0 = tab < 0 || tab >= UI_RELOJ_TABS ? 0 : tab;
+    lv_obj_set_pos(r->hi, hi_x(t0), (TAB_H - 2 - TAB_LENS_H) / 2);
+    lv_obj_set_width(r->hi, kTabHiW[t0]);
     for (int i = 0; i < UI_RELOJ_TABS; i++) {
-        r->icons[i] = flex_icon_create(bar, kTabIcon[i], TAB_ICON, FLEX_C_WHITE);
-        lv_obj_set_pos(r->icons[i], kTabCx[i] - TAB_X - 2 - TAB_ICON / 2, (TAB_H - 4 - TAB_ICON) / 2);
+        r->icons[i] = flex_icon_create(bar, kTabIcon[i], TAB_ICON, FLEX_GLASS_TXT);
+        lv_obj_set_pos(r->icons[i], kTabCx[i] - TAB_X - 1 - TAB_ICON / 2, (TAB_H - 2 - TAB_ICON) / 2);
     }
     lv_obj_set_user_data(page, r);
     lv_obj_add_event_cb(page, free_cb, LV_EVENT_DELETE, r);
@@ -204,12 +174,12 @@ typedef struct {
     int64_t key;
 } hora_t;
 
-#define HORA_TIME_Y  97   /* parte alta de la línea: el dígito empieza en y ~ 113, como en el diseño */
+#define HORA_TIME_Y  118  /* Outfit Regular 120: los dígitos quedan centrados entre la barra y la fecha */
 #define HORA_DATE_Y  262
-#define CARD_Y       312
-#define CARD_H       105
-#define CARD_W       171
-#define CARD_R       40
+#define CARD_Y       318
+#define CARD_H       100
+#define CARD_W       172
+#define CARD_R       28
 
 static void hora_refresh(hora_t *h)
 {
@@ -225,7 +195,7 @@ static void hora_refresh(hora_t *h)
     }
     h->key = key;
     lv_label_set_text(h->time, t.time);
-    watch_theme_set_text_color(h->time, t.valid ? FLEX_C_WHITE : FLEX_C_MUTE);
+    watch_theme_set_text_color(h->time, t.valid ? FLEX_GLASS_TXT : FLEX_C_MUTE);
     lv_label_set_text(h->date, t.date);
     char b[24];
     if (t.valid) {
@@ -233,8 +203,8 @@ static void hora_refresh(hora_t *h)
     } else {
         snprintf(b, sizeof(b), "--");
     }
-    lv_label_set_text(lv_obj_get_child(h->card_date, 2), b);
-    lv_label_set_text(lv_obj_get_child(h->card_fmt, 2), ws.h24 ? "24 h" : "12 h");
+    lv_label_set_text(lv_obj_get_child(h->card_date, 1), b);
+    lv_label_set_text(lv_obj_get_child(h->card_fmt, 1), ws.h24 ? "24 h" : "12 h");
 }
 
 static void hora_tick_cb(lv_timer_t *t)
@@ -260,17 +230,18 @@ static void fmt_cb(lv_event_t *e)
 
 static lv_obj_t *card(lv_obj_t *parent, int32_t x, const char *title, lv_event_cb_t cb, void *ud)
 {
-    lv_obj_t *c = watch_theme_lg_button(parent, FLEX_LG_DARK, x, CARD_Y - UI_RELOJ_TOP, CARD_W, CARD_H, CARD_R,
-                                        FLEX_GLOW_BOTTOM);
-    lv_obj_t *t = watch_theme_label(c, FLEX_FONT_S22, FLEX_C_WHITE, title);
-    lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 6);
-    lv_obj_t *v = watch_theme_label(c, FLEX_FONT_S22, FLEX_C_WHITE, "");
+    /* Tarjeta de contenido discreta: el dato es el protagonista */
+    lv_obj_t *c = flex_glass_panel(parent, FLEX_GLASS_CARD, x, CARD_Y - UI_RELOJ_TOP, CARD_W, CARD_H, CARD_R);
+    flex_glass_interactive(c);
+    lv_obj_t *t = watch_theme_label(c, FLEX_TYPE_CAPTION, FLEX_GLASS_TXT2, title);
+    lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 18);
+    lv_obj_t *v = watch_theme_label(c, FLEX_TYPE_HEADLINE, FLEX_GLASS_TXT, "");
     lv_obj_set_width(v, CARD_W - 24);
     lv_obj_set_style_text_align(v, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(v, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_align(v, LV_ALIGN_TOP_MID, 0, 50);
     lv_obj_add_event_cb(c, cb, LV_EVENT_CLICKED, ud);
-    return c; /* hijos: 0 reflejo, 1 título, 2 valor */
+    return c; /* hijos: 0 título, 1 valor */
 }
 
 lv_obj_t *ui_reloj_view(lv_obj_t *page)
@@ -294,9 +265,9 @@ lv_obj_t *ui_reloj_time_view(lv_obj_t *page)
     LV_ASSERT_MALLOC(h);
     h->key = INT64_MIN;
     lv_obj_t *v = ui_reloj_view(page);
-    h->time = watch_theme_label(v, FLEX_FONT_S_CLOCK, FLEX_C_MUTE, "--:--");
+    h->time = watch_theme_label(v, FLEX_TYPE_DISPLAY, FLEX_C_MUTE, "--:--");
     lv_obj_align(h->time, LV_ALIGN_TOP_MID, 0, HORA_TIME_Y - UI_RELOJ_TOP);
-    h->date = watch_theme_label(v, FLEX_FONT_S22, FLEX_C_WHITE, "");
+    h->date = watch_theme_label(v, FLEX_TYPE_BODY, FLEX_GLASS_TXT2, "");
     lv_obj_set_width(h->date, FLEX_SCREEN_W - 2 * FLEX_SAFE_X);
     lv_obj_set_style_text_align(h->date, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(h->date, LV_LABEL_LONG_MODE_DOTS);

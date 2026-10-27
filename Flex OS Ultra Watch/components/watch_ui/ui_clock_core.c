@@ -199,10 +199,10 @@ static void ring_show(ring_kind_t kind, int alarm_idx, const char *big)
     s_ring.big = watch_theme_label(root, FLEX_FONT_CLOCK, FLEX_C_TXT, big);
     lv_obj_align(s_ring.big, LV_ALIGN_TOP_MID, 0, 48 + RING_ICON + 12 + 40);
 
-    s_ring.left = watch_theme_button(root, alarm ? "Posponer" : "+1 min", FLEX_C_SURF2, RING_BTN_W, RING_BTN_H);
+    s_ring.left = flex_glass_button(root, alarm ? "Posponer" : "+1 min", FLEX_GLASS_TINT_NONE, RING_BTN_W, RING_BTN_H);
     lv_obj_align(s_ring.left, LV_ALIGN_BOTTOM_MID, -(RING_BTN_W / 2 + 8), -48);
     lv_obj_add_event_cb(s_ring.left, left_cb, LV_EVENT_CLICKED, NULL);
-    s_ring.right = watch_theme_button(root, "Detener", FLEX_C_DANGER, RING_BTN_W, RING_BTN_H);
+    s_ring.right = flex_glass_button(root, "Detener", FLEX_C_DANGER, RING_BTN_W, RING_BTN_H);
     lv_obj_align(s_ring.right, LV_ALIGN_BOTTOM_MID, RING_BTN_W / 2 + 8, -48);
     lv_obj_add_event_cb(s_ring.right, right_cb, LV_EVENT_CLICKED, NULL);
 

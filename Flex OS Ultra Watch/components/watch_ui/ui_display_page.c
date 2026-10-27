@@ -78,6 +78,18 @@ static void dim_cb(lv_event_t *e)
     watch_theme_row_set_value(lv_event_get_current_target(e), ui_dim_text(ws.dim));
 }
 
+/* Efectos de vidrio: Automático -> Premium -> Estándar -> Ligero */
+static void glass_cb(lv_event_t *e)
+{
+    watch_settings_t ws;
+    watch_settings_get(&ws);
+    ws.glass = (uint8_t)((ws.glass + 1) % WS_GLASS_COUNT);
+    watch_settings_update(&ws);
+    ui_glass_apply();
+    watch_theme_row_set_value(lv_event_get_current_target(e),
+                              ui_psave_active() ? "Ligero (ahorro)" : ui_glass_setting_text(ws.glass));
+}
+
 static void timeout_cb(lv_event_t *e)
 {
     lv_obj_t *row = lv_event_get_current_target(e);
@@ -127,6 +139,17 @@ lv_obj_t *ui_display_page_create(lv_obj_t *parent)
     lv_label_set_long_mode(wnote, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_width(wnote, LV_PCT(100));
     lv_obj_set_style_pad_left(wnote, 16, 0);
+
+    watch_theme_section(list, "Efectos");
+    lv_obj_t *glass = watch_theme_list_row(list, FLEX_ICON_IMAGE, FLEX_C_CAT_BLUE, "Vidrio",
+                                           ui_psave_active() ? "Ligero (ahorro)" : ui_glass_setting_text(ws.glass),
+                                           false);
+    lv_obj_add_event_cb(glass, glass_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *gnote = watch_theme_label(list, FLEX_FONT_SMALL, FLEX_C_MUTE,
+                                        "Automático: Premium, y Estándar si el reloj no llega. Ligero gasta menos.");
+    lv_label_set_long_mode(gnote, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_width(gnote, LV_PCT(100));
+    lv_obj_set_style_pad_left(gnote, 16, 0);
 
     watch_theme_section(list, "Panel");
     watch_theme_info_row(list, "Pantalla", "AMOLED 410 × 502");

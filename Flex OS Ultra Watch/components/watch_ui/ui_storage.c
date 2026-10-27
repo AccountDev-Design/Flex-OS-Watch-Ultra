@@ -1,6 +1,8 @@
 /*
- * ui_storage — app Almacenamiento con el diseño del usuario
- * (design/referencias/almacenamiento.png) y su página de detalles (F4.6).
+ * ui_storage — app Almacenamiento (composición de design/referencias/
+ * almacenamiento.png, con el Flex Liquid Glass Engine y la escala tipográfica
+ * del sistema: sin negritas, barras finas y una sola tarjeta discreta) y su
+ * página de detalles (F4.6).
  *
  * Página principal, todo con datos reales:
  *  - "Memoria interna": la flash de 32 MB (tamaño leído del chip). Ocupado =
@@ -8,10 +10,11 @@
  *    ajustes: todo lo que no es "storage") + lo usado en LittleFS. Sin
  *    LittleFS montado se dice y solo se cuenta el sistema;
  *  - "PSRAM": total y libre del montón de PSRAM (watch_diag_mem);
- *  - tarjeta "Detalles de memoria y sistema" con el estado de la memoria
+ *  - tarjeta "Memoria y sistema" con el estado de la memoria
  *    (ui_mem_health) que abre los detalles, y "Optimizar": suelta lo que se
- *    puede regenerar (fondo desenfocado del cajón, caché de imágenes de LVGL,
- *    app suspendida) y dice cuánto se liberó. No borra archivos;
+ *    puede regenerar (fondo de la última vista previa del selector de esferas,
+ *    caché de imágenes de LVGL, app suspendida) y dice cuánto se liberó. No
+ *    borra archivos;
  *  - leyenda por categorías (stg_usage, en la tarea del almacenamiento: no
  *    bloquea la interfaz) que abre el explorador de Documentos y la Papelera.
  *
@@ -201,19 +204,25 @@ lv_obj_t *ui_storage_details_create(lv_obj_t *parent)
 /* ======================= Página principal (diseño del usuario) ======================= */
 
 #define MAIN_TICK_MS 1000
-#define X0           33
-#define BAR_W        337
-#define BAR_H        44
-#define BAR_R        12
-#define CARD_X       34
-#define CARD_Y       278
-#define CARD_W       340
-#define CARD_H       74
-#define OPT_W        123
-#define OPT_H        48
-#define LEG_Y0       375 /* centro de la primera fila de la leyenda */
-#define LEG_DY       28
-#define LEG_DOT      20
+/* Geometría para 410x502 (las esquinas redondeadas mandan arriba y abajo) */
+#define X0           34
+#define BAR_W        342
+#define BAR_H        14          /* barra fina en píldora: dato, no bloque */
+#define SEC1_Y       74          /* "Memoria interna" */
+#define SEC2_Y       142         /* "PSRAM" */
+#define BAR_DY       36          /* de la etiqueta a su barra */
+#define CARD_X       30
+#define CARD_Y       212
+#define CARD_W       350
+#define CARD_H       84
+#define CARD_R       26
+#define OPT_W        128
+#define OPT_H        46
+#define LEG_Y0       330 /* centro de la primera fila de la leyenda */
+#define LEG_DY       34
+#define LEG_DOT      12
+#define C_TRACK      0x2C2E34    /* pista de las barras */
+#define C_PSRAM      0x64D2FF    /* PSRAM: cian sereno (antes lima a toda saturación) */
 
 enum { LEG_DOCS = 0, LEG_SYS, LEG_APPS, LEG_TRASH, LEG_N };
 
@@ -369,7 +378,7 @@ static lv_obj_t *label_at(lv_obj_t *parent, const lv_font_t *f, uint32_t rgb, co
 
 static lv_obj_t *value_right(lv_obj_t *parent, int32_t right, int32_t y)
 {
-    lv_obj_t *l = watch_theme_label(parent, FLEX_FONT_S22, FLEX_C_WHITE, "--");
+    lv_obj_t *l = watch_theme_label(parent, FLEX_TYPE_CAPTION, FLEX_GLASS_TXT2, "--");
     lv_obj_set_width(l, 200);
     lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_pos(l, right - 200, y);
@@ -387,54 +396,50 @@ lv_obj_t *ui_storage_create(lv_obj_t *parent)
     LV_ASSERT_MALLOC(p);
     lv_obj_t *page = ui_page_new(parent);
     watch_theme_page(page);
-    const int32_t lh22 = lv_font_get_line_height(FLEX_FONT_S22);
+    const int32_t lh_body = lv_font_get_line_height(FLEX_TYPE_BODY);
+    const int32_t lh_cap = lv_font_get_line_height(FLEX_TYPE_CAPTION);
 
-    lv_obj_t *title = watch_theme_label(page, FLEX_FONT_S32, FLEX_C_WHITE, "Almacenamiento");
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 16);
+    lv_obj_t *title = watch_theme_label(page, FLEX_TYPE_TITLE, FLEX_GLASS_TXT, "Almacenamiento");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 20);
 
-    label_at(page, FLEX_FONT_S22, FLEX_C_WHITE, "Memoria interna", X0, 70);
-    p->flash_val = value_right(page, X0 + BAR_W, 70);
-    p->flash_bar = watch_theme_bar(page, BAR_W, BAR_H, FLEX_ST_FLASH, FLEX_ST_TRACK);
-    lv_obj_set_style_radius(p->flash_bar, BAR_R, LV_PART_MAIN);
-    lv_obj_set_style_radius(p->flash_bar, BAR_R, LV_PART_INDICATOR);
-    lv_obj_set_pos(p->flash_bar, X0, 105);
+    /* Dos medidas: etiqueta regular, valor en gris a la derecha y una barra
+     * fina debajo (los valores alineados por su línea base) */
+    label_at(page, FLEX_TYPE_BODY, FLEX_GLASS_TXT, "Memoria interna", X0, SEC1_Y);
+    p->flash_val = value_right(page, X0 + BAR_W, SEC1_Y + lh_body - lh_cap - 1);
+    p->flash_bar = watch_theme_bar(page, BAR_W, BAR_H, FLEX_ST_FLASH, C_TRACK);
+    lv_obj_set_pos(p->flash_bar, X0, SEC1_Y + BAR_DY);
 
-    label_at(page, FLEX_FONT_S22, FLEX_C_WHITE, "PSRAM", X0, 160);
-    p->psram_val = value_right(page, X0 + BAR_W, 160);
-    p->psram_bar = watch_theme_bar(page, BAR_W, BAR_H, FLEX_ST_PSRAM, FLEX_ST_TRACK);
-    lv_obj_set_style_radius(p->psram_bar, BAR_R, LV_PART_MAIN);
-    lv_obj_set_style_radius(p->psram_bar, BAR_R, LV_PART_INDICATOR);
-    lv_obj_set_pos(p->psram_bar, X0, 203);
+    label_at(page, FLEX_TYPE_BODY, FLEX_GLASS_TXT, "PSRAM", X0, SEC2_Y);
+    p->psram_val = value_right(page, X0 + BAR_W, SEC2_Y + lh_body - lh_cap - 1);
+    p->psram_bar = watch_theme_bar(page, BAR_W, BAR_H, C_PSRAM, C_TRACK);
+    lv_obj_set_pos(p->psram_bar, X0, SEC2_Y + BAR_DY);
 
-    /* Tarjeta de vidrio: detalles (toda la tarjeta) y "Optimizar" */
-    lv_obj_t *card = watch_theme_lg_button(page, FLEX_LG_DARK, CARD_X, CARD_Y, CARD_W, CARD_H, 18, FLEX_GLOW_BOTTOM);
+    /* Tarjeta de contenido (material discreto del motor): toda la tarjeta
+     * abre los detalles; "Optimizar" es la acción principal (tintada). */
+    lv_obj_t *card = flex_glass_panel(page, FLEX_GLASS_CARD, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R);
+    flex_glass_interactive(card);
     lv_obj_add_event_cb(card, details_cb, LV_EVENT_CLICKED, p);
-    lv_obj_t *ct = watch_theme_label(card, FLEX_FONT_S20, FLEX_C_WHITE, "Detalles de memoria\ny sistema");
-    lv_obj_set_style_text_line_space(ct, -5, 0);
-    lv_obj_set_pos(ct, 9, 5);
+    /* Título de tarjeta en Medium 20 (como las notificaciones): deja aire
+     * hasta "Optimizar"; título y estado, centrados en la tarjeta */
+    const int32_t lh_t = lv_font_get_line_height(FLEX_TYPE_LABEL);
+    const int32_t ty = (CARD_H - 2 * FLEX_GLASS_RIM_W - (lh_t + 4 + lh_cap)) / 2;
+    lv_obj_t *ct = watch_theme_label(card, FLEX_TYPE_LABEL, FLEX_GLASS_TXT, "Memoria y sistema");
+    lv_obj_set_pos(ct, 18, ty);
     p->health_dot = lv_obj_create(card);
     lv_obj_remove_style_all(p->health_dot);
-    lv_obj_set_size(p->health_dot, 10, 10);
+    lv_obj_set_size(p->health_dot, 9, 9);
     lv_obj_set_style_radius(p->health_dot, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_opa(p->health_dot, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(p->health_dot, flex_color(FLEX_ST_APPS), 0);
     lv_obj_remove_flag(p->health_dot, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_pos(p->health_dot, 9, 51);
-    p->health = label_at(card, FLEX_FONT_S16, FLEX_C_WHITE, "", 24, 46);
-    lv_obj_t *opt = lv_button_create(card);
-    lv_obj_remove_style_all(opt);
-    lv_obj_set_size(opt, OPT_W, OPT_H);
-    lv_obj_set_pos(opt, 234 - CARD_X - 2, 290 - CARD_Y - 2);
-    lv_obj_set_style_radius(opt, OPT_H / 2, 0);
-    lv_obj_set_style_bg_color(opt, flex_color(FLEX_ST_BUTTON), 0);
-    lv_obj_set_style_bg_color(opt, flex_color(0x3A56D8), LV_STATE_PRESSED);
-    lv_obj_set_style_bg_opa(opt, LV_OPA_COVER, 0);
+    lv_obj_set_pos(p->health_dot, 19, ty + lh_t + 4 + (lh_cap - 9) / 2);
+    p->health = label_at(card, FLEX_TYPE_CAPTION, FLEX_GLASS_TXT2, "", 34, ty + lh_t + 4);
+    lv_obj_t *opt = flex_glass_button(card, "Optimizar", FLEX_C_PRIMARY, OPT_W, OPT_H);
+    lv_obj_align(opt, LV_ALIGN_RIGHT_MID, -16, 0);
     lv_obj_set_ext_click_area(opt, 8);
-    lv_obj_t *ot = watch_theme_label(opt, FLEX_FONT_S22, FLEX_C_WHITE, "Optimizar");
-    lv_obj_center(ot);
     lv_obj_add_event_cb(opt, optimize_cb, LV_EVENT_CLICKED, p);
 
-    /* Leyenda por categorías */
+    /* Leyenda por categorías: punto de color, nombre regular y tamaño en gris */
     static const struct {
         const char *name;
         uint32_t rgb;
@@ -447,15 +452,9 @@ lv_obj_t *ui_storage_create(lv_obj_t *parent)
     };
     for (int i = 0; i < LEG_N; i++) {
         const int32_t cy = LEG_Y0 + i * LEG_DY;
-        lv_obj_t *row = lv_obj_create(page);
-        lv_obj_remove_style_all(row);
-        lv_obj_set_size(row, BAR_W + 8, LEG_DY);
-        lv_obj_set_pos(row, X0, cy - LEG_DY / 2);
-        lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_set_style_bg_color(row, flex_color(FLEX_C_WHITE), LV_STATE_PRESSED);
-        lv_obj_set_style_bg_opa(row, LV_OPA_10, LV_STATE_PRESSED);
-        lv_obj_set_style_radius(row, 8, 0);
+        /* Fila fantasma: se ilumina como vidrio solo mientras se toca */
+        lv_obj_t *row = flex_glass_panel(page, FLEX_GLASS_GHOST, X0 - 8, cy - LEG_DY / 2, BAR_W + 16, LEG_DY, 12);
+        flex_glass_interactive(row);
         if (kLeg[i].dir) {
             lv_obj_add_event_cb(row, browse_main_cb, LV_EVENT_CLICKED, (void *)kLeg[i].dir);
         } else {
@@ -469,10 +468,10 @@ lv_obj_t *ui_storage_create(lv_obj_t *parent)
         lv_obj_set_style_bg_color(dot, flex_color(kLeg[i].rgb), 0);
         lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
         lv_obj_remove_flag(dot, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_set_pos(dot, 4, (LEG_DY - LEG_DOT) / 2);
-        lv_obj_t *n = watch_theme_label(row, FLEX_FONT_S22, FLEX_C_WHITE, kLeg[i].name);
-        lv_obj_set_pos(n, 33, (LEG_DY - lh22) / 2 + 1);
-        p->leg_val[i] = value_right(row, BAR_W - 8, (LEG_DY - lh22) / 2 + 1);
+        lv_obj_set_pos(dot, 10, (LEG_DY - 2 - LEG_DOT) / 2);
+        lv_obj_t *n = watch_theme_label(row, FLEX_TYPE_BODY, FLEX_GLASS_TXT, kLeg[i].name);
+        lv_obj_set_pos(n, 34, (LEG_DY - 2 - lh_body) / 2);
+        p->leg_val[i] = value_right(row, BAR_W + 4, (LEG_DY - 2 - lh_cap) / 2);
     }
 
     main_refresh(p);

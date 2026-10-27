@@ -1,19 +1,17 @@
 /*
- * watch_theme — identidad visual de Flex OS Ultra en LVGL 9 para el reloj.
+ * watch_theme — identidad visual de Flex OS Ultra en LVGL 9 para el reloj:
+ * fuentes, fondos (de pantalla y de las esferas), páginas, cabeceras y listas.
  *
- * Modo oscuro AMOLED: fondo negro puro (#000000) en la esfera, las páginas y
- * el panel rápido. "Liquid Glass" sobre negro = superficie con el tinte
- * adaptativo de la referencia PRECALCULADA y opaca, más el borde de luz
- * arriba/izquierda. Sin desenfoque, sin capas translúcidas a pantalla
- * completa y sin degradados: cada cuadro solo rellena colores sólidos y
- * dibuja texto (ver docs/B4-CALIDAD.md). Los 8 fondos de la referencia están
- * disponibles (watch_theme_set_wallpaper) y con ellos las tarjetas vuelven a
- * ser translúcidas.
+ * Modo oscuro AMOLED: fondo negro puro (#000000) en la esfera y las páginas.
+ * El vidrio (filas, tarjetas, botones, panel rápido, avisos...) NO se define
+ * aquí: todo sale del Flex Liquid Glass Engine (flex_glass.h), que es la única
+ * implementación del sistema.
  */
 #pragma once
 
 #include <stdbool.h>
 #include "lvgl.h"
+#include "flex_glass.h"
 #include "flex_icons.h"
 #include "flex_tokens.h"
 
@@ -34,24 +32,12 @@ LV_FONT_DECLARE(flex_outfit_clock_120); /* solo '-', '0'-'9' y ':' */
 #define FLEX_FONT_LARGE  (&flex_outfit_40)
 #define FLEX_FONT_CLOCK  (&flex_outfit_clock_120)
 
-/* Pantallas rediseñadas con los diseños del usuario (League Spartan Bold, la
- * letra de sus referencias; tools/gen_fonts.sh) */
+/* League Spartan Bold: solo la usa una esfera (rótulo de 16 px); las esferas
+ * no cambian. Las demás pantallas usan la escala FLEX_TYPE_* (Outfit). */
 LV_FONT_DECLARE(flex_spartan_16);
-LV_FONT_DECLARE(flex_spartan_20);
-LV_FONT_DECLARE(flex_spartan_22);
-LV_FONT_DECLARE(flex_spartan_24);
-LV_FONT_DECLARE(flex_spartan_32);
-LV_FONT_DECLARE(flex_spartan_40);
-LV_FONT_DECLARE(flex_spartan_clock_188); /* ' ', '-', '0'-'9' y ':' */
 LV_FONT_DECLARE(flex_outfit_15);
 #define FLEX_FONT_S16      (&flex_spartan_16)
-#define FLEX_FONT_S20      (&flex_spartan_20)
-#define FLEX_FONT_S22      (&flex_spartan_22)
-#define FLEX_FONT_S24      (&flex_spartan_24)
-#define FLEX_FONT_S32      (&flex_spartan_32)
-#define FLEX_FONT_S40      (&flex_spartan_40)
-#define FLEX_FONT_S_CLOCK  (&flex_spartan_clock_188)
-#define FLEX_FONT_TINY     (&flex_outfit_15)  /* rótulos pequeños de los diseños */
+#define FLEX_FONT_TINY     (&flex_outfit_15)  /* rótulos pequeños */
 /* Esferas fotográficas: dígitos (' ', '-', '0'-'9', ':') y rótulos en mayúsculas */
 LV_FONT_DECLARE(flex_cond_156);
 LV_FONT_DECLARE(flex_cond_196);
@@ -64,6 +50,23 @@ LV_FONT_DECLARE(flex_outfit_med_48);
 #define FLEX_FONT_CAPS_S   (&flex_outfit_med_28)
 #define FLEX_FONT_CAPS     (&flex_outfit_med_34)
 #define FLEX_FONT_CAPS_L   (&flex_outfit_med_48)
+
+/* ---- Escala tipográfica del sistema (Outfit, SIL OFL 1.1) ----------------
+ * Pesos regulares para casi todo; Medium solo para títulos, botones y cifras
+ * que piden énfasis. El grosor no sustituye al contraste ni a la jerarquía:
+ * la jerarquía sale del tamaño, del color (principal / secundario) y del
+ * espacio. Medidas para el AMOLED de 410x502 a ~315 ppi (1 mm ~ 12,4 px). */
+LV_FONT_DECLARE(flex_outfit_m20);
+LV_FONT_DECLARE(flex_outfit_m24);
+LV_FONT_DECLARE(flex_outfit_m30);
+#define FLEX_TYPE_FOOTNOTE (&flex_outfit_15)        /* Regular 15: notas al pie */
+#define FLEX_TYPE_CAPTION  (&flex_outfit_18)        /* Regular 18: rótulos, valores secundarios */
+#define FLEX_TYPE_BODY     (&flex_outfit_22)        /* Regular 22: texto */
+#define FLEX_TYPE_LABEL    (&flex_outfit_m20)       /* Medium 20: botones, pestañas */
+#define FLEX_TYPE_HEADLINE (&flex_outfit_m24)       /* Medium 24: título de tarjeta, valor destacado */
+#define FLEX_TYPE_TITLE    (&flex_outfit_m30)       /* Medium 30: título de pantalla */
+#define FLEX_TYPE_NUMBER   (&flex_outfit_40)        /* Regular 40: cifras grandes */
+#define FLEX_TYPE_DISPLAY  (&flex_outfit_clock_120) /* Regular 120: la hora (solo '-', '0'-'9' y ':') */
 
 static inline lv_color_t flex_color(uint32_t rgb)
 {
@@ -155,78 +158,25 @@ void watch_theme_preview_begin(void);
 void watch_theme_preview_end(void);
 void watch_theme_preview_release(void);
 
-/**
- * Fondo actual desenfocado para el cajón de aplicaciones (flex_blur): una
- * sola copia en PSRAM, generada por partes y reutilizada mientras el fondo de
- * la esfera no cambie.
- *  - watch_theme_blur_get(): la imagen lista o NULL (sin fondo o sin generar).
- *  - watch_theme_blur_step(rows): avanza la generación (rows filas de
- *    trabajo); true si ya está lista o si no hay nada que desenfocar.
- *  - watch_theme_has_background(): la esfera activa tiene imagen de fondo.
- */
-const lv_image_dsc_t *watch_theme_blur_get(void);
-bool watch_theme_blur_step(int rows);
-/** Un cajón vivo muestra el desenfoque (on) o se borra (off): mientras haya
- * alguno, la imagen no se libera (ni con watch_theme_release_caches). */
-void watch_theme_blur_hold(bool on);
+/** La esfera activa tiene imagen de fondo. */
 bool watch_theme_has_background(void);
-/** Suelta lo que se puede regenerar (desenfoque y caché de imágenes de
- * LVGL). Devuelve los bytes de PSRAM liberados por el tema. */
+/** Píxeles (410x502 RGB565) del fondo con el que se construye ahora (la
+ * esfera activa o una vista previa), o NULL con el negro. Solo para la placa
+ * congelada de las esferas (flex_glass_face_plate). */
+const uint16_t *watch_theme_bg_pixels(void);
+/** Suelta lo que se puede regenerar (fondo de la última vista previa del
+ * selector y caché de imágenes de LVGL). Devuelve los bytes de PSRAM
+ * liberados por el tema. */
 size_t watch_theme_release_caches(void);
-
-/**
- * Crea una tarjeta de vidrio (rol CARD) en (x, y) de tamaño w x h, en
- * coordenadas de pantalla. El tinte es el de la mezcla adaptativa de Flex OS
- * Ultra: sobre negro (por defecto) se precalcula y la tarjeta es OPACA (sin
- * mezcla por píxel); sobre un fondo es translúcida y se calcula con la luma
- * real del fondo que queda debajo.
- */
-lv_obj_t *watch_theme_glass_card(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h);
-
-/**
- * Suelo de tinte del vidrio (gGlMinMix de la referencia): quien dibuja vidrio
- * sobre contenido que no controla (un aviso) lo sube para que el texto se lea.
- * La referencia usa 150 (Overlay.h:167) porque detrás hay un fondo
- * DESENFOCADO. Aquí no se desenfoca (coste), y con 150 la esfera se
- * transparenta a través del aviso (comprobado en la vista previa), así que
- * el suelo sube a 235.
- */
-#define FLEX_GLASS_MIN_MIX_BANNER 235
-/** Suelo del tinte de una tarjeta con texto claro sobre un fondo claro. */
-#define FLEX_GLASS_MIN_MIX_LIGHT  200
-void watch_theme_glass_set_min_tint(lv_obj_t *card, lv_opa_t min_mix);
 
 /** Etiqueta con fuente y color de la paleta. */
 lv_obj_t *watch_theme_label(lv_obj_t *parent, const lv_font_t *font, uint32_t rgb, const char *text);
 
-/* ---- Componentes (F3.1) -------------------------------------------------
- * Todos los controles pulsables reaccionan al toque mientras el dedo está
- * encima (LV_STATE_PRESSED: el tinte se aclara) sin animaciones ni
- * desenfoque. LV_STATE_CHECKED = activo (acento). LV_STATE_DISABLED = sin
- * función todavía: se ve apagado y LVGL no le entrega toques. */
-
-/**
- * Botón de vidrio: tarjeta de watch_theme_glass_card() pulsable. Quien la
- * crea escucha LV_EVENT_CLICKED.
- */
-lv_obj_t *watch_theme_glass_button(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h);
-
-/**
- * Mosaico del panel rápido: vidrio plano (como las filas) con el radio de las
- * tarjetas grandes, pulsable y con los tres estados. Sin disposición: quien
- * lo crea coloca su contenido.
- */
-lv_obj_t *watch_theme_tile(lv_obj_t *parent, int32_t x, int32_t y, int32_t w, int32_t h);
-
-/**
- * Botón en forma de pastilla con el texto centrado (hijo 0). bg_rgb es su
- * color (FLEX_C_PRIMARY para la acción principal, FLEX_C_SURF2 para la
- * secundaria, FLEX_C_DANGER para detener). Pulsable: quien lo crea escucha
- * LV_EVENT_CLICKED. Con LV_STATE_DISABLED se atenúa y no responde.
- */
-lv_obj_t *watch_theme_button(lv_obj_t *parent, const char *text, uint32_t bg_rgb, int32_t w, int32_t h);
-/** Cambia texto y color (NULL / 0 = no cambiar). */
-void watch_theme_button_set(lv_obj_t *btn, const char *text, uint32_t bg_rgb);
+/* ---- Componentes de página (F3.1) -------------------------------------
+ * Las filas pulsables usan el material ROW del motor (flex_glass): se
+ * iluminan mientras el dedo está encima (LV_STATE_PRESSED) y se apagan con
+ * LV_STATE_DISABLED (LVGL no les entrega toques). Los botones, tarjetas y
+ * controles son de flex_glass.h. */
 
 /** Fondo plano de página (FLEX_C_PAGE) para las pantallas de lista. */
 void watch_theme_page(lv_obj_t *screen);
@@ -276,24 +226,7 @@ void watch_theme_set_visible(lv_obj_t *obj, bool visible);
 /** Marca la fila como no disponible: apagada, sin toque y con el valor "Pendiente". */
 void watch_theme_row_set_pending(lv_obj_t *row);
 
-/* ---- Liquid Glass de los diseños del usuario (rediseño 2026-10) ----------
- * Componentes compartidos por las pantallas rediseñadas; sus valores están en
- * flex_tokens.h (FLEX_LG_*). Sin sombras ni desenfoque por cuadro: degradado,
- * borde de luz y un reflejo fino en el borde (lo que se ve en las referencias).
- *  - oscuro: cristal sobre negro (Reloj, alarmas, Almacenamiento);
- *  - claro: cristal blanco translúcido sobre el degradado del panel rápido.
- * Los pulsables reaccionan con LV_STATE_PRESSED; el claro, además, se rellena
- * del color activo con LV_STATE_CHECKED. */
-typedef enum { FLEX_LG_DARK = 0, FLEX_LG_LIGHT } flex_lg_t;
-typedef enum { FLEX_GLOW_NONE = 0, FLEX_GLOW_TOP, FLEX_GLOW_BOTTOM } flex_glow_t;
-lv_obj_t *watch_theme_lg(lv_obj_t *parent, flex_lg_t kind, int32_t x, int32_t y, int32_t w, int32_t h,
-                         int32_t radius, flex_glow_t glow);
-/** Igual, pulsable (quien lo crea escucha LV_EVENT_CLICKED). */
-lv_obj_t *watch_theme_lg_button(lv_obj_t *parent, flex_lg_t kind, int32_t x, int32_t y, int32_t w, int32_t h,
-                                int32_t radius, flex_glow_t glow);
-/** Interruptor de las alarmas (verde activo / gris), de w x h. */
-lv_obj_t *watch_theme_switch(lv_obj_t *parent, int32_t w, int32_t h);
-/** Barra de progreso redondeada de los diseños (Almacenamiento). */
+/** Barra de progreso en píldora (datos: no es vidrio). Rango 0..1000. */
 lv_obj_t *watch_theme_bar(lv_obj_t *parent, int32_t w, int32_t h, uint32_t fill_rgb, uint32_t track_rgb);
 
 #ifdef __cplusplus

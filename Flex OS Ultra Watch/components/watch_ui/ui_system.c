@@ -93,6 +93,7 @@ void ui_system_start(bool power_ok)
     batt_alert_init(&s_sys.alerts);
     ui_clock_init();
     ui_psave_init(); /* Flex Ultra Power Saving guardado: antes de crear la esfera */
+    ui_glass_init(); /* perfil del vidrio (depende del ahorro) */
     ui_screen_init();
     s_sys.timer = lv_timer_create(sys_tick, SYS_TICK_MS, NULL);
     sys_tick(s_sys.timer);

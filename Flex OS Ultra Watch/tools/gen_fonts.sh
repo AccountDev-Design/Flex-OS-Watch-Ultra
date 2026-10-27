@@ -6,8 +6,8 @@
 #  - Outfit (Regular, ExtraLight, Medium, SemiBold): https://github.com/Outfitio/Outfit-Fonts,
 #    commit 9027738, sin cambios. Es la letra de Flex OS Ultra.
 #  - League Spartan Bold: instancia wght=700 de LeagueSpartan[wght].ttf (google/fonts, ofl/leaguespartan)
-#    con `fonttools varLib.instancer`. Es la letra de los diseños del usuario (Reloj, Almacenamiento,
-#    panel rápido, alarmas).
+#    con `fonttools varLib.instancer`. Solo queda el tamaño de 16 px que usa una esfera (las esferas no se
+#    tocan); el resto de pantallas usa la escala tipográfica de Outfit (watch_theme.h, FLEX_TYPE_*).
 #  - FlexCondensed-Medium: Barlow Condensed Medium (google/fonts, ofl/barlowcondensed) estrechada al
 #    80 % en horizontal con tools/fonts/derive_condensed.py y con otro nombre (la OFL lo exige para una
 #    versión modificada; Barlow no declara nombres reservados). Dígitos de las esferas fotográficas.
@@ -39,12 +39,14 @@ for SIZE in 18 22 28 40; do
 done
 font flex_outfit_clock_120 Outfit-Regular.ttf 120 0x2D,0x30-0x3A
 
-# Pantallas rediseñadas (League Spartan Bold)
-for SIZE in 16 20 22 24 32 40; do
-    font flex_spartan_${SIZE} LeagueSpartan-Bold.ttf "$SIZE" "$TXT"
+# Escala tipográfica del sistema: pesos Medium para títulos, botones y cifras con énfasis
+for SIZE in 20 24 30; do
+    font flex_outfit_m${SIZE} Outfit-Medium.ttf "$SIZE" "$TXT"
 done
-font flex_spartan_clock_188 LeagueSpartan-Bold.ttf 188 "$DIGITS"   # Reloj > Hora
-font flex_outfit_15 Outfit-Regular.ttf 15 "$TXT"                   # rótulos pequeños (temporizador)
+font flex_outfit_15 Outfit-Regular.ttf 15 "$TXT"                   # notas al pie
+
+# Esfera con rótulo en League Spartan Bold (no se toca)
+font flex_spartan_16 LeagueSpartan-Bold.ttf 16 "$TXT"
 
 # Esferas
 font flex_cond_156 FlexCondensed-Medium.ttf 156 "$DIGITS"          # Taj Mahal

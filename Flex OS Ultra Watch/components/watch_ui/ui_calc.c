@@ -102,7 +102,7 @@ lv_obj_t *ui_calc_create(lv_obj_t *parent)
         for (int c = 0; c < 4; c++) {
             const char *t = calc_labels[r][c];
             const bool op = calc_label_is_op(r, c);
-            lv_obj_t *k = watch_theme_button(page, t, op ? CALC_ORANGE : FLEX_C_SURF2, KEY_W, KEY_H);
+            lv_obj_t *k = flex_glass_button(page, t, op ? CALC_ORANGE : FLEX_GLASS_TINT_NONE, KEY_W, KEY_H);
             lv_obj_set_style_radius(k, KEY_R, 0);
             /* una cifra: letra grande; "+/-" y "DEL", la siguiente (fs-- de calcFontFor) */
             lv_obj_set_style_text_font(k, t[1] ? FLEX_FONT_BODY : FLEX_FONT_TITLE, 0);

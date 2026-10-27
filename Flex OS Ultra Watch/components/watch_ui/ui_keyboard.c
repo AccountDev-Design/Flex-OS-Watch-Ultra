@@ -182,14 +182,11 @@ lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta, int flags, ui_kb_cb
     lv_obj_set_style_border_width(kb, 0, 0);
     lv_obj_set_style_pad_all(kb, 0, 0);
     lv_obj_set_style_pad_gap(kb, 5, 0);
-    lv_obj_set_style_bg_color(kb, flex_color(FLEX_C_SURF2), LV_PART_ITEMS);
-    lv_obj_set_style_bg_opa(kb, LV_OPA_COVER, LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(kb, flex_color(FLEX_C_GLASS_PRESSED), LV_PART_ITEMS | LV_STATE_PRESSED);
+    /* Teclas: controles de vidrio del motor (se iluminan al pulsarlas) */
+    flex_glass_apply_states(kb, FLEX_GLASS_CONTROL, LV_PART_ITEMS);
     lv_obj_set_style_radius(kb, 10, LV_PART_ITEMS);
-    lv_obj_set_style_border_width(kb, 0, LV_PART_ITEMS);
     lv_obj_set_style_shadow_width(kb, 0, LV_PART_ITEMS);
     lv_obj_set_style_text_font(kb, FLEX_FONT_SMALL, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(kb, flex_color(FLEX_C_TXT), LV_PART_ITEMS);
     set_page(k, KB_LOWER);
     lv_obj_add_event_cb(kb, kb_cb, LV_EVENT_VALUE_CHANGED, k);
     lv_obj_add_event_cb(kb, free_cb, LV_EVENT_DELETE, k);
@@ -198,15 +195,17 @@ lv_obj_t *ui_keyboard_create(lv_obj_t *parent, lv_obj_t *ta, int flags, ui_kb_cb
 
 void ui_textarea_style(lv_obj_t *ta)
 {
-    lv_obj_set_style_bg_color(ta, flex_color(FLEX_C_SURF), 0);
-    lv_obj_set_style_bg_opa(ta, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(ta, 0, 0);
+    /* Campo de texto: material de contenido del motor */
+    flex_glass_apply(ta, FLEX_GLASS_ROW, 0);
     lv_obj_set_style_radius(ta, 16, 0);
     lv_obj_set_style_text_font(ta, FLEX_FONT_BODY, 0);
     lv_obj_set_style_text_color(ta, flex_color(FLEX_C_TXT), 0);
     lv_obj_set_style_text_color(ta, flex_color(FLEX_C_MUTE), LV_PART_TEXTAREA_PLACEHOLDER);
-    lv_obj_set_style_pad_hor(ta, 14, 0);
-    lv_obj_set_style_pad_ver(ta, 14, 0);
+    /* 1 px menos de relleno por el borde de luz del material: la línea de
+     * texto sigue cabiendo entera (si no, el campo se desplaza para enseñar el
+     * cursor y vuelve, sin fin) */
+    lv_obj_set_style_pad_hor(ta, 14 - FLEX_GLASS_RIM_W, 0);
+    lv_obj_set_style_pad_ver(ta, 14 - FLEX_GLASS_RIM_W, 0);
     lv_obj_set_style_bg_color(ta, flex_color(FLEX_C_ACCENT), LV_PART_CURSOR);
     lv_obj_set_style_border_color(ta, flex_color(FLEX_C_ACCENT), LV_PART_CURSOR | LV_STATE_FOCUSED);
     /* Cursor fijo, sin parpadeo: una animación infinita redibuja la pantalla

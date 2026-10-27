@@ -88,7 +88,7 @@ static void sw_cb(lv_event_t *e)
 static lv_obj_t *switch_row(lv_obj_t *list, flex_icon_t icon, const char *title, sw_id_t id)
 {
     lv_obj_t *r = watch_theme_list_row(list, icon, WB_C_EXER, title, NULL, false);
-    lv_obj_t *sw = watch_theme_switch(r, 64, 36);
+    lv_obj_t *sw = flex_glass_switch(r, 64, 36);
     lv_obj_align(sw, LV_ALIGN_RIGHT_MID, -12, 0);
     lv_obj_add_event_cb(sw, sw_cb, LV_EVENT_VALUE_CHANGED, (void *)(uintptr_t)id);
     /* la fila entera también lo cambia (zona táctil grande) */
@@ -434,8 +434,8 @@ static void save_cb(lv_event_t *e)
 
 static lv_obj_t *step_btn(lv_obj_t *page, const char *t, int32_t dir, int32_t x, edit_t *p)
 {
-    lv_obj_t *b = watch_theme_lg_button(page, FLEX_LG_DARK, x, 210, 150, 84, 42, FLEX_GLOW_NONE);
-    lv_obj_t *l = watch_theme_label(b, FLEX_FONT_S40, FLEX_C_TXT, t);
+    lv_obj_t *b = flex_glass_pressable(page, FLEX_GLASS_CONTROL, x, 210, 150, 84, LV_RADIUS_CIRCLE);
+    lv_obj_t *l = watch_theme_label(b, FLEX_TYPE_NUMBER, FLEX_GLASS_TXT, t);
     lv_obj_center(l);
     lv_obj_set_user_data(b, (void *)(intptr_t)dir);
     lv_obj_add_event_cb(b, step_cb, LV_EVENT_CLICKED, p);
@@ -454,16 +454,16 @@ lv_obj_t *ui_wb_edit_create(lv_obj_t *parent)
     lv_obj_t *page = ui_page_new(parent);
     watch_theme_page(page);
     watch_theme_header(page, p->e.title, back_cb, NULL);
-    p->val = watch_theme_label(page, FLEX_FONT_S40, WB_C_EXER, "");
+    p->val = watch_theme_label(page, FLEX_TYPE_NUMBER, WB_C_EXER, "");
     lv_obj_align(p->val, LV_ALIGN_TOP_MID, 0, FLEX_HDR_H + 34);
     step_btn(page, "-", -1, 36, p);
     step_btn(page, "+", 1, FLEX_SCREEN_W - 36 - 150, p);
     if (p->e.optional) {
-        lv_obj_t *u = watch_theme_button(page, "Sin definir", FLEX_C_SURF2, 200, 50);
+        lv_obj_t *u = flex_glass_button(page, "Sin definir", FLEX_GLASS_TINT_NONE, 200, 50);
         lv_obj_align(u, LV_ALIGN_TOP_MID, 0, 312);
         lv_obj_add_event_cb(u, unset_cb, LV_EVENT_CLICKED, p);
     }
-    lv_obj_t *s = watch_theme_button(page, "Guardar", WB_C_GO, FLEX_SCREEN_W - 2 * 40, 60);
+    lv_obj_t *s = flex_glass_button(page, "Guardar", WB_C_GO, FLEX_SCREEN_W - 2 * 40, 60);
     lv_obj_set_style_text_color(s, flex_color(FLEX_C_BLACK), 0);
     lv_obj_align(s, LV_ALIGN_TOP_MID, 0, 380);
     lv_obj_add_event_cb(s, save_cb, LV_EVENT_CLICKED, p);
@@ -563,7 +563,7 @@ static lv_obj_t *cal_text(lv_obj_t *b, const char *t, int32_t y, uint32_t rgb, c
 static lv_obj_t *cal_button(lv_obj_t *b, const char *t, uint32_t rgb, int32_t x, int32_t y, int32_t w,
                             lv_event_cb_t cb, cal_t *c, uintptr_t ud)
 {
-    lv_obj_t *bt = watch_theme_button(b, t, rgb, w, 58);
+    lv_obj_t *bt = flex_glass_button(b, t, rgb, w, 58);
     if (rgb == WB_C_GO) {
         lv_obj_set_style_text_color(bt, flex_color(FLEX_C_BLACK), 0);
     }
@@ -599,7 +599,7 @@ static void cal_build(cal_t *c, cal_step_t st)
     case CAL_COUNT:
         cal_text(b, c->run ? "Corriendo: pasos contados" : "Caminando: pasos contados", 10, FLEX_C_TXT2,
                  FLEX_FONT_SMALL);
-        c->count = cal_text(b, "0", 60, WB_C_STEPS_TXT, FLEX_FONT_S40);
+        c->count = cal_text(b, "0", 60, WB_C_STEPS_TXT, FLEX_TYPE_NUMBER);
         cal_text(b, "Al llegar al final del recorrido, pulsa \"He llegado\".", 130, FLEX_C_MUTE, FLEX_FONT_TINY);
         cal_button(b, "He llegado", WB_C_GO, 40, 200, FLEX_SCREEN_W - 80, cal_stop_cb, c, 0);
         break;
@@ -607,10 +607,10 @@ static void cal_build(cal_t *c, cal_step_t st)
         snprintf(t, sizeof(t), "%lu pasos. ¿Qué distancia recorriste?", (unsigned long)c->steps);
         cal_text(b, t, 6, FLEX_C_TXT2, FLEX_FONT_SMALL);
         c->real_m = c->real_m ? c->real_m : 400;
-        c->dist = cal_text(b, "", 70, WB_C_DIST, FLEX_FONT_S40);
+        c->dist = cal_text(b, "", 70, WB_C_DIST, FLEX_TYPE_NUMBER);
         cal_dist_show(c);
-        cal_button(b, "-10 m", FLEX_C_SURF2, 30, 140, 168, cal_step_cb, c, (uintptr_t)(intptr_t)-1);
-        cal_button(b, "+10 m", FLEX_C_SURF2, FLEX_SCREEN_W - 30 - 168, 140, 168, cal_step_cb, c, 1);
+        cal_button(b, "-10 m", FLEX_GLASS_TINT_NONE, 30, 140, 168, cal_step_cb, c, (uintptr_t)(intptr_t)-1);
+        cal_button(b, "+10 m", FLEX_GLASS_TINT_NONE, FLEX_SCREEN_W - 30 - 168, 140, 168, cal_step_cb, c, 1);
         cal_button(b, "Calcular", WB_C_GO, 40, 226, FLEX_SCREEN_W - 80, cal_calc_cb, c, 0);
         break;
     }
@@ -632,9 +632,9 @@ static void cal_build(cal_t *c, cal_step_t st)
                  act_calib_error_pct(est, (uint32_t)c->real_m));
         cal_text(b, t, 6, FLEX_C_TXT2, FLEX_FONT_SMALL);
         snprintf(t, sizeof(t), "Zancada nueva: %u cm", cm);
-        cal_text(b, t, 96, WB_C_GO, FLEX_FONT_S24);
+        cal_text(b, t, 96, WB_C_GO, FLEX_TYPE_HEADLINE);
         cal_button(b, "Aplicar", WB_C_GO, 30, 170, 168, cal_apply_cb, c, 0);
-        cal_button(b, "Repetir", FLEX_C_SURF2, FLEX_SCREEN_W - 30 - 168, 170, 168, cal_restart_cb, c, 0);
+        cal_button(b, "Repetir", FLEX_GLASS_TINT_NONE, FLEX_SCREEN_W - 30 - 168, 170, 168, cal_restart_cb, c, 0);
         break;
     }
     }

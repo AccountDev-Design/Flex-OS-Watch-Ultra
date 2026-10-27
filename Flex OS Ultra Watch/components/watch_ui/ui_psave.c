@@ -118,6 +118,7 @@ void ui_psave_set(bool on)
     }
     s_active = on;
     watch_settings_update(&ws);
+    ui_glass_apply(); /* el ahorro usa el vidrio Ligero */
     /* La esfera se rehace (mínima en negro, o la elegida al salir). */
     ui_nav_replace_root(ui_face_create);
 }

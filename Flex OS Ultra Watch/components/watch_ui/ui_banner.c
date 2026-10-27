@@ -1,5 +1,6 @@
 /*
- * ui_banner — aviso emergente de vidrio en lv_layer_top().
+ * ui_banner — aviso emergente en lv_layer_top(): una lámina (FLEX_GLASS_SHEET)
+ * del Flex Liquid Glass Engine.
  *
  * Tiempos de la referencia (FlexOS_Ultra_Overlay.h): entrada 220 ms, visible
  * 4200 ms, salida 180 ms, curva de salida cuadrática. Un toque lo cierra. Se
@@ -107,11 +108,12 @@ static void tap_cb(lv_event_t *e)
 static void build(void)
 {
     watch_theme_init();
-    lv_obj_t *card = watch_theme_glass_card(lv_layer_top(), B_X, -(B_H + 12), B_W, B_H);
-    lv_obj_set_style_radius(card, B_RADIUS, 0);
+    /* Lámina del Flex Liquid Glass Engine: vidrio oscuro legible sobre
+     * cualquier esfera o página (no es vidrio sobre vidrio: va sola encima). */
+    lv_obj_t *card = flex_glass_panel(lv_layer_top(), FLEX_GLASS_SHEET, B_X, -(B_H + 12), B_W, B_H, B_RADIUS);
+    lv_obj_set_style_pad_hor(card, 18, 0);
     lv_obj_set_style_pad_ver(card, B_PAD_V, 0);
-    watch_theme_glass_set_min_tint(card, FLEX_GLASS_MIN_MIX_BANNER);
-    lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
+    flex_glass_interactive(card);
     lv_obj_add_event_cb(card, tap_cb, LV_EVENT_CLICKED, NULL);
 
     s_b.icon = flex_battery_icon_create(card, 44, 22);
@@ -132,11 +134,11 @@ static void build(void)
     lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
     lv_obj_remove_flag(col, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     lv_obj_align(col, LV_ALIGN_LEFT_MID, 60, 0);
-    s_b.title = watch_theme_label(col, FLEX_FONT_BODY, FLEX_C_TXT, "");
-    lv_obj_set_size(s_b.title, LV_PCT(100), lv_font_get_line_height(FLEX_FONT_BODY));
+    s_b.title = watch_theme_label(col, FLEX_TYPE_LABEL, FLEX_GLASS_TXT, "");
+    lv_obj_set_size(s_b.title, LV_PCT(100), lv_font_get_line_height(FLEX_TYPE_LABEL) + 4);
     lv_label_set_long_mode(s_b.title, LV_LABEL_LONG_MODE_DOTS);
-    s_b.text = watch_theme_label(col, FLEX_FONT_SMALL, FLEX_C_TXT2, "Conecta el cargador");
-    lv_obj_set_size(s_b.text, LV_PCT(100), lv_font_get_line_height(FLEX_FONT_SMALL));
+    s_b.text = watch_theme_label(col, FLEX_TYPE_CAPTION, FLEX_GLASS_TXT2, "Conecta el cargador");
+    lv_obj_set_size(s_b.text, LV_PCT(100), lv_font_get_line_height(FLEX_TYPE_CAPTION));
     lv_label_set_long_mode(s_b.text, LV_LABEL_LONG_MODE_DOTS);
     s_b.card = card;
 }
@@ -167,7 +169,7 @@ void ui_banner_show_notif(const char *app, const char *text, uint32_t notif_id)
     lv_obj_add_flag(s_b.info, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(s_b.bell, LV_OBJ_FLAG_HIDDEN);
     lv_label_set_text(s_b.title, app && app[0] ? app : "Notificación");
-    lv_obj_set_style_text_color(s_b.title, flex_color(FLEX_C_TXT), 0);
+    lv_obj_set_style_text_color(s_b.title, flex_color(FLEX_GLASS_TXT), 0);
     lv_label_set_text(s_b.text, text ? text : "");
     start_out(T_IN_MS + T_SHOW_MS);
 }

@@ -550,7 +550,7 @@ static lv_obj_t *wrap_label(lv_obj_t *parent, const lv_font_t *f, uint32_t rgb, 
 
 static lv_obj_t *tile(lv_obj_t *list)
 {
-    lv_obj_t *t = watch_theme_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_t *t = flex_glass_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(t, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(t, 4, 0);
     lv_obj_remove_flag(t, LV_OBJ_FLAG_CLICKABLE);
@@ -688,7 +688,7 @@ static void build_sun(wx_page_t *p)
 
 static void card(lv_obj_t *grid, const char *title, bool ok, const char *value, const char *hint)
 {
-    lv_obj_t *c = watch_theme_tile(grid, 0, 0, LV_PCT(48), CARD_H);
+    lv_obj_t *c = flex_glass_tile(grid, 0, 0, LV_PCT(48), CARD_H);
     lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_pad_all(c, 14, 0);
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
@@ -789,9 +789,9 @@ static void foot_text(wx_page_t *p, char *b, size_t n)
 
 static void build_footer(wx_page_t *p)
 {
-    lv_obj_t *b1 = watch_theme_button(p->list, "Mis ubicaciones", FLEX_C_SURF2, LV_PCT(100), 56);
+    lv_obj_t *b1 = flex_glass_button(p->list, "Mis ubicaciones", FLEX_GLASS_TINT_NONE, LV_PCT(100), 56);
     lv_obj_add_event_cb(b1, locs_open_cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *b2 = watch_theme_button(p->list, "Actualizar ahora", FLEX_C_SURF2, LV_PCT(100), 56);
+    lv_obj_t *b2 = flex_glass_button(p->list, "Actualizar ahora", FLEX_GLASS_TINT_NONE, LV_PCT(100), 56);
     lv_obj_add_event_cb(b2, retry_cb, LV_EVENT_CLICKED, NULL);
     char t[96];
     foot_text(p, t, sizeof(t));
@@ -829,11 +829,11 @@ static void build_empty(wx_page_t *p)
     if (s->nloc && s->err != WXE_NONE) {
         wrap_label(box, FLEX_FONT_SMALL, FLEX_C_WARN, wx_error_text(s->err), true);
     }
-    lv_obj_t *b1 = watch_theme_button(p->list, s->nloc ? "Reintentar" : "Añadir ubicación", FLEX_C_PRIMARY,
+    lv_obj_t *b1 = flex_glass_button(p->list, s->nloc ? "Reintentar" : "Añadir ubicación", FLEX_C_PRIMARY,
                                       LV_PCT(100), 60);
     lv_obj_add_event_cb(b1, s->nloc ? retry_cb : search_open_cb, LV_EVENT_CLICKED, NULL);
     if (s->nloc) {
-        lv_obj_t *b2 = watch_theme_button(p->list, "Mis ubicaciones", FLEX_C_SURF2, LV_PCT(100), 60);
+        lv_obj_t *b2 = flex_glass_button(p->list, "Mis ubicaciones", FLEX_GLASS_TINT_NONE, LV_PCT(100), 60);
         lv_obj_add_event_cb(b2, locs_open_cb, LV_EVENT_CLICKED, NULL);
     }
     wrap_label(p->list, FLEX_FONT_SMALL, FLEX_C_MUTE, "Datos meteorológicos: Open-Meteo", true);
@@ -973,7 +973,7 @@ static void wl_build(wl_page_t *p)
     char b[160];
     for (int i = 0; i < p->st.nloc; i++) {
         const wx_loc_t *l = &p->st.locs[i];
-        lv_obj_t *row = watch_theme_tile(p->list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+        lv_obj_t *row = flex_glass_tile(p->list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
         lv_obj_set_style_min_height(row, 78, 0);
         lv_obj_set_style_pad_ver(row, 10, 0);
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
@@ -1005,7 +1005,7 @@ static void wl_build(wl_page_t *p)
             wrap_label(col, FLEX_FONT_SMALL, FLEX_C_MUTE, b, false);
         }
         const bool armed = p->armed == i;
-        lv_obj_t *del = watch_theme_button(row, armed ? "¿Seguro?" : "Quitar", armed ? FLEX_C_DANGER : FLEX_C_SURF2,
+        lv_obj_t *del = flex_glass_button(row, armed ? "¿Seguro?" : "Quitar", armed ? FLEX_C_DANGER : FLEX_GLASS_TINT_NONE,
                                            armed ? 110 : 92, 48);
         lv_obj_set_user_data(del, p);
         lv_obj_add_event_cb(del, loc_del_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
@@ -1014,7 +1014,7 @@ static void wl_build(wl_page_t *p)
         wrap_label(p->list, FLEX_FONT_BODY, FLEX_C_TXT2, "Añade una ciudad para ver su clima", true);
     }
     if (p->st.nloc < WX_LOCS) {
-        lv_obj_t *add = watch_theme_button(p->list, "Añadir ubicación", FLEX_C_PRIMARY, LV_PCT(100), 56);
+        lv_obj_t *add = flex_glass_button(p->list, "Añadir ubicación", FLEX_C_PRIMARY, LV_PCT(100), 56);
         lv_obj_add_event_cb(add, search_open_cb, LV_EVENT_CLICKED, NULL);
     } else {
         wrap_label(p->list, FLEX_FONT_SMALL, FLEX_C_MUTE, "Máximo 5 ubicaciones: quita una para añadir otra.", true);
@@ -1150,7 +1150,7 @@ static void ws_build(ws_page_t *p)
         char b[160];
         for (int i = 0; i < p->st.nres; i++) {
             const wx_loc_t *l = &p->st.res[i];
-            lv_obj_t *row = watch_theme_tile(p->res, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+            lv_obj_t *row = flex_glass_tile(p->res, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
             lv_obj_set_style_pad_ver(row, 10, 0);
             lv_obj_set_flex_flow(row, LV_FLEX_FLOW_COLUMN);
             lv_obj_set_user_data(row, p);

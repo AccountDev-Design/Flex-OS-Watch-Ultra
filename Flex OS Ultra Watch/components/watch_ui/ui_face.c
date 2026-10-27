@@ -97,7 +97,6 @@ typedef struct {
     int last_pct;
     uint32_t wx_gen;
     uint32_t txt, txt2;
-    lv_timer_t *warm; /* prepara el fondo desenfocado del cajón (se borra al terminar) */
     /* esferas de los diseños del usuario */
     const struct photo_cfg *photo;
     lv_obj_t *minutes;  /* Flores: los minutos, debajo de la hora */
@@ -418,27 +417,10 @@ static void parallax_cb(lv_timer_t *t)
     lv_obj_align(f->date, LV_ALIGN_CENTER, dx, dy + PAR_DATE_DY);
 }
 
-/* Fondo desenfocado del cajón: se genera por partes con la esfera quieta a
- * la vista, para que el cajón lo tenga listo al abrirse. */
-static void warm_cb(lv_timer_t *t)
-{
-    face_t *f = lv_timer_get_user_data(t);
-    if (ui_nav_depth() != 1 || ui_nav_busy() || ui_qp_active() || !ui_screen_is_on()) {
-        return;
-    }
-    if (watch_theme_blur_step(40)) {
-        lv_timer_delete(t);
-        f->warm = NULL;
-    }
-}
-
 static void delete_cb(lv_event_t *e)
 {
     face_t *f = lv_event_get_user_data(e);
     lv_timer_delete(f->timer);
-    if (f->warm) {
-        lv_timer_delete(f->warm);
-    }
     if (f->ptimer) {
         lv_timer_delete(f->ptimer);
     }
@@ -499,7 +481,7 @@ static lv_obj_t *mod_tile(face_t *f, lv_obj_t *c, int col, int row, const char *
     (void)f;
     const int32_t x = (FLEX_SCREEN_W - 2 * MOD_TILE_W - MOD_GAP) / 2 + col * (MOD_TILE_W + MOD_GAP);
     const int32_t y = MOD_TOP + row * (MOD_TILE_H + MOD_GAP);
-    lv_obj_t *t = watch_theme_glass_card(c, x, y, MOD_TILE_W, MOD_TILE_H);
+    lv_obj_t *t = flex_glass_face_plate(c, x, y, MOD_TILE_W, MOD_TILE_H);
     lv_obj_t *l = watch_theme_label(t, FLEX_FONT_SMALL, FLEX_C_TXT2, title);
     lv_obj_align(l, LV_ALIGN_TOP_LEFT, 0, -4);
     return t;
@@ -544,12 +526,12 @@ static void build_modular(face_t *f, lv_obj_t *c)
 
 static void build_glass(face_t *f, lv_obj_t *c)
 {
-    lv_obj_t *card = watch_theme_glass_card(c, (FLEX_SCREEN_W - GLASS_W) / 2, (FLEX_SCREEN_H - GLASS_H) / 2,
+    lv_obj_t *card = flex_glass_face_plate(c, (FLEX_SCREEN_W - GLASS_W) / 2, (FLEX_SCREEN_H - GLASS_H) / 2,
                                             GLASS_W, GLASS_H);
     lv_obj_set_style_radius(card, 48, 0);
     if (watch_theme_wall_is_light((FLEX_SCREEN_W - GLASS_W) / 2, (FLEX_SCREEN_H - GLASS_H) / 2, GLASS_W,
                                   GLASS_H)) {
-        watch_theme_glass_set_min_tint(card, FLEX_GLASS_MIN_MIX_LIGHT);
+        flex_glass_face_plate_min_tint(card, FLEX_GLASS_MIN_MIX_LIGHT);
     }
     f->txt = FLEX_C_TXT;
     f->txt2 = FLEX_C_TXT2;
@@ -584,7 +566,7 @@ static void build_parallax(face_t *f, lv_obj_t *c, bool interactive)
     }
     f->p_halo = halo;
     /* Tarjeta de vidrio intermedia */
-    f->p_card = watch_theme_glass_card(c, 0, 0, 300, 190);
+    f->p_card = flex_glass_face_plate(c, 0, 0, 300, 190);
     lv_obj_set_style_radius(f->p_card, 40, 0);
     lv_obj_align(f->p_card, LV_ALIGN_CENTER, 0, 0);
     f->txt = FLEX_C_TXT;
@@ -1000,9 +982,6 @@ lv_obj_t *ui_face_create_style(lv_obj_t *parent, int style, bool interactive)
         lv_obj_add_event_cb(scr, press_track_cb, LV_EVENT_PRESSED, NULL);
         lv_obj_add_event_cb(scr, press_track_cb, LV_EVENT_PRESSING, NULL);
         lv_obj_add_event_cb(scr, long_press_cb, LV_EVENT_LONG_PRESSED, NULL);
-        if (watch_theme_has_background() && !watch_theme_blur_get()) {
-            f->warm = lv_timer_create(warm_cb, 25, f);
-        }
     }
     f->timer = lv_timer_create(tick_cb, FACE_TICK_MS, f);
     lv_obj_add_event_cb(scr, delete_cb, LV_EVENT_DELETE, f);

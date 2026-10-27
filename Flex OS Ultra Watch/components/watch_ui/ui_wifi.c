@@ -69,12 +69,7 @@ static uint32_t hash_str(uint32_t h, const char *s)
 
 static void switch_style(lv_obj_t *sw)
 {
-    lv_obj_set_size(sw, 56, 32);
-    lv_obj_set_style_bg_color(sw, flex_color(FLEX_C_TRACK), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(sw, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(sw, flex_color(FLEX_C_ACCENT), LV_PART_INDICATOR | LV_STATE_CHECKED);
-    lv_obj_set_style_bg_color(sw, flex_color(FLEX_C_WHITE), LV_PART_KNOB);
-    lv_obj_set_style_pad_all(sw, -3, LV_PART_KNOB);
+    flex_glass_switch_style(sw, 56, 32); /* el interruptor del motor */
     lv_obj_remove_flag(sw, LV_OBJ_FLAG_CLICKABLE); /* toca la fila entera */
 }
 
@@ -97,7 +92,7 @@ static void show_cb(lv_event_t *e)
     lv_obj_t *b = lv_event_get_current_target(e);
     const bool hide = !lv_textarea_get_password_mode(p->ta);
     lv_textarea_set_password_mode(p->ta, hide);
-    watch_theme_button_set(b, hide ? "Ver" : "Ocultar", 0);
+    flex_glass_button_set(b, hide ? "Ver" : "Ocultar", 0);
 }
 
 static void pw_free_cb(lv_event_t *e)
@@ -129,7 +124,7 @@ lv_obj_t *ui_wifi_password_create(lv_obj_t *parent)
     lv_obj_set_pos(p->ta, FLEX_SAFE_X, FLEX_HDR_H + 22);
     ui_textarea_style(p->ta);
 
-    lv_obj_t *show = watch_theme_button(page, "Ver", FLEX_C_SURF2, 88, 56);
+    lv_obj_t *show = flex_glass_button(page, "Ver", FLEX_GLASS_TINT_NONE, 88, 56);
     lv_obj_set_pos(show, FLEX_SCREEN_W - FLEX_SAFE_X - 88, FLEX_HDR_H + 22);
     lv_obj_add_event_cb(show, show_cb, LV_EVENT_CLICKED, p);
 

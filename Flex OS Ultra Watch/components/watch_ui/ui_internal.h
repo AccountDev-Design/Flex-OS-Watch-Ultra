@@ -243,6 +243,11 @@ lv_obj_t *ui_apps_badge(lv_obj_t *drawer);
 int ui_apps_visible(lv_obj_t *drawer, int *apps, int max);
 /** La rejilla se está moviendo (arrastre, inercia o muelles). */
 bool ui_apps_moving(lv_obj_t *drawer);
+/** Transición vertical del cajón (ui_nav): offset es donde estaría la página
+ * (0 = en su sitio, +-FLEX_SCREEN_H = fuera). La página no se mueve: la
+ * rejilla sigue al dedo y el fondo de la página es un velo negro con la
+ * opacidad del recorrido sobre la esfera quieta. */
+void ui_apps_transition(lv_obj_t *drawer, int32_t offset);
 /** La próxima apertura empieza con Reloj en el centro (pruebas). */
 void ui_apps_reset_view(void);
 /** La esfera supo que el dedo se movió (un gesto): no ofrece la pulsación larga. */
@@ -301,6 +306,19 @@ bool ui_psave_active(void);
 void ui_psave_set(bool on);
 /** Texto de la política de radios ("Conservar", "Apagar Wi-Fi"...). */
 const char *ui_psave_radio_text(uint8_t policy);
+
+/* ---- Flex Liquid Glass Engine: política de perfiles (ui_glass.c) ---- */
+#include "flex_glass.h"
+/** Mide los cuadros y aplica el perfil del ajuste guardado (una vez, al arrancar). */
+void ui_glass_init(void);
+/** Vuelve a calcular y aplica el perfil (al cambiar el ajuste o el ahorro). */
+void ui_glass_apply(void);
+/** Perfil que toca ahora: el del ajuste, Ligero con el ahorro, o el techo medido en automático. */
+flex_glass_profile_t ui_glass_effective(void);
+/** "Auto (Premium)", "Estándar"... */
+const char *ui_glass_setting_text(uint8_t setting);
+/** Medidor del perfil automático (diagnóstico y pruebas). */
+const flex_glass_auto_t *ui_glass_meter(void);
 
 /* ---- AOD y protección AMOLED (ui_aod.c) ---- */
 /** AOD efectivo: activado en Ajustes y sin ahorro de energía. */

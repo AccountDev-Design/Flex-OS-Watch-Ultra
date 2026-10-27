@@ -61,24 +61,14 @@
 #define FLEX_ONYX_R_OUT_480 380
 #define FLEX_ONYX_ALPHA     46
 
-/* ---- Material Liquid Glass, nivel 50 (alfa 0..255) -------------------- */
+/* ---- Material de la placa de las esferas (nivel 50 de la referencia) ---
+ * Solo lo usa la placa CONGELADA de las esferas (flex_glass_face_plate): las
+ * esferas no cambian. El resto del vidrio es el del motor (más abajo). */
 #define FLEX_GLASS_TINT_MIN     46
 #define FLEX_GLASS_TINT_MAX     70
 #define FLEX_GLASS_TINT_BASE    58
-#define FLEX_GLASS_SPECULAR     26   /* blanco, 45 % superior, decrece a 0 */
-#define FLEX_GLASS_SHADE        30   /* negro, 55 % inferior, crece desde 0 */
 #define FLEX_GLASS_EDGE_STRONG  156
-#define FLEX_GLASS_EDGE_WEAK    104
 #define FLEX_GLASS_EDGE_HI      0xCDD6E4
-#define FLEX_GLASS_EDGE_LO      0x161C28
-/* Estados de los controles de vidrio. Activo = acento con la mezcla de
- * qpMixAcc() (QuickPanelGlass.h:154). Pulsado: la referencia responde con un
- * destello blanco (Widgets.h:593); aquí, para no animar nada por cada toque,
- * el tinte se aclara mientras el dedo está encima. */
-#define FLEX_GLASS_ACTIVE_MIX   178
-#define FLEX_C_GLASS_PRESSED    0x56607E
-#define FLEX_GLASS_PRESSED_MIX  170
-#define FLEX_GLASS_DISABLED_MIX 26
 
 /* ---- Geometría del reloj (px del panel de 410x502) ------------------- */
 #define FLEX_SCREEN_W        410
@@ -120,40 +110,15 @@
 /* ---- Rediseño 2026-10: colores de los diseños del usuario ---------------
  * Muestreados de las referencias escaladas a 410x502 (design/referencias,
  * docs/REDISENO-2026-10.md). Solo los usan las pantallas rediseñadas. */
-/* Liquid Glass oscuro (tarjetas sobre negro: Reloj, Almacenamiento, alarmas) */
-#define FLEX_LG_DARK_TOP     0x24282E   /* degradado vertical del cristal */
-#define FLEX_LG_DARK_BOT     0x121518
-#define FLEX_LG_DARK_EDGE    0xA9BCCF   /* borde de luz */
-#define FLEX_LG_DARK_EDGE_OPA 170
-#define FLEX_LG_GLOW         0xFFFFFF   /* reflejo del borde inferior */
-#define FLEX_LG_GLOW_OPA     200
-/* Liquid Glass claro (mosaicos sobre el degradado del panel rápido) */
-#define FLEX_LG_LIGHT_FILL_OPA 34       /* blanco */
-#define FLEX_LG_LIGHT_EDGE_OPA 120
-/* Panel rápido */
-#define FLEX_QP_GRAD_L       0x56BCC8
-#define FLEX_QP_GRAD_R       0x9EE38C
-#define FLEX_QP_ACTIVE       0x5CE1E6   /* mosaico activo y relleno del brillo */
+/* El vidrio de esas pantallas (antes FLEX_LG_* y el degradado del panel
+ * rápido) es ahora el del Flex Liquid Glass Engine (más abajo). */
 /* Reloj */
-#define FLEX_RD_TAB_ACTIVE   0x5170FF
-#define FLEX_RD_TAB_TOP      0x2A2A2A
-#define FLEX_RD_TAB_BOT      0x0E0E0E
 #define FLEX_RD_DIAL         0x26273B
 #define FLEX_RD_DIAL_CENTER  0x2E3148
 #define FLEX_RD_HAND         0x6869EE
-#define FLEX_RD_START        0x9D39EE
-#define FLEX_RD_START_BOT    0x8A27E6
-#define FLEX_RD_SWITCH_ON    0x00D54F
-#define FLEX_RD_SWITCH_OFF   0xB2B2B2
-#define FLEX_RD_ALARM_SUB    0x6669A2   /* "Diariamente" activa */
-#define FLEX_RD_ALARM_OFF    0x6B7075   /* alarma desactivada */
 #define FLEX_RD_FADED        0x3C3F44   /* valores vecinos del rodillo */
-#define FLEX_RD_FADED_BLUE   0x4D5070
 /* Almacenamiento */
 #define FLEX_ST_FLASH        0x5170FF
-#define FLEX_ST_PSRAM        0xC1FF72
-#define FLEX_ST_TRACK        0x737373
-#define FLEX_ST_BUTTON       0x4C6CFF
 #define FLEX_ST_DOCS         0xFF3131
 #define FLEX_ST_SYSTEM       0xFFDE59
 #define FLEX_ST_APPS         0x3CC027
@@ -162,6 +127,76 @@
 #define FLEX_CMP_ORANGE      0xFF4F06
 #define FLEX_CMP_RED         0xE0301E
 #define FLEX_CMP_BEZEL       0x3C3C3F
+
+/* ---- Flex Liquid Glass Engine (flex_glass.h) -----------------------------
+ * Valores de los materiales del motor único de vidrio. Alfa 0..255.
+ * Principios (HIG Materials, WWDC25 "Meet Liquid Glass"): el vidrio es la
+ * capa de navegación y controles; el contenido usa un material discreto; nada
+ * de vidrio sobre vidrio; el tinte se reserva a lo activo y a la acción
+ * principal; borde de luz fino (1 px a 315 ppi) y reflejo en la parte alta. */
+#define FLEX_GLASS_RIM_W        1
+#define FLEX_GLASS_TXT          0xF5F6FA   /* texto principal sobre vidrio */
+#define FLEX_GLASS_TXT2         0xA7ACB8   /* secundario ("vibrante", ~62 %) */
+#define FLEX_GLASS_TXT_OFF      0x6E7380   /* no disponible */
+/* Fin del reflejo (0..255 de la altura). El panel es RGB565 y LVGL 9.5 no
+ * trama los degradados: uno largo y oscuro se ve en franjas anchas. El
+ * reflejo se queda en la parte alta y el resto del cuerpo es liso. */
+#define FLEX_GLASS_SHEEN_END    115
+/* Control (mosaicos, botones, píldoras): blanco translúcido con reflejo arriba */
+#define FLEX_GLASS_CTL_TOP      44
+#define FLEX_GLASS_CTL_BOT      20
+#define FLEX_GLASS_CTL_RIM      130
+#define FLEX_GLASS_CTL_PR_TOP   96         /* pulsado: se ilumina desde dentro */
+#define FLEX_GLASS_CTL_PR_BOT   50
+#define FLEX_GLASS_CTL_PR_RIM   200
+/* Barra de pestañas y la lente que marca la pestaña activa */
+#define FLEX_GLASS_BAR_TOP      34
+#define FLEX_GLASS_BAR_BOT      14
+#define FLEX_GLASS_BAR_RIM      90
+#define FLEX_GLASS_LENS_TOP     74
+#define FLEX_GLASS_LENS_BOT     40
+#define FLEX_GLASS_LENS_RIM     150
+/* Lámina oscura (avisos, diálogos): legible sobre cualquier contenido */
+#define FLEX_GLASS_SHEET_TOP_RGB 0x2C2F38
+#define FLEX_GLASS_SHEET_BOT_RGB 0x15171C
+#define FLEX_GLASS_SHEET_TOP    222
+#define FLEX_GLASS_SHEET_BOT    210
+#define FLEX_GLASS_SHEET_RIM    70
+/* Velo de atenuación (detrás del panel rápido). Sin desenfoque los detalles
+ * de debajo siguen nítidos: el velo deja ver los colores y la luz de la
+ * esfera (~15 %), no sus cifras, para que no compitan con los controles. */
+#define FLEX_GLASS_SCRIM_TOP    224
+#define FLEX_GLASS_SCRIM_BOT    208
+/* Fondo ambiental de las páginas que alojan vidrio (notificaciones) */
+#define FLEX_GLASS_AMB_TOP_RGB  0x1D2742
+#define FLEX_GLASS_AMB_BOT_RGB  0x050608
+/* Material de contenido (tarjetas y filas): discreto, el contenido manda */
+#define FLEX_GLASS_CARD_TOP     26
+#define FLEX_GLASS_CARD_BOT     16
+#define FLEX_GLASS_CARD_RIM     40
+#define FLEX_GLASS_ROW_RIM      26
+#define FLEX_GLASS_CARD_PR      46         /* pulsado */
+/* Tinte selectivo (activo, acción principal): color del tinte con reflejo */
+#define FLEX_GLASS_TINT_HI      40         /* blanco mezclado arriba */
+#define FLEX_GLASS_TINT_TOP     235
+#define FLEX_GLASS_TINT_BOT     200
+#define FLEX_GLASS_TINT_RIM     110
+/* Desactivado: la mitad de cuerpo y de borde */
+#define FLEX_GLASS_OFF_DIV      2
+/* Transiciones de estado (ms) por perfil: Premium, Estándar, Ligero */
+#define FLEX_GLASS_TRANS_PREMIUM 140
+#define FLEX_GLASS_TRANS_STD     90
+/* Tintes del sistema (activos del panel rápido, interruptores) */
+#define FLEX_TINT_BLUE          0x0A84FF
+#define FLEX_TINT_INDIGO        0x5E5CE6
+#define FLEX_TINT_AMBER         0xFF9F0A
+#define FLEX_TINT_GREEN         0x30D158
+#define FLEX_TINT_RED           0xFF453A
+#define FLEX_TINT_PURPLE        0x9D39EE
+#define FLEX_TINT_YELLOW        0xFFD60A
+#define FLEX_TINT_LIME          0xB6F33A   /* "empezar" de Bienestar */
+/* Texto sobre un tinte claro (amarillo, lima): oscuro para que se lea */
+#define FLEX_GLASS_TXT_ON_LIGHT 0x1C1C1E
 
 /* ---- Movimiento (ms) -------------------------------------------------- */
 #define FLEX_ANIM_APP_OPEN_MS   210

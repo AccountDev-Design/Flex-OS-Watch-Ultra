@@ -786,7 +786,7 @@ static void vw_msg(const char *text, const char *btn, int act)
     set_text(V->msg_l, f);
     V->msg_act = btn ? act : VM_NONE;
     if (btn) {
-        watch_theme_button_set(V->msg_b, btn, 0);
+        flex_glass_button_set(V->msg_b, btn, 0);
     }
     watch_theme_set_visible(V->msg_b, btn != NULL);
     watch_theme_set_visible(V->msg, true);
@@ -1012,7 +1012,7 @@ static lv_obj_t *vw_page_create(lv_obj_t *parent)
     lv_obj_center(V->msg);
     V->msg_l = wrap_label(V->msg, FLEX_FONT_BODY, FLEX_C_TXT, FLEX_SCREEN_W - 2 * 48);
     lv_obj_set_style_text_align(V->msg_l, LV_TEXT_ALIGN_CENTER, 0);
-    V->msg_b = watch_theme_button(V->msg, "", FLEX_C_SURF2, 220, 56);
+    V->msg_b = flex_glass_button(V->msg, "", FLEX_GLASS_TINT_NONE, 220, 56);
     lv_obj_add_event_cb(V->msg_b, vw_msg_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_add_flag(V->msg, LV_OBJ_FLAG_HIDDEN);
 
@@ -1112,7 +1112,7 @@ static void if_act_cb(lv_event_t *e)
         const uint32_t now = lv_tick_get();
         if (!p->trash_at || now - p->trash_at >= CONFIRM_MS) {
             p->trash_at = now;
-            watch_theme_button_set(p->trash_b, "Toca otra vez para tirarla", FLEX_C_DANGER);
+            flex_glass_button_set(p->trash_b, "Toca otra vez para tirarla", FLEX_C_DANGER);
             return;
         }
         p->trash_at = 0;
@@ -1129,7 +1129,7 @@ static void if_act_cb(lv_event_t *e)
 
 static void if_button(if_t *p, const char *t, uint32_t rgb, int act)
 {
-    lv_obj_t *b = watch_theme_button(p->list, t, rgb, LV_PCT(100), 60);
+    lv_obj_t *b = flex_glass_button(p->list, t, rgb, LV_PCT(100), 60);
     lv_obj_set_user_data(b, (void *)(intptr_t)act);
     lv_obj_add_event_cb(b, if_act_cb, LV_EVENT_CLICKED, p);
     if (act == IA_TRASH) {
@@ -1159,7 +1159,7 @@ static void info_build(if_t *p)
     char t[200], f[200];
     lv_obj_clean(p->list);
     p->trash_b = NULL;
-    lv_obj_t *c = watch_theme_tile(p->list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_t *c = flex_glass_tile(p->list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(c, 4, 0);
@@ -1217,12 +1217,12 @@ static void info_build(if_t *p)
                    {GAL_SRC_PHONE, IA_UP_PHONE, "Subir a Flex Phone"}};
         for (size_t i = 0; i < sizeof(kUp) / sizeof(kUp[0]); i++) {
             if (gal_can(G->e, GAL_X_UPLOAD, it, kUp[i].dest, NULL, 0)) {
-                if_button(p, kUp[i].text, FLEX_C_SURF2, kUp[i].act);
+                if_button(p, kUp[i].text, FLEX_GLASS_TINT_NONE, kUp[i].act);
             }
         }
     }
     if (gal_can(G->e, GAL_X_TRASH, it, it->src, NULL, 0)) {
-        if_button(p, it->src == GAL_SRC_LOCAL ? "Mover a la papelera" : "Mover a su papelera", FLEX_C_SURF2, IA_TRASH);
+        if_button(p, it->src == GAL_SRC_LOCAL ? "Mover a la papelera" : "Mover a su papelera", FLEX_GLASS_TINT_NONE, IA_TRASH);
     }
     p->status = list_label(p->list, FLEX_FONT_SMALL, FLEX_C_WARN);
 }
@@ -1252,8 +1252,8 @@ static void if_tick_cb(lv_timer_t *t)
     }
     if (p->trash_at && lv_tick_get() - p->trash_at >= CONFIRM_MS) {
         p->trash_at = 0;
-        watch_theme_button_set(p->trash_b, p->it.src == GAL_SRC_LOCAL ? "Mover a la papelera" : "Mover a su papelera",
-                               FLEX_C_SURF2);
+        flex_glass_button_set(p->trash_b, p->it.src == GAL_SRC_LOCAL ? "Mover a la papelera" : "Mover a su papelera",
+                               FLEX_GLASS_TINT_NONE);
     }
     /* Lo que se puede hacer depende de las fuentes y de la cola: se rehace si cambian */
     const uint32_t sig = if_sig(there ? &cur : NULL);
@@ -1665,14 +1665,10 @@ static lv_obj_t *ultra_page_create(lv_obj_t *parent)
     lv_obj_set_style_border_width(kb, 0, 0);
     lv_obj_set_style_pad_all(kb, 0, 0);
     lv_obj_set_style_pad_gap(kb, 6, 0);
-    lv_obj_set_style_bg_color(kb, flex_color(FLEX_C_SURF2), LV_PART_ITEMS);
-    lv_obj_set_style_bg_opa(kb, LV_OPA_COVER, LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(kb, flex_color(FLEX_C_GLASS_PRESSED), LV_PART_ITEMS | LV_STATE_PRESSED);
+    flex_glass_apply_states(kb, FLEX_GLASS_CONTROL, LV_PART_ITEMS); /* teclas de vidrio del motor */
     lv_obj_set_style_radius(kb, 12, LV_PART_ITEMS);
-    lv_obj_set_style_border_width(kb, 0, LV_PART_ITEMS);
     lv_obj_set_style_shadow_width(kb, 0, LV_PART_ITEMS);
     lv_obj_set_style_text_font(kb, FLEX_FONT_BODY, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(kb, flex_color(FLEX_C_TXT), LV_PART_ITEMS);
     const int32_t ky = ty + 54 + 2 * lv_font_get_line_height(FLEX_FONT_SMALL) + 8;
     lv_obj_set_size(kb, FLEX_SCREEN_W - 2 * 36, FLEX_SCREEN_H - FLEX_LIST_BOTTOM - 4 - ky);
     lv_obj_set_pos(kb, 36, ky);
@@ -1720,7 +1716,7 @@ static void ac_unlink_cb(lv_event_t *e)
         return;
     }
     p->un_at = now;
-    watch_theme_button_set(p->un_b, "Toca otra vez para desvincular", FLEX_C_DANGER);
+    flex_glass_button_set(p->un_b, "Toca otra vez para desvincular", FLEX_C_DANGER);
 }
 
 static bool ac_busy(uint8_t flow)
@@ -1765,7 +1761,7 @@ static void ac_build(ac_t *p)
     p->link = s->acct_link;
     p->wifi = s->wifi;
     if (s->acct_flow == GAL_ACCT_CODE) {
-        lv_obj_t *c = watch_theme_tile(p->list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+        lv_obj_t *c = flex_glass_tile(p->list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
         lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_flex_align(c, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -1778,15 +1774,15 @@ static void ac_build(ac_t *p)
                  f, sizeof(f), FLEX_FONT_SMALL, w, 7);
         set_text(l, f);
         p->stage = list_label(p->list, FLEX_FONT_SMALL, FLEX_C_MUTE);
-        lv_obj_t *b = watch_theme_button(p->list, "Cancelar", FLEX_C_SURF2, LV_PCT(100), 60);
+        lv_obj_t *b = flex_glass_button(p->list, "Cancelar", FLEX_GLASS_TINT_NONE, LV_PCT(100), 60);
         lv_obj_add_event_cb(b, ac_cancel_cb, LV_EVENT_CLICKED, p);
     } else if (s->acct_flow == GAL_ACCT_REQUESTING) {
         watch_theme_label(p->list, FLEX_FONT_BODY, FLEX_C_TXT, "Pidiendo un código…");
         p->stage = list_label(p->list, FLEX_FONT_SMALL, FLEX_C_MUTE);
-        lv_obj_t *b = watch_theme_button(p->list, "Cancelar", FLEX_C_SURF2, LV_PCT(100), 60);
+        lv_obj_t *b = flex_glass_button(p->list, "Cancelar", FLEX_GLASS_TINT_NONE, LV_PCT(100), 60);
         lv_obj_add_event_cb(b, ac_cancel_cb, LV_EVENT_CLICKED, p);
     } else if (s->acct_link != GAL_LINK_UNLINKED) {
-        lv_obj_t *c = watch_theme_tile(p->list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+        lv_obj_t *c = flex_glass_tile(p->list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
         lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_style_pad_row(c, 4, 0);
@@ -1799,13 +1795,13 @@ static void ac_build(ac_t *p)
         }
         p->err = list_label(p->list, FLEX_FONT_SMALL, FLEX_C_WARN);
         if (s->acct_link == GAL_LINK_AUTH_REQUIRED || s->acct_link == GAL_LINK_TOKEN_EXPIRED) {
-            lv_obj_t *b = watch_theme_button(p->list, "Vincular otra vez", FLEX_C_PRIMARY, LV_PCT(100), 60);
+            lv_obj_t *b = flex_glass_button(p->list, "Vincular otra vez", FLEX_C_PRIMARY, LV_PCT(100), 60);
             lv_obj_add_event_cb(b, ac_link_cb, LV_EVENT_CLICKED, p);
             if (!s->wifi) {
                 lv_obj_add_state(b, LV_STATE_DISABLED);
             }
         }
-        p->un_b = watch_theme_button(p->list, "Desvincular este reloj", FLEX_C_SURF2, LV_PCT(100), 60);
+        p->un_b = flex_glass_button(p->list, "Desvincular este reloj", FLEX_GLASS_TINT_NONE, LV_PCT(100), 60);
         lv_obj_add_event_cb(p->un_b, ac_unlink_cb, LV_EVENT_CLICKED, p);
         set_text(list_label(p->list, FLEX_FONT_SMALL, FLEX_C_MUTE),
                  "Desvincular borra la credencial del reloj; tus fotos siguen en Flex Cloud.");
@@ -1814,7 +1810,7 @@ static void ac_build(ac_t *p)
         set_text(l, "Vincula el reloj con tu Flex Account para ver y subir tus fotos de Flex Cloud: la misma cuenta, "
                     "cuota y biblioteca que Flex OS Ultra y Flex Cloud Web. El reloj no guarda tu contraseña.");
         p->err = list_label(p->list, FLEX_FONT_SMALL, FLEX_C_WARN);
-        lv_obj_t *b = watch_theme_button(p->list, "Vincular con Flex Account", FLEX_C_PRIMARY, LV_PCT(100), 60);
+        lv_obj_t *b = flex_glass_button(p->list, "Vincular con Flex Account", FLEX_C_PRIMARY, LV_PCT(100), 60);
         lv_obj_add_event_cb(b, ac_link_cb, LV_EVENT_CLICKED, p);
         if (!s->wifi) {
             lv_obj_add_state(b, LV_STATE_DISABLED);
@@ -1846,7 +1842,7 @@ static void ac_tick_cb(lv_timer_t *t)
     p->flow = s->acct_flow;
     if (p->un_at && lv_tick_get() - p->un_at >= CONFIRM_MS) {
         p->un_at = 0;
-        watch_theme_button_set(p->un_b, "Desvincular este reloj", FLEX_C_SURF2);
+        flex_glass_button_set(p->un_b, "Desvincular este reloj", FLEX_GLASS_TINT_NONE);
     }
     ac_texts(p);
 }
@@ -1926,7 +1922,7 @@ static void xf_build(xf_t *p, const gal_xfer_info_t *x, int n)
     for (int i = 0; i < n; i++) {
         p->ids[i] = x[i].id;
         p->states[i] = x[i].state;
-        lv_obj_t *c = watch_theme_tile(p->list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+        lv_obj_t *c = flex_glass_tile(p->list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
         lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_style_pad_row(c, 4, 0);
@@ -1944,7 +1940,7 @@ static void xf_build(xf_t *p, const gal_xfer_info_t *x, int n)
         set_text(p->line[i], f);
         const bool live = x[i].state == GAL_XS_QUEUED || x[i].state == GAL_XS_RUN || x[i].state == GAL_XS_WAIT;
         if (live || x[i].state == GAL_XS_FAIL) {
-            lv_obj_t *b = watch_theme_button(c, live ? "Cancelar" : "Reintentar", live ? FLEX_C_SURF2 : FLEX_C_PRIMARY,
+            lv_obj_t *b = flex_glass_button(c, live ? "Cancelar" : "Reintentar", live ? FLEX_GLASS_TINT_NONE : FLEX_C_PRIMARY,
                                              LV_PCT(100), 52);
             lv_obj_set_user_data(b, (void *)(intptr_t)(live ? x[i].id : -(int)x[i].id));
             lv_obj_add_event_cb(b, xf_btn_cb, LV_EVENT_CLICKED, p);
@@ -1953,7 +1949,7 @@ static void xf_build(xf_t *p, const gal_xfer_info_t *x, int n)
         }
     }
     if (ended) {
-        lv_obj_t *b = watch_theme_button(p->list, "Quitar las terminadas", FLEX_C_SURF2, LV_PCT(100), 60);
+        lv_obj_t *b = flex_glass_button(p->list, "Quitar las terminadas", FLEX_GLASS_TINT_NONE, LV_PCT(100), 60);
         lv_obj_set_user_data(b, (void *)(intptr_t)0);
         lv_obj_add_event_cb(b, xf_btn_cb, LV_EVENT_CLICKED, p);
     }
@@ -2099,7 +2095,7 @@ static void del_cb(lv_event_t *e)
 
 static lv_obj_t *tab_create(lv_obj_t *page, gal_tab_t t, int32_t x, int32_t w, const char *text)
 {
-    lv_obj_t *b = watch_theme_tile(page, x, TABS_Y, w, TABS_H);
+    lv_obj_t *b = flex_glass_tile(page, x, TABS_Y, w, TABS_H);
     lv_obj_set_style_pad_all(b, 0, 0);
     lv_obj_add_event_cb(b, tab_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)t);
     G->tab_l[t] = watch_theme_label(b, FLEX_FONT_SMALL, FLEX_C_TXT, text);
@@ -2125,7 +2121,7 @@ lv_obj_t *ui_gallery_create(lv_obj_t *parent)
 
     /* transferencias en marcha o fallidas: a la derecha de la cabecera */
     const int32_t xy = FLEX_SAFE_TOP + (FLEX_HDR_ZONE - XP_H) / 2;
-    G->xp = watch_theme_tile(hdr, flex_safe_right(xy, xy + XP_H - 1, FLEX_SAFE_MARGIN) + 1 - XP_W, xy, XP_W, XP_H);
+    G->xp = flex_glass_tile(hdr, flex_safe_right(xy, xy + XP_H - 1, FLEX_SAFE_MARGIN) + 1 - XP_W, xy, XP_W, XP_H);
     lv_obj_set_style_pad_all(G->xp, 0, 0);
     lv_obj_add_event_cb(G->xp, xp_cb, LV_EVENT_CLICKED, NULL);
     G->xp_ok = flex_icon_create(G->xp, FLEX_ICON_UPDATE, 20, FLEX_C_ACCENT_LIGHT);
@@ -2154,7 +2150,7 @@ lv_obj_t *ui_gallery_create(lv_obj_t *parent)
     lv_obj_set_scrollbar_mode(G->scroll, LV_SCROLLBAR_MODE_OFF);
     lv_obj_add_flag(G->scroll, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(G->scroll, scroll_cb, LV_EVENT_SCROLL, NULL);
-    G->chip = watch_theme_tile(G->scroll, GRID_X, 0, GRID_W, CHIP_H);
+    G->chip = flex_glass_tile(G->scroll, GRID_X, 0, GRID_W, CHIP_H);
     lv_obj_set_style_pad_all(G->chip, 0, 0);
     lv_obj_add_event_cb(G->chip, chip_cb, LV_EVENT_CLICKED, NULL);
     G->chip_dot = dot(G->chip, 12);
@@ -2162,13 +2158,13 @@ lv_obj_t *ui_gallery_create(lv_obj_t *parent)
     G->chip_l = wrap_label(G->chip, FLEX_FONT_SMALL, FLEX_C_TXT, GRID_W - 40 - 36);
     lv_obj_align(G->chip_l, LV_ALIGN_LEFT_MID, 40, 0);
     lv_obj_align(flex_icon_create(G->chip, FLEX_ICON_CHEVRON_RIGHT, 18, FLEX_C_MUTE), LV_ALIGN_RIGHT_MID, -14, 0);
-    G->card = watch_theme_tile(G->scroll, GRID_X, GRID_Y, GRID_W, LV_SIZE_CONTENT);
+    G->card = flex_glass_tile(G->scroll, GRID_X, GRID_Y, GRID_W, LV_SIZE_CONTENT);
     lv_obj_remove_flag(G->card, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_flex_flow(G->card, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(G->card, 8, 0);
     G->card_t = wrap_label(G->card, FLEX_FONT_BODY, FLEX_C_TXT, GRID_W - 32);
     G->card_s = wrap_label(G->card, FLEX_FONT_SMALL, FLEX_C_TXT2, GRID_W - 32);
-    G->card_b = watch_theme_button(G->card, "", FLEX_C_SURF2, LV_PCT(100), 56);
+    G->card_b = flex_glass_button(G->card, "", FLEX_GLASS_TINT_NONE, LV_PCT(100), 56);
     lv_obj_add_event_cb(G->card_b, card_btn_cb, LV_EVENT_CLICKED, NULL);
     G->card_bl = lv_obj_get_child(G->card_b, 0);
     G->spacer = lv_obj_create(G->scroll);

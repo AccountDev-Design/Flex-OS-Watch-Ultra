@@ -230,8 +230,10 @@ static void style_roller(lv_obj_t *r, const lv_font_t *font)
     lv_obj_set_style_text_align(r, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_line_space(r, 12, 0);
     lv_obj_set_style_anim_duration(r, 160, 0);
-    lv_obj_set_style_bg_color(r, flex_color(FLEX_C_SURF), LV_PART_SELECTED);
-    lv_obj_set_style_bg_opa(r, LV_OPA_COVER, LV_PART_SELECTED);
+    flex_glass_apply(r, FLEX_GLASS_LENS, LV_PART_SELECTED); /* lente de vidrio sobre la fila elegida */
+    /* Sin borde en la fila elegida: el rodillo calcula dónde centrarla con su
+     * caja, y un borde de 1 px lo dejaba corrigiéndose 2 px sin fin */
+    lv_obj_set_style_border_width(r, 0, LV_PART_SELECTED);
     lv_obj_set_style_radius(r, 12, LV_PART_SELECTED);
     lv_obj_set_style_text_color(r, flex_color(FLEX_C_TXT), LV_PART_SELECTED);
     lv_obj_set_style_text_font(r, font, LV_PART_SELECTED);
@@ -421,7 +423,7 @@ lv_obj_t *ui_timeset_create(lv_obj_t *parent)
     lv_obj_set_style_text_align(t->status, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(t->status, LV_ALIGN_TOP_MID, 0, y_status);
 
-    t->btn = watch_theme_tile(page, (FLEX_SCREEN_W - 200) / 2, y_status + 32, 200, 56);
+    t->btn = flex_glass_tile(page, (FLEX_SCREEN_W - 200) / 2, y_status + 32, 200, 56);
     lv_obj_set_style_radius(t->btn, 28, 0);
     lv_obj_set_style_pad_all(t->btn, 0, 0);
     lv_obj_set_style_bg_color(t->btn, flex_color(FLEX_C_PRIMARY), 0);

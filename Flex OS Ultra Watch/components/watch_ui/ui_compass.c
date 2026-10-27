@@ -262,11 +262,11 @@ static void dial_draw_cb(lv_event_t *e)
             continue;
         }
         snprintf(b, sizeof(b), "%d", v);
-        arc_text(&d, b, FLEX_FONT_S16, C_NUM, (float)v - rot, NUM_R, true);
+        arc_text(&d, b, FLEX_TYPE_FOOTNOTE, C_NUM, (float)v - rot, NUM_R, true);
     }
     static const char *const kCard[4] = {"REF", "90", "180", "270"};
     for (int k = 0; k < 4; k++) {
-        arc_text(&d, kCard[k], FLEX_FONT_S20, FLEX_C_WHITE, (float)(k * 90) - rot, CARD_R, true);
+        arc_text(&d, kCard[k], FLEX_TYPE_LABEL, FLEX_C_WHITE, (float)(k * 90) - rot, CARD_R, true);
     }
 
     /* Anillo naranja (fijo) con sus marcas, puntos y datos reales */
@@ -287,10 +287,10 @@ static void dial_draw_cb(lv_event_t *e)
         }
     }
     const float base_up = RING_IN + 4.0f, base_dn = RING_R - 4.0f;
-    arc_text(&d, p->txt[TXT_TL], FLEX_FONT_S16, C_RING_TXT, -45.0f, base_up, true);
-    arc_text(&d, p->txt[TXT_TR], FLEX_FONT_S16, C_RING_TXT, 45.0f, base_up, true);
-    arc_text(&d, p->txt[TXT_BR], FLEX_FONT_S16, C_RING_TXT, 135.0f, base_dn, false);
-    arc_text(&d, p->txt[TXT_BL], FLEX_FONT_S16, C_RING_TXT, 225.0f, base_dn, false);
+    arc_text(&d, p->txt[TXT_TL], FLEX_TYPE_FOOTNOTE, C_RING_TXT, -45.0f, base_up, true);
+    arc_text(&d, p->txt[TXT_TR], FLEX_TYPE_FOOTNOTE, C_RING_TXT, 45.0f, base_up, true);
+    arc_text(&d, p->txt[TXT_BR], FLEX_TYPE_FOOTNOTE, C_RING_TXT, 135.0f, base_dn, false);
+    arc_text(&d, p->txt[TXT_BL], FLEX_TYPE_FOOTNOTE, C_RING_TXT, 225.0f, base_dn, false);
 
     /* Retícula */
     seg(&d, (float)(d.cx - RING_IN), (float)d.cy, (float)(d.cx + RING_IN), (float)d.cy, 2, C_CROSS, false);
@@ -553,7 +553,7 @@ static lv_obj_t *details_create(lv_obj_t *parent)
     lv_obj_t *list = watch_theme_list(page);
 
     /* Rumbo relativo, incertidumbre y "Fijar referencia" */
-    lv_obj_t *card = watch_theme_tile(list, 0, 0, LV_PCT(100), 190);
+    lv_obj_t *card = flex_glass_tile(list, 0, 0, LV_PCT(100), 190);
     lv_obj_remove_flag(card, LV_OBJ_FLAG_CLICKABLE);
     p->deg = watch_theme_label(card, FLEX_FONT_LARGE, FLEX_C_TXT, "--");
     lv_obj_align(p->deg, LV_ALIGN_TOP_MID, 0, 0);
@@ -562,7 +562,7 @@ static lv_obj_t *details_create(lv_obj_t *parent)
     lv_obj_set_style_text_align(p->unc, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(p->unc, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_align(p->unc, LV_ALIGN_TOP_MID, 0, 62);
-    lv_obj_t *rb = watch_theme_button(card, "Fijar referencia", FLEX_C_PRIMARY, 240, 56);
+    lv_obj_t *rb = flex_glass_button(card, "Fijar referencia", FLEX_C_PRIMARY, 240, 56);
     lv_obj_align(rb, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_add_event_cb(rb, reset_cb, LV_EVENT_CLICKED, NULL);
     para(list, FLEX_FONT_SMALL, FLEX_C_MUTE,
@@ -616,9 +616,9 @@ lv_obj_t *ui_compass_create(lv_obj_t *parent)
     watch_theme_page(page);
 
     /* Rumbo (naranja) y hora, apartados de las esquinas redondeadas */
-    p->heading = watch_theme_label(page, FLEX_FONT_S32, FLEX_CMP_ORANGE, "--° REL");
+    p->heading = watch_theme_label(page, FLEX_TYPE_TITLE, FLEX_CMP_ORANGE, "--° REL");
     lv_obj_set_pos(p->heading, 60, HDR_Y);
-    p->time = watch_theme_label(page, FLEX_FONT_S32, FLEX_C_WHITE, "--:--");
+    p->time = watch_theme_label(page, FLEX_TYPE_TITLE, FLEX_C_WHITE, "--:--");
     lv_obj_set_width(p->time, 150);
     lv_obj_set_style_text_align(p->time, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_pos(p->time, 350 - 150, HDR_Y);

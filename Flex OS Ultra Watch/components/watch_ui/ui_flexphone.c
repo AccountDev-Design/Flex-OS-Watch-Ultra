@@ -122,7 +122,7 @@ static void fmt_rtt(const watch_phone_status_t *s, char *b, size_t n)
 /* Tarjeta de vidrio con columna (alto según el contenido) */
 static lv_obj_t *card_col(lv_obj_t *list, int32_t gap)
 {
-    lv_obj_t *c = watch_theme_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_t *c = flex_glass_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(c, gap, 0);
@@ -151,7 +151,7 @@ static lv_obj_t *notice(lv_obj_t *list, const char *title, uint32_t rgb, const c
 
 static lv_obj_t *full_button(lv_obj_t *list, const char *text, uint32_t rgb, lv_event_cb_t cb, void *ud)
 {
-    lv_obj_t *b = watch_theme_button(list, text, rgb, LV_PCT(100), 60);
+    lv_obj_t *b = flex_glass_button(list, text, rgb, LV_PCT(100), 60);
     if (cb) {
         lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, ud);
     }
@@ -265,7 +265,7 @@ static void build(fp_page_t *p, const watch_phone_status_t *s)
         if (s->pair_user_ok) {
             lv_obj_add_state(p->confirm, LV_STATE_DISABLED);
         }
-        full_button(p->dyn, "Cancelar", FLEX_C_SURF2, cancel_cb, NULL);
+        full_button(p->dyn, "Cancelar", FLEX_GLASS_TINT_NONE, cancel_cb, NULL);
     } else if (s->err[0]) {
         notice(p->dyn, s->link == FLP_LS_ERROR ? "El enlace falló" : "Aviso", s->link == FLP_LS_ERROR ? FLEX_C_ERR
                                                                                                     : FLEX_C_WARN,
@@ -395,8 +395,8 @@ static void find_cb(lv_event_t *e)
     conn_page_t *p = lv_event_get_user_data(e);
     if (watch_phone_find(!p->finding)) {
         p->finding = !p->finding;
-        watch_theme_button_set(p->find, p->finding ? "Parar el sonido" : "Hacer sonar el teléfono",
-                               p->finding ? FLEX_C_DANGER : FLEX_C_SURF2);
+        flex_glass_button_set(p->find, p->finding ? "Parar el sonido" : "Hacer sonar el teléfono",
+                               p->finding ? FLEX_C_DANGER : FLEX_GLASS_TINT_NONE);
     }
 }
 
@@ -407,11 +407,11 @@ static void forget_cb(lv_event_t *e)
     if (p->forget_at && now - p->forget_at < FORGET_MS) {
         p->forget_at = 0;
         watch_phone_forget();
-        watch_theme_button_set(p->forget, "Olvidar el teléfono", FLEX_C_SURF2);
+        flex_glass_button_set(p->forget, "Olvidar el teléfono", FLEX_GLASS_TINT_NONE);
         return;
     }
     p->forget_at = now;
-    watch_theme_button_set(p->forget, "Toca otra vez para olvidar", FLEX_C_DANGER);
+    flex_glass_button_set(p->forget, "Toca otra vez para olvidar", FLEX_C_DANGER);
 }
 
 static void conn_refresh(conn_page_t *p)
@@ -430,8 +430,8 @@ static void conn_refresh(conn_page_t *p)
     } else {
         watch_theme_set_visible(p->err_card, false);
     }
-    watch_theme_button_set(p->toggle, s.enabled ? "Apagar el enlace" : "Activar el enlace",
-                           s.enabled ? FLEX_C_SURF2 : FLEX_C_PRIMARY);
+    flex_glass_button_set(p->toggle, s.enabled ? "Apagar el enlace" : "Activar el enlace",
+                           s.enabled ? FLEX_GLASS_TINT_NONE : FLEX_C_PRIMARY);
     const bool can_find = s.link == FLP_LS_READY && s.caps.valid && (s.caps.granted & FLP_CAP_FIND);
     if (can_find) {
         lv_obj_remove_state(p->find, LV_STATE_DISABLED);
@@ -439,12 +439,12 @@ static void conn_refresh(conn_page_t *p)
         lv_obj_add_state(p->find, LV_STATE_DISABLED);
         if (p->finding) {
             p->finding = false;
-            watch_theme_button_set(p->find, "Hacer sonar el teléfono", FLEX_C_SURF2);
+            flex_glass_button_set(p->find, "Hacer sonar el teléfono", FLEX_GLASS_TINT_NONE);
         }
     }
     if (p->forget_at && lv_tick_get() - p->forget_at >= FORGET_MS) {
         p->forget_at = 0;
-        watch_theme_button_set(p->forget, "Olvidar el teléfono", FLEX_C_SURF2);
+        flex_glass_button_set(p->forget, "Olvidar el teléfono", FLEX_GLASS_TINT_NONE);
     }
     if (s.bonded) {
         lv_obj_remove_state(p->forget, LV_STATE_DISABLED);
@@ -478,8 +478,8 @@ lv_obj_t *ui_phone_conn_create(lv_obj_t *parent)
     p->err_card = notice(list, "Último error", FLEX_C_WARN, "", &p->err);
 
     p->toggle = full_button(list, "", FLEX_C_PRIMARY, toggle_cb, NULL);
-    p->find = full_button(list, "Hacer sonar el teléfono", FLEX_C_SURF2, find_cb, p);
-    p->forget = full_button(list, "Olvidar el teléfono", FLEX_C_SURF2, forget_cb, p);
+    p->find = full_button(list, "Hacer sonar el teléfono", FLEX_GLASS_TINT_NONE, find_cb, p);
+    p->forget = full_button(list, "Olvidar el teléfono", FLEX_GLASS_TINT_NONE, forget_cb, p);
 
     notice(list, "Cómo se conecta", FLEX_C_TXT,
            "El reloj busca por Bluetooth LE el servicio de la app Flex Phone y se conecta solo. La primera vez el "
@@ -673,8 +673,8 @@ static void relay_refresh(relay_page_t *p)
     const uint8_t key = s.link != FLP_LS_READY ? 0xFE : up ? 1 : 0;
     if (key != p->shown) {
         p->shown = key;
-        watch_theme_button_set(p->toggle, up ? "Parar el servidor del teléfono" : "Encender el servidor del teléfono",
-                               up ? FLEX_C_SURF2 : FLEX_C_PRIMARY);
+        flex_glass_button_set(p->toggle, up ? "Parar el servidor del teléfono" : "Encender el servidor del teléfono",
+                               up ? FLEX_GLASS_TINT_NONE : FLEX_C_PRIMARY);
         if (s.link == FLP_LS_READY) {
             lv_obj_remove_state(p->toggle, LV_STATE_DISABLED);
         } else {
@@ -711,7 +711,7 @@ lv_obj_t *ui_phone_relay_create(lv_obj_t *parent)
     p->src = watch_theme_info_row(list, "Origen del navegador", "");
     p->why_card = notice(list, "Motivo", FLEX_C_WARN, "", &p->why);
     p->toggle = full_button(list, "", FLEX_C_PRIMARY, relay_toggle_cb, p);
-    p->open = full_button(list, "Abrir el navegador", FLEX_C_SURF2, open_cb, (void *)ui_browser_create);
+    p->open = full_button(list, "Abrir el navegador", FLEX_GLASS_TINT_NONE, open_cb, (void *)ui_browser_create);
 
     notice(list, "Cómo funciona", FLEX_C_TXT,
            "Al abrir el navegador con el origen en Automático o Flex Phone, el reloj pide al teléfono por "

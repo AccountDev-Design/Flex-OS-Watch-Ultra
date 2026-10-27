@@ -43,7 +43,7 @@ static lv_obj_t *center_icon(void)
     lv_obj_t *best = NULL;
     int32_t bd = INT32_MAX;
     lv_obj_t *d = ui_nav_top();
-    lv_obj_t *grid = lv_obj_get_child(d, 1);
+    lv_obj_t *grid = lv_obj_get_child(d, 0);
     for (uint32_t i = 0; grid && i < lv_obj_get_child_count(grid); i++) {
         lv_obj_t *o = lv_obj_get_child(grid, (int32_t)i);
         if (!lv_obj_check_type(o, &lv_image_class) || lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) {
@@ -87,8 +87,7 @@ void sim_suite_grid(const char *out)
     sim_scenario(90, 4100, BATT_STATE_DISCHARGING, BATT_LEVEL_NORMAL, false);
     ui_apps_reset_view();
     set_wall(FLEX_WALL_AURORA);
-    sim_run(1500); /* la esfera prepara el fondo desenfocado con calma */
-    EXPECT(watch_theme_blur_get() != NULL, "la esfera no preparo el fondo desenfocado del cajon");
+    sim_run(600);
     const uint32_t blocks0 = sim_mem_blocks();
     const int timers0 = sim_timer_count();
 
@@ -96,17 +95,30 @@ void sim_suite_grid(const char *out)
     sim_drag(205, 150, 206, 330, 8, 16);
     EXPECT(ui_nav_busy() && ui_nav_depth() == 2, "el cajon no baja siguiendo al dedo");
     lv_obj_t *drawer = ui_nav_top();
-    EXPECT(drawer && lv_obj_get_y(drawer) > -FLEX_SCREEN_H + 120 && lv_obj_get_y(drawer) < -FLEX_SCREEN_H + 230,
-           "cajon en y = %d durante el arrastre", drawer ? (int)lv_obj_get_y(drawer) : 0);
+    /* Transición continua: la página (y con ella cualquier fondo) no se
+     * mueve; solo la rejilla sigue al dedo, sobre un velo a medias encima de
+     * la esfera, que sigue quieta y visible. */
+    lv_obj_t *grid = drawer ? lv_obj_get_child(drawer, 0) : NULL;
+    EXPECT(grid && lv_obj_get_y(grid) > -FLEX_SCREEN_H + 120 && lv_obj_get_y(grid) < -FLEX_SCREEN_H + 230,
+           "rejilla en y = %d durante el arrastre", grid ? (int)lv_obj_get_y(grid) : 0);
+    EXPECT(drawer && lv_obj_get_y(drawer) == 0 && lv_obj_get_x(drawer) == 0, "la pagina del cajon se desplaza entera");
+    const lv_opa_t veil = drawer ? lv_obj_get_style_bg_opa(drawer, 0) : 0;
+    EXPECT(veil > LV_OPA_10 && veil < LV_OPA_80, "velo del cajon a %d durante el arrastre", (int)veil);
+    EXPECT(!lv_obj_has_flag(ui_nav_page(0), LV_OBJ_FLAG_HIDDEN) && lv_obj_get_y(ui_nav_page(0)) == 0,
+           "la esfera no se queda quieta y visible bajo el cajon");
     sim_save(out, "rd_cajon_abriendo");
     sim_release();
     sim_run(500);
     EXPECT(ui_nav_depth() == 2 && !ui_nav_busy() && ui_apps_find(ui_nav_top(), "Reloj"),
            "deslizar hacia abajo desde el centro no abrio el cajon");
     drawer = ui_nav_top();
-    lv_obj_t *bg = lv_obj_get_child(drawer, 0);
-    EXPECT(bg && lv_image_get_src(bg) == watch_theme_blur_get() && !lv_obj_has_flag(bg, LV_OBJ_FLAG_HIDDEN),
-           "el cajon no usa el fondo desenfocado");
+    EXPECT(lv_obj_get_style_bg_opa(drawer, 0) == LV_OPA_COVER && lv_obj_get_y(lv_obj_get_child(drawer, 0)) == 0,
+           "el cajon abierto no queda opaco y en su sitio");
+    EXPECT(lv_obj_has_flag(ui_nav_page(0), LV_OBJ_FLAG_HIDDEN), "la esfera se sigue dibujando bajo el cajon");
+    for (uint32_t k = 0; k < lv_obj_get_child_count(drawer); k++) {
+        EXPECT(!lv_obj_check_type(lv_obj_get_child(drawer, (int32_t)k), &lv_image_class),
+               "el cajon lleva una imagen de fondo");
+    }
     EXPECT(!ui_apps_moving(drawer), "la rejilla se mueve en reposo");
     lv_obj_t *c = center_icon();
     EXPECT(c && lv_image_get_scale(c) == 256, "el icono central no esta a su tamano nativo (%d)",
@@ -269,12 +281,12 @@ void sim_suite_grid(const char *out)
     /* ---- Fondo negro AMOLED: el cajón va sobre negro ---- */
     set_wall(FLEX_WALL_BLACK);
     sim_run(400);
-    EXPECT(!watch_theme_has_background() && !watch_theme_blur_get(), "con el negro queda un fondo");
+    EXPECT(!watch_theme_has_background(), "con el negro queda un fondo");
     ui_nav_drag_open_begin_dir(ui_apps_create, true);
     ui_nav_drag_open_end(true, FLEX_SCREEN_H);
     sim_run(500);
-    bg = lv_obj_get_child(ui_nav_top(), 0);
-    EXPECT(bg && lv_obj_has_flag(bg, LV_OBJ_FLAG_HIDDEN), "con fondo negro el cajon muestra una imagen");
+    EXPECT(ui_nav_depth() == 2 && lv_obj_get_style_bg_opa(ui_nav_top(), 0) == LV_OPA_COVER,
+           "con fondo negro el cajon no se abre");
     sim_save(out, "rd_cajon_negro");
     ui_nav_home();
     sim_run(500);

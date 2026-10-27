@@ -176,7 +176,7 @@ void sim_suite_settings(const char *out)
     /* Rediseño 2026-10: la página nueva resume la memoria; sin LittleFS lo dice
      * y no inventa categorías. Las pruebas y el formateo siguen en "Detalles". */
     EXPECT(sim_find_label(ui_nav_top(), "Datos sin montar"), "almacenamiento: no dice que los datos no estan montados");
-    lv_obj_t *bdet = sim_find_label(ui_nav_top(), "Detalles de memoria\ny sistema");
+    lv_obj_t *bdet = sim_find_label(ui_nav_top(), "Memoria y sistema");
     while (bdet && !lv_obj_has_flag(bdet, LV_OBJ_FLAG_CLICKABLE)) {
         bdet = lv_obj_get_parent(bdet);
     }

@@ -30,7 +30,7 @@
 
 static lv_obj_t *card_col(lv_obj_t *list, int32_t gap)
 {
-    lv_obj_t *c = watch_theme_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_t *c = flex_glass_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(c, gap, 0);
@@ -153,12 +153,12 @@ static void build_page(ota_page_t *p, const watch_ota_status_t *s)
         lv_obj_t *l = para(p->list, FLEX_FONT_BODY, FLEX_C_ACCENT, st);
         lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
     } else if (upd) {
-        lv_obj_t *bt = watch_theme_button(p->list, "Actualizar ahora", FLEX_C_PRIMARY, LV_PCT(100), 60);
+        lv_obj_t *bt = flex_glass_button(p->list, "Actualizar ahora", FLEX_C_PRIMARY, LV_PCT(100), 60);
         lv_obj_add_event_cb(bt, install_cb, LV_EVENT_CLICKED, NULL);
-        bt = watch_theme_button(p->list, "Buscar de nuevo", FLEX_C_SURF2, LV_PCT(100), 60);
+        bt = flex_glass_button(p->list, "Buscar de nuevo", FLEX_GLASS_TINT_NONE, LV_PCT(100), 60);
         lv_obj_add_event_cb(bt, check_cb, LV_EVENT_CLICKED, NULL);
     } else {
-        lv_obj_t *bt = watch_theme_button(p->list, "Buscar actualización", FLEX_C_PRIMARY, LV_PCT(100), 60);
+        lv_obj_t *bt = flex_glass_button(p->list, "Buscar actualización", FLEX_C_PRIMARY, LV_PCT(100), 60);
         lv_obj_add_event_cb(bt, check_cb, LV_EVENT_CLICKED, NULL);
     }
 
@@ -364,10 +364,10 @@ lv_obj_t *ui_ota_install_create(lv_obj_t *parent)
     in->err_foot = center_label(page, FLEX_FONT_SMALL, FLEX_C_TXT2, 300);
     lv_label_set_text(in->err_foot, "El reloj no se ha modificado.");
 
-    in->cancel = watch_theme_button(page, "Cancelar", FLEX_C_SURF2, BTN_W, BTN_H);
+    in->cancel = flex_glass_button(page, "Cancelar", FLEX_GLASS_TINT_NONE, BTN_W, BTN_H);
     lv_obj_set_pos(in->cancel, (FLEX_SCREEN_W - BTN_W) / 2, BTN_Y);
     lv_obj_add_event_cb(in->cancel, cancel_cb, LV_EVENT_CLICKED, NULL);
-    in->ok = watch_theme_button(page, "Entendido", FLEX_C_PRIMARY, BTN_W, BTN_H);
+    in->ok = flex_glass_button(page, "Entendido", FLEX_C_PRIMARY, BTN_W, BTN_H);
     lv_obj_set_pos(in->ok, (FLEX_SCREEN_W - BTN_W) / 2, BTN_Y);
     lv_obj_add_event_cb(in->ok, back_cb, LV_EVENT_CLICKED, NULL);
     in->reboot = center_label(page, FLEX_FONT_SMALL, FLEX_C_TXT2, BTN_Y + 16);

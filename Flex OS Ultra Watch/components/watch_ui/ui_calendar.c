@@ -170,7 +170,7 @@ static void free_cb(lv_event_t *e)
 
 static lv_obj_t *nav_btn(lv_obj_t *page, cal_page_t *p, flex_icon_t icon, int32_t x, lv_event_cb_t cb)
 {
-    lv_obj_t *b = watch_theme_glass_button(page, x, MONTH_Y, 64, MONTH_H);
+    lv_obj_t *b = flex_glass_control(page, x, MONTH_Y, 64, MONTH_H);
     lv_obj_set_style_radius(b, MONTH_H / 2, 0);
     lv_obj_t *ic = flex_icon_create(b, icon, 20, FLEX_C_TXT);
     lv_obj_center(ic);

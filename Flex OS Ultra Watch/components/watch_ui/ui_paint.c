@@ -188,7 +188,7 @@ static void build(pg_page_t *p)
         ui_fs_notice(p->list, "Paint", why);
         return;
     }
-    lv_obj_t *nb = watch_theme_button(p->list, "Nuevo dibujo", FLEX_C_PRIMARY, LV_PCT(100), 60);
+    lv_obj_t *nb = flex_glass_button(p->list, "Nuevo dibujo", FLEX_C_PRIMARY, LV_PCT(100), 60);
     lv_obj_add_event_cb(nb, new_cb, LV_EVENT_CLICKED, NULL);
     ffs_entry_t *e = lv_malloc(sizeof(ffs_entry_t) * FFS_LIST_MAX);
     LV_ASSERT_MALLOC(e);
@@ -207,7 +207,7 @@ static void build(pg_page_t *p)
             continue;
         }
         const bool valid = fxp_info(path, &in);
-        lv_obj_t *c = watch_theme_tile(p->list, 0, 0, LV_PCT(100), THUMB_H + 24);
+        lv_obj_t *c = flex_glass_tile(p->list, 0, 0, LV_PCT(100), THUMB_H + 24);
         if (p->thumbs) {
             lv_obj_t *cv = lv_canvas_create(c);
             lv_canvas_set_buffer(cv, p->thumbs + (size_t)shown * THUMB_W * THUMB_H, THUMB_W, THUMB_H,
@@ -431,7 +431,7 @@ static void clear_cb(lv_event_t *e)
     const uint32_t now = lv_tick_get();
     if (p->clear_at && now - p->clear_at < CONFIRM_MS) {
         p->clear_at = 0;
-        watch_theme_button_set(p->clear, "Limpiar", FLEX_C_DANGER);
+        flex_glass_button_set(p->clear, "Limpiar", FLEX_C_DANGER);
         if (fxp_clear(p->path)) {
             ui_files_changed();
         }
@@ -439,7 +439,7 @@ static void clear_cb(lv_event_t *e)
         return;
     }
     p->clear_at = now;
-    watch_theme_button_set(p->clear, "¿Seguro?", FLEX_C_DANGER);
+    flex_glass_button_set(p->clear, "¿Seguro?", FLEX_C_DANGER);
 }
 
 static void pc_tick_cb(lv_timer_t *t)
@@ -447,7 +447,7 @@ static void pc_tick_cb(lv_timer_t *t)
     pc_page_t *p = lv_timer_get_user_data(t);
     if (p->clear_at && lv_tick_get() - p->clear_at >= CONFIRM_MS) {
         p->clear_at = 0;
-        watch_theme_button_set(p->clear, "Limpiar", FLEX_C_DANGER);
+        flex_glass_button_set(p->clear, "Limpiar", FLEX_C_DANGER);
     }
 }
 
@@ -520,7 +520,7 @@ lv_obj_t *ui_paint_canvas_create(lv_obj_t *parent)
         lv_obj_add_event_cb(s, swatch_cb, LV_EVENT_CLICKED, p);
         p->swatch[i] = s;
     }
-    p->size_btn = watch_theme_glass_button(page, x0 + 6 * (SWATCH + 8) + 4, TOOLS_Y1 - 4, 56, SWATCH + 8);
+    p->size_btn = flex_glass_control(page, x0 + 6 * (SWATCH + 8) + 4, TOOLS_Y1 - 4, 56, SWATCH + 8);
     p->size_dot = lv_obj_create(p->size_btn);
     lv_obj_remove_style_all(p->size_dot);
     lv_obj_set_style_radius(p->size_dot, LV_RADIUS_CIRCLE, 0);
@@ -530,10 +530,10 @@ lv_obj_t *ui_paint_canvas_create(lv_obj_t *parent)
     lv_obj_set_size(p->size_dot, 2 * kSizes[p->size], 2 * kSizes[p->size]);
     lv_obj_center(p->size_dot);
     lv_obj_add_event_cb(p->size_btn, size_cb, LV_EVENT_CLICKED, p);
-    lv_obj_t *u = watch_theme_button(page, "Deshacer", FLEX_C_SURF2, 150, 44);
+    lv_obj_t *u = flex_glass_button(page, "Deshacer", FLEX_GLASS_TINT_NONE, 150, 44);
     lv_obj_set_pos(u, FLEX_SCREEN_W / 2 - 156, TOOLS_Y2);
     lv_obj_add_event_cb(u, undo_cb, LV_EVENT_CLICKED, p);
-    p->clear = watch_theme_button(page, "Limpiar", FLEX_C_DANGER, 150, 44);
+    p->clear = flex_glass_button(page, "Limpiar", FLEX_C_DANGER, 150, 44);
     lv_obj_set_pos(p->clear, FLEX_SCREEN_W / 2 + 6, TOOLS_Y2);
     lv_obj_add_event_cb(p->clear, clear_cb, LV_EVENT_CLICKED, p);
     ui_page_timer(page, pc_tick_cb, 500, p);

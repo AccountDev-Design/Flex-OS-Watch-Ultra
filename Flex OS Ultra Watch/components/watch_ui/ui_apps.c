@@ -1,6 +1,6 @@
 /*
  * ui_apps — cajón de aplicaciones ("Grid View"): panal infinito con efecto
- * lupa que sigue al dedo, sobre el fondo de la esfera desenfocado.
+ * lupa que sigue al dedo, sobre negro AMOLED.
  *
  * Referencia de COMPORTAMIENTO: el panal de Apple Watch (desplazamiento libre
  * en todas las direcciones, iconos grandes cerca del foco y pequeños hacia los
@@ -24,10 +24,14 @@
  *    se movió más de UI_DRAG_SLOP_PX (un arrastre nunca abre nada, y que el
  *    icono crezca después con la lupa no cambia la elección). Pulsar fuera de
  *    un icono no abre nada.
- *  - Fondo: el de la esfera activa desenfocado (watch_theme_blur_*, una copia
- *    en PSRAM que se genera por partes y se reutiliza). Mientras se genera el
- *    cajón va sobre negro y la imagen entra con un fundido; con la esfera en
- *    negro AMOLED, negro.
+ *  - Fondo: negro AMOLED en reposo. Al abrirse o cerrarse siguiendo al dedo
+ *    (ui_nav), la página NO se desplaza: la esfera de debajo se queda quieta y
+ *    la página la va cubriendo con un velo negro cuya opacidad sigue al
+ *    recorrido, mientras solo la rejilla de iconos se mueve con el dedo
+ *    (ui_apps_transition). Antes la página llevaba dentro una copia
+ *    desenfocada del fondo de pantalla (402 KB en PSRAM generados por partes)
+ *    y la arrastraba entera: dos fondos moviéndose a la vez, un fundido extra
+ *    al terminar de generarse y trabajo de CPU durante el gesto.
  *
  * Abrir una app la retoma si estaba suspendida (se salió con el gesto hacia
  * arriba) con su estado; si no, la abre nueva (ui_nav_open_app). Solo aparecen
@@ -44,9 +48,6 @@
 
 #define APPS_TICK_MS 500
 #define FRAME_MS     16
-#define BLUR_MS      12
-#define BLUR_ROWS    48
-#define BLUR_FADE_MS 160
 #define ICON_D       FLEX_APP_ICON_SIZE        /* 92 */
 #define BADGE_D      18                        /* punto de estado: 7 px a 72 en la referencia */
 #define HIT_MARGIN   6                         /* px alrededor del círculo que cuentan como toque */
@@ -114,12 +115,10 @@ typedef struct {
 
 typedef struct {
     lv_obj_t *page;
-    lv_obj_t *bg;
     lv_obj_t *grid;
     lv_obj_t *badge;
     cell_t cells[GRID_MAX_ITEMS];
     lv_timer_t *frame;
-    lv_timer_t *blur;
     grid_vec_t off, vel;     /* desplazamiento de la rejilla y su velocidad */
     grid_vec_t lens, lens_v; /* punto de la lupa y su velocidad */
     grid_vec_t press_pt, last_pt;
@@ -403,34 +402,6 @@ static void touch_cb(lv_event_t *e)
     }
 }
 
-static void bg_opa_cb(void *obj, int32_t v)
-{
-    lv_obj_set_style_image_opa(obj, (lv_opa_t)v, 0);
-}
-
-static void blur_cb(lv_timer_t *t)
-{
-    grid_t *g = lv_timer_get_user_data(t);
-    if (!watch_theme_blur_step(BLUR_ROWS)) {
-        return;
-    }
-    const lv_image_dsc_t *d = watch_theme_blur_get();
-    if (d) {
-        lv_image_set_src(g->bg, d);
-        lv_obj_set_style_image_opa(g->bg, LV_OPA_TRANSP, 0);
-        watch_theme_set_visible(g->bg, true);
-        lv_anim_t a;
-        lv_anim_init(&a);
-        lv_anim_set_var(&a, g->bg);
-        lv_anim_set_exec_cb(&a, bg_opa_cb);
-        lv_anim_set_values(&a, LV_OPA_TRANSP, LV_OPA_COVER);
-        lv_anim_set_duration(&a, BLUR_FADE_MS);
-        lv_anim_start(&a); /* ligada a la imagen: LVGL la borra con ella */
-    }
-    lv_timer_delete(t);
-    g->blur = NULL;
-}
-
 static void tick_cb(lv_timer_t *t)
 {
     place_badge(lv_timer_get_user_data(t));
@@ -440,10 +411,6 @@ static void delete_cb(lv_event_t *e)
 {
     grid_t *g = lv_event_get_user_data(e);
     lv_timer_delete(g->frame);
-    if (g->blur) {
-        lv_timer_delete(g->blur);
-    }
-    watch_theme_blur_hold(false);
     lv_free(g);
 }
 
@@ -460,21 +427,6 @@ lv_obj_t *ui_apps_create(lv_obj_t *parent)
     g->hit_app = -1;
     g->off = s_last_off;
     g->lens = kCenter;
-
-    /* Fondo de la esfera desenfocado (o negro mientras se genera / sin fondo) */
-    watch_theme_blur_hold(true);
-    g->bg = lv_image_create(page);
-    lv_obj_set_pos(g->bg, 0, 0);
-    lv_obj_remove_flag(g->bg, LV_OBJ_FLAG_CLICKABLE);
-    const lv_image_dsc_t *blur = watch_theme_blur_get();
-    if (blur) {
-        lv_image_set_src(g->bg, blur);
-    } else {
-        lv_obj_add_flag(g->bg, LV_OBJ_FLAG_HIDDEN);
-        if (watch_theme_has_background()) {
-            g->blur = lv_timer_create(blur_cb, BLUR_MS, g); /* se borra solo al terminar o con la página */
-        }
-    }
 
     /* Rejilla a pantalla completa (sin cabecera): se sale con los gestos de borde. */
     lv_obj_t *grid = lv_obj_create(page);
@@ -513,11 +465,26 @@ lv_obj_t *ui_apps_create(lv_obj_t *parent)
 
 static grid_t *grid_of(lv_obj_t *drawer)
 {
-    if (!drawer || lv_obj_get_child_count(drawer) < 2) {
-        return NULL;
-    }
-    grid_t *g = lv_obj_get_user_data(drawer);
+    grid_t *g = drawer ? lv_obj_get_user_data(drawer) : NULL;
     return (g && g->page == drawer) ? g : NULL;
+}
+
+void ui_apps_transition(lv_obj_t *drawer, int32_t offset)
+{
+    grid_t *g = grid_of(drawer);
+    if (!g) {
+        return;
+    }
+    const int32_t d = LV_CLAMP(0, LV_ABS(offset), FLEX_SCREEN_H);
+    /* Velo: transparente con el cajón fuera y opaco (el negro de reposo) con
+     * el cajón en su sitio. Solo se toca lo que cambia. */
+    const lv_opa_t opa = (lv_opa_t)(LV_OPA_COVER * (FLEX_SCREEN_H - d) / FLEX_SCREEN_H);
+    if (lv_obj_get_style_bg_opa(drawer, LV_PART_MAIN) != opa) {
+        lv_obj_set_style_bg_opa(drawer, opa, 0);
+    }
+    if (lv_obj_get_y(g->grid) != offset) {
+        lv_obj_set_y(g->grid, offset);
+    }
 }
 
 lv_obj_t *ui_apps_find(lv_obj_t *drawer, const char *name)

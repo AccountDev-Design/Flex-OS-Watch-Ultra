@@ -235,7 +235,8 @@ static void suite_storage(const char *out)
     EXPECT(sim_stg.usage_gen == 1, "almacenamiento: no pidio el recuento por categorias (o lo pidio %u veces)",
            (unsigned)sim_stg.usage_gen);
     shot(out, "rd_almacenamiento");
-    /* Optimizar: sin cachés no hay nada que liberar; con el fondo desenfocado, sí */
+    /* Optimizar: sin cachés no hay nada que liberar; con el fondo de una vista
+     * previa del selector de esferas guardado, sí */
     EXPECT(tap_text("Optimizar"), "almacenamiento: no hay Optimizar");
     sim_run(300);
     EXPECT(ui_banner_active(), "Optimizar no dice nada");
@@ -248,16 +249,21 @@ static void suite_storage(const char *out)
     watch_settings_update(&ws);
     watch_theme_set_wallpaper(FLEX_WALL_AURORA);
     ui_nav_replace_root(ui_face_create);
-    sim_run(1500);
-    EXPECT(watch_theme_blur_get() != NULL, "almacenamiento: no hay fondo desenfocado que liberar");
+    sim_run(600);
+    /* Una vista previa con su propio fondo deja el segundo búfer guardado */
+    watch_theme_preview_begin();
+    lv_obj_t *tmp = ui_face_create_style(lv_layer_top(), UI_FACE_MONTANA, false);
+    watch_theme_preview_end();
+    lv_obj_delete(tmp);
     ui_nav_push(ui_storage_create);
     sim_run(600);
     EXPECT(tap_text("Optimizar"), "almacenamiento: no hay Optimizar");
     sim_run(300);
-    EXPECT(watch_theme_blur_get() == NULL, "Optimizar no solto el fondo desenfocado");
+    EXPECT(watch_theme_release_caches() == 0, "Optimizar no solto el fondo de la vista previa");
+    EXPECT(sim_find_label_prefix(lv_layer_top(), "Liberados"), "Optimizar no dice cuanto libero");
     sim_run(4000);
     /* La tarjeta abre los detalles (pruebas y formateo siguen ahí) */
-    EXPECT(tap_text("Detalles de memoria\ny sistema"), "almacenamiento: la tarjeta no se puede tocar");
+    EXPECT(tap_text("Memoria y sistema"), "almacenamiento: la tarjeta no se puede tocar");
     EXPECT(sim_find_label(ui_nav_top(), "Detalles") && sim_find_label(ui_nav_top(), "Probar escritura"),
            "almacenamiento: no abre los detalles");
     ui_nav_back();

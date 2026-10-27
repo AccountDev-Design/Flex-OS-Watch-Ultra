@@ -52,8 +52,9 @@ static void save(const alarm_set_t *set)
 #define HEAD_H   40
 #define SW_W     75
 #define SW_H     35
-#define ADD_W    104
-#define ADD_H    36
+#define ADD_W    112
+#define ADD_H    38
+#define CARD_R   28
 
 typedef struct {
     lv_obj_t *list;
@@ -96,24 +97,26 @@ static void alarm_time_text(const alarm_t *a, char *t, size_t tn, char *ampm, si
 
 static lv_obj_t *alarm_card(alp_t *p, int i, const alarm_t *a, int32_t y)
 {
-    lv_obj_t *c = watch_theme_lg_button(p->list, FLEX_LG_DARK, CARD_X, y, CARD_W, CARD_H, CARD_H / 2,
-                                        FLEX_GLOW_TOP);
+    /* Tarjeta de contenido (material discreto del motor): la hora es lo que
+     * importa; el tamaño da el énfasis, no el grosor. */
+    lv_obj_t *c = flex_glass_panel(p->list, FLEX_GLASS_CARD, CARD_X, y, CARD_W, CARD_H, CARD_R);
+    flex_glass_interactive(c);
     lv_obj_add_event_cb(c, open_edit_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
-    const uint32_t col = a->on ? FLEX_C_WHITE : FLEX_RD_ALARM_OFF;
+    const uint32_t col = a->on ? FLEX_GLASS_TXT : FLEX_GLASS_TXT_OFF;
     char t[16], ampm[8], d[32];
     alarm_time_text(a, t, sizeof(t), ampm, sizeof(ampm));
-    lv_obj_t *tl = watch_theme_label(c, FLEX_FONT_S40, col, t);
-    lv_obj_set_pos(tl, 36, 14);
+    lv_obj_t *tl = watch_theme_label(c, FLEX_TYPE_NUMBER, col, t);
+    lv_obj_set_pos(tl, 26, 8);
     if (ampm[0]) {
-        lv_obj_t *al = watch_theme_label(c, FLEX_FONT_S40, col, ampm);
+        lv_obj_t *al = watch_theme_label(c, FLEX_TYPE_CAPTION, a->on ? FLEX_GLASS_TXT2 : FLEX_GLASS_TXT_OFF, ampm);
         lv_obj_update_layout(tl);
-        lv_obj_align_to(al, tl, LV_ALIGN_OUT_RIGHT_BOTTOM, 8, 0);
+        lv_obj_align_to(al, tl, LV_ALIGN_OUT_RIGHT_BOTTOM, 6, -6);
     }
     alarm_days_text(a->days, d, sizeof(d));
-    lv_obj_t *dl = watch_theme_label(c, FLEX_FONT_S16, a->on ? FLEX_RD_ALARM_SUB : FLEX_RD_ALARM_OFF,
+    lv_obj_t *dl = watch_theme_label(c, FLEX_TYPE_CAPTION, a->on ? FLEX_GLASS_TXT2 : FLEX_GLASS_TXT_OFF,
                                      strcmp(d, "Todos los días") == 0 ? "Diariamente" : d);
-    lv_obj_set_pos(dl, 40, 58);
-    lv_obj_t *sw = watch_theme_switch(c, SW_W, SW_H);
+    lv_obj_set_pos(dl, 28, 58);
+    lv_obj_t *sw = flex_glass_switch(c, SW_W, SW_H);
     lv_obj_align(sw, LV_ALIGN_RIGHT_MID, -24, 0);
     if (a->on) {
         lv_obj_add_state(sw, LV_STATE_CHECKED);
@@ -127,19 +130,20 @@ static void build_list(alp_t *p)
     lv_obj_clean(p->list);
     const alarm_set_t *set = ui_alarms();
     /* Cabecera: la próxima alarma y "+" */
-    p->next = watch_theme_label(p->list, FLEX_FONT_S16, FLEX_C_TXT2, "");
+    p->next = watch_theme_label(p->list, FLEX_TYPE_CAPTION, FLEX_GLASS_TXT2, "");
     lv_obj_set_width(p->next, CARD_W - ADD_W - 24);
     lv_label_set_long_mode(p->next, LV_LABEL_LONG_MODE_DOTS);
-    lv_obj_set_pos(p->next, CARD_X + 14, (HEAD_H - lv_font_get_line_height(FLEX_FONT_S16)) / 2);
+    lv_obj_set_pos(p->next, CARD_X + 14, (HEAD_H - lv_font_get_line_height(FLEX_TYPE_CAPTION)) / 2);
     p->next_key = INT64_MIN;
     if (set->n < AL_MAX) {
-        lv_obj_t *add = watch_theme_lg_button(p->list, FLEX_LG_DARK, CARD_X + CARD_W - ADD_W, (HEAD_H - ADD_H) / 2,
-                                              ADD_W, ADD_H, ADD_H / 2, FLEX_GLOW_NONE);
+        lv_obj_t *add = flex_glass_panel(p->list, FLEX_GLASS_CONTROL, CARD_X + CARD_W - ADD_W, (HEAD_H - ADD_H) / 2,
+                                         ADD_W, ADD_H, LV_RADIUS_CIRCLE);
+        flex_glass_interactive(add);
         lv_obj_set_ext_click_area(add, 12);
-        lv_obj_t *plus = flex_icon_create(add, FLEX_ICON_PLUS, 16, FLEX_C_WHITE);
-        lv_obj_align(plus, LV_ALIGN_LEFT_MID, 12, 0);
-        lv_obj_t *t = watch_theme_label(add, FLEX_FONT_S16, FLEX_C_WHITE, "Añadir");
-        lv_obj_align(t, LV_ALIGN_LEFT_MID, 34, 1);
+        lv_obj_t *plus = flex_icon_create(add, FLEX_ICON_PLUS, 16, FLEX_GLASS_TXT);
+        lv_obj_align(plus, LV_ALIGN_LEFT_MID, 13, 0);
+        lv_obj_t *t = watch_theme_label(add, FLEX_TYPE_LABEL, FLEX_GLASS_TXT, "Añadir");
+        lv_obj_align(t, LV_ALIGN_LEFT_MID, 36, 0);
         lv_obj_add_event_cb(add, open_edit_cb, LV_EVENT_CLICKED, (void *)(intptr_t)-1);
     }
     int32_t y = HEAD_H + 8;
@@ -148,7 +152,7 @@ static void build_list(alp_t *p)
         y += CARD_H + CARD_GAP;
     }
     if (set->n == 0) {
-        lv_obj_t *e = watch_theme_label(p->list, FLEX_FONT_S22, FLEX_C_TXT2, "Sin alarmas");
+        lv_obj_t *e = watch_theme_label(p->list, FLEX_TYPE_BODY, FLEX_GLASS_TXT2, "Sin alarmas");
         lv_obj_align(e, LV_ALIGN_TOP_MID, 0, y + 40);
         y += 80;
     }
@@ -239,9 +243,9 @@ static void paint_chips(ale_t *p)
 {
     for (int k = 0; k < 7; k++) {
         const bool on = p->a.days & (1u << DAY_ORDER[k]);
-        watch_theme_button_set(p->chips[k], NULL, on ? FLEX_C_PRIMARY : FLEX_C_SURF);
+        flex_glass_button_set(p->chips[k], NULL, on ? FLEX_C_PRIMARY : FLEX_GLASS_TINT_NONE);
     }
-    watch_theme_button_set(p->active, p->a.on ? "Activa" : "Desactivada", p->a.on ? FLEX_C_OK : FLEX_C_SURF2);
+    flex_glass_button_set(p->active, p->a.on ? "Activa" : "Desactivada", p->a.on ? FLEX_C_OK : FLEX_GLASS_TINT_NONE);
 }
 
 static void chip_cb(lv_event_t *e)
@@ -324,7 +328,7 @@ lv_obj_t *ui_alarm_edit_create(lv_obj_t *parent)
     /* Días: L M X J V S D (ninguno = una sola vez) */
     const int32_t gap = 6, cw = 7 * CHIP + 6 * gap, cy = y + hr + 12;
     for (int k = 0; k < 7; k++) {
-        lv_obj_t *c = watch_theme_button(page, DAY_L[DAY_ORDER[k]], FLEX_C_SURF, CHIP, CHIP);
+        lv_obj_t *c = flex_glass_button(page, DAY_L[DAY_ORDER[k]], FLEX_GLASS_TINT_NONE, CHIP, CHIP);
         lv_obj_set_pos(c, (FLEX_SCREEN_W - cw) / 2 + k * (CHIP + gap), cy);
         lv_obj_set_user_data(c, p);
         lv_obj_add_event_cb(c, chip_cb, LV_EVENT_CLICKED, (void *)(intptr_t)DAY_ORDER[k]);
@@ -332,15 +336,15 @@ lv_obj_t *ui_alarm_edit_create(lv_obj_t *parent)
     }
     lv_obj_t *hint = watch_theme_label(page, FLEX_FONT_SMALL, FLEX_C_MUTE, "Sin días: suena una sola vez");
     lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, cy + CHIP + 6);
-    p->active = watch_theme_button(page, "Activa", FLEX_C_OK, 180, 44);
+    p->active = flex_glass_button(page, "Activa", FLEX_C_OK, 180, 44);
     lv_obj_align(p->active, LV_ALIGN_TOP_MID, 0, cy + CHIP + 36);
     lv_obj_add_event_cb(p->active, active_cb, LV_EVENT_CLICKED, p);
 
-    lv_obj_t *left = watch_theme_button(page, existing ? "Eliminar" : "Cancelar",
-                                        existing ? FLEX_C_DANGER : FLEX_C_SURF2, BTN_W, BTN_H);
+    lv_obj_t *left = flex_glass_button(page, existing ? "Eliminar" : "Cancelar",
+                                        existing ? FLEX_C_DANGER : FLEX_GLASS_TINT_NONE, BTN_W, BTN_H);
     lv_obj_align(left, LV_ALIGN_BOTTOM_MID, -(BTN_W / 2 + 8), -FLEX_LIST_BOTTOM);
     lv_obj_add_event_cb(left, existing ? delete_alarm_cb : back_cb, LV_EVENT_CLICKED, p);
-    lv_obj_t *ok = watch_theme_button(page, "Guardar", FLEX_C_PRIMARY, BTN_W, BTN_H);
+    lv_obj_t *ok = flex_glass_button(page, "Guardar", FLEX_C_PRIMARY, BTN_W, BTN_H);
     lv_obj_align(ok, LV_ALIGN_BOTTOM_MID, BTN_W / 2 + 8, -FLEX_LIST_BOTTOM);
     lv_obj_add_event_cb(ok, save_cb, LV_EVENT_CLICKED, p);
 

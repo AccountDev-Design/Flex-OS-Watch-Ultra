@@ -96,12 +96,12 @@ static void star_cb(lv_event_t *e)
 
 static lv_obj_t *type_row(lv_obj_t *list, const act_type_t *t, const act_config_t *c)
 {
-    lv_obj_t *r = watch_theme_lg_button(list, FLEX_LG_DARK, 0, 0, CARD_W, FLEX_ROW_H, FLEX_RADIUS_ROW, FLEX_GLOW_NONE);
+    lv_obj_t *r = flex_glass_pressable(list, FLEX_GLASS_ROW, 0, 0, CARD_W, FLEX_ROW_H, FLEX_RADIUS_ROW);
     lv_obj_set_width(r, LV_PCT(100));
     lv_obj_t *b = ui_wb_icon_badge(r, (act_icon_t)t->icon, 46, ui_wb_cat_color((act_cat_t)t->cat));
     lv_obj_align(b, LV_ALIGN_LEFT_MID, 12, 0);
-    lv_obj_t *n = watch_theme_label(r, FLEX_FONT_S20, FLEX_C_TXT, "");
-    const int lines = ui_wb_fit(n, t->name, CARD_W - 70 - 64, FLEX_FONT_S20, FLEX_FONT_S16);
+    lv_obj_t *n = watch_theme_label(r, FLEX_TYPE_LABEL, FLEX_C_TXT, "");
+    const int lines = ui_wb_fit(n, t->name, CARD_W - 70 - 64, FLEX_TYPE_LABEL, FLEX_TYPE_FOOTNOTE);
     lv_obj_align(n, LV_ALIGN_TOP_LEFT, 70, lines > 1 ? 5 : 12);
     lv_obj_t *s = watch_theme_label(r, FLEX_FONT_TINY, FLEX_C_TXT2, short_caps(t));
     lv_obj_align(s, LV_ALIGN_BOTTOM_LEFT, 70, lines > 1 ? -5 : -12);
@@ -142,7 +142,7 @@ lv_obj_t *ui_wb_workouts_create(lv_obj_t *parent)
     act_config_t c;
     watch_activity_config(&c);
 
-    lv_obj_t *sr = watch_theme_lg_button(list, FLEX_LG_DARK, 0, 0, CARD_W, 56, 28, FLEX_GLOW_NONE);
+    lv_obj_t *sr = flex_glass_pressable(list, FLEX_GLASS_CARD, 0, 0, CARD_W, 56, 28);
     lv_obj_set_width(sr, LV_PCT(100));
     lv_obj_t *sl = watch_theme_label(sr, FLEX_FONT_BODY, FLEX_C_MUTE, "Buscar entrenamiento");
     lv_obj_align(sl, LV_ALIGN_LEFT_MID, 22, 0);
@@ -381,7 +381,7 @@ static void end_cb(lv_event_t *e)
     wk_t *w = lv_event_get_user_data(e);
     if (!w->confirm_at || lv_tick_elaps(w->confirm_at) > CONFIRM_MS) {
         w->confirm_at = lv_tick_get() | 1u;
-        watch_theme_button_set(w->end_btn, "¿Terminar?", 0);
+        flex_glass_button_set(w->end_btn, "¿Terminar?", 0);
         return;
     }
     w->confirm_at = 0;
@@ -399,7 +399,7 @@ static void add_tile(wk_t *w, lv_obj_t *grid, uint8_t kind, const char *label, u
     lv_obj_remove_style_all(t);
     lv_obj_set_size(t, (FLEX_SCREEN_W - 2 * 28 - 10) / 2, 66);
     lv_obj_remove_flag(t, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-    w->tile_val[i] = watch_theme_label(t, FLEX_FONT_S32, rgb, "--");
+    w->tile_val[i] = watch_theme_label(t, FLEX_TYPE_TITLE, rgb, "--");
     lv_obj_align(w->tile_val[i], LV_ALIGN_TOP_LEFT, 0, 0);
     lv_obj_t *l = watch_theme_label(t, FLEX_FONT_TINY, FLEX_C_TXT2, label);
     lv_obj_align(l, LV_ALIGN_BOTTOM_LEFT, 0, 0);
@@ -455,13 +455,11 @@ static void build_live(wk_t *w)
     }
 
     /* Controles por encima de las franjas de los gestos de borde */
-    w->pause_btn = watch_theme_button(b, "Pausa", WB_C_TIMER, 168, 62);
+    w->pause_btn = flex_glass_button(b, "Pausa", WB_C_TIMER, 168, 62);
     lv_obj_set_style_text_color(w->pause_btn, flex_color(FLEX_C_BLACK), 0);
-    lv_obj_set_style_text_font(w->pause_btn, FLEX_FONT_S22, 0);
     lv_obj_align(w->pause_btn, LV_ALIGN_TOP_LEFT, 28, 326);
     lv_obj_add_event_cb(w->pause_btn, pause_cb, LV_EVENT_CLICKED, w);
-    w->end_btn = watch_theme_button(b, "Terminar", WB_C_STOP, 168, 62);
-    lv_obj_set_style_text_font(w->end_btn, FLEX_FONT_S22, 0);
+    w->end_btn = flex_glass_button(b, "Terminar", WB_C_STOP, 168, 62);
     lv_obj_align(w->end_btn, LV_ALIGN_TOP_RIGHT, -28, 326);
     lv_obj_add_event_cb(w->end_btn, end_cb, LV_EVENT_CLICKED, w);
     w->confirm_at = 0;
@@ -533,10 +531,10 @@ static void refresh_live(wk_t *w, const watch_activity_status_t *st)
         ui_wb_set_text(w->tile_val[i], s);
     }
     const bool paused = v->ses == ACT_SES_PAUSED;
-    watch_theme_button_set(w->pause_btn, paused ? "Reanudar" : "Pausa", paused ? WB_C_GO : WB_C_TIMER);
+    flex_glass_button_set(w->pause_btn, paused ? "Reanudar" : "Pausa", paused ? WB_C_GO : WB_C_TIMER);
     if (w->confirm_at && lv_tick_elaps(w->confirm_at) > CONFIRM_MS) {
         w->confirm_at = 0;
-        watch_theme_button_set(w->end_btn, "Terminar", 0);
+        flex_glass_button_set(w->end_btn, "Terminar", 0);
     }
 }
 
@@ -565,8 +563,8 @@ static void build_summary(wk_t *w, const watch_activity_status_t *st)
     lv_obj_remove_flag(hdr, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_t *bd = ui_wb_icon_badge(hdr, (act_icon_t)t->icon, 56, ui_wb_cat_color((act_cat_t)t->cat));
     lv_obj_align(bd, LV_ALIGN_LEFT_MID, 0, 0);
-    lv_obj_t *nm = watch_theme_label(hdr, FLEX_FONT_S22, FLEX_C_TXT, "");
-    const int nl = ui_wb_fit(nm, t->name, CARD_W - 70, FLEX_FONT_S22, FLEX_FONT_S16);
+    lv_obj_t *nm = watch_theme_label(hdr, FLEX_TYPE_BODY, FLEX_C_TXT, "");
+    const int nl = ui_wb_fit(nm, t->name, CARD_W - 70, FLEX_TYPE_BODY, FLEX_TYPE_FOOTNOTE);
     lv_obj_align(nm, LV_ALIGN_TOP_LEFT, 68, nl > 1 ? 0 : 6);
     lv_obj_t *how = watch_theme_label(hdr, FLEX_FONT_TINY, v->end_reason == ACT_END_AUTO ? FLEX_C_WARN : WB_C_EXER,
                                       v->end_reason == ACT_END_AUTO ? "Terminado solo tras la pausa" : "Terminado");
@@ -604,7 +602,7 @@ static void build_summary(wk_t *w, const watch_activity_status_t *st)
         info(list, "Pausas automáticas", b);
     }
     info(list, "Guardado", st->storage_ok ? "En el historial" : (st->persistent ? "Hasta mañana (sin LittleFS)" : "No"));
-    lv_obj_t *ok = watch_theme_button(list, "Listo", WB_C_GO, CARD_W, 60);
+    lv_obj_t *ok = flex_glass_button(list, "Listo", WB_C_GO, CARD_W, 60);
     lv_obj_set_width(ok, LV_PCT(100));
     lv_obj_set_style_text_color(ok, flex_color(FLEX_C_BLACK), 0);
     lv_obj_add_event_cb(ok, done_cb, LV_EVENT_CLICKED, w);
@@ -713,7 +711,7 @@ lv_obj_t *ui_wb_workout_create(lv_obj_t *parent)
     lv_obj_t *hdr = watch_theme_header(page, "", back_cb, NULL);
     w->title = lv_obj_get_child(hdr, -1);
     if (!w->title || !lv_obj_check_type(w->title, &lv_label_class)) {
-        w->title = watch_theme_label(page, FLEX_FONT_S20, FLEX_C_TXT, "");
+        w->title = watch_theme_label(page, FLEX_TYPE_LABEL, FLEX_C_TXT, "");
         lv_obj_align(w->title, LV_ALIGN_TOP_MID, 0, FLEX_SAFE_TOP + 20);
     }
     watch_activity_status_t st;

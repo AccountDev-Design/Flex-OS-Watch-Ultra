@@ -593,17 +593,15 @@ static void menu_bg_cb(lv_event_t *e)
 
 static void menu_add(lv_obj_t *col, const char *text, int id, bool enabled, uint32_t rgb)
 {
-    lv_obj_t *b = lv_obj_create(col);
-    lv_obj_remove_style_all(b);
+    /* Fantasma del motor: vidrio solo mientras se toca */
+    lv_obj_t *b = flex_glass_create(col, FLEX_GLASS_GHOST);
     lv_obj_set_size(b, LV_PCT(100), 42);
+    lv_obj_set_style_radius(b, 12, 0);
     lv_obj_set_style_pad_left(b, 14, 0);
-    lv_obj_remove_flag(b, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_t *l = watch_theme_label(b, FLEX_FONT_BODY, enabled ? rgb : FLEX_C_MUTE, text);
     lv_obj_align(l, LV_ALIGN_LEFT_MID, 0, 0);
     if (enabled) {
-        lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_set_style_bg_color(b, flex_color(FLEX_C_SURF2), LV_STATE_PRESSED);
-        lv_obj_set_style_bg_opa(b, LV_OPA_COVER, LV_STATE_PRESSED);
+        flex_glass_interactive(b);
         lv_obj_add_event_cb(b, menu_item_cb, LV_EVENT_CLICKED, (void *)(intptr_t)id);
     }
 }
@@ -611,15 +609,15 @@ static void menu_add(lv_obj_t *col, const char *text, int id, bool enabled, uint
 static void open_menu(void)
 {
     close_menu();
-    lv_obj_t *bg = lv_obj_create(U->page);
-    lv_obj_remove_style_all(bg);
+    /* Velo del motor sobre la página web y, encima, una lámina legible sea
+     * cual sea el contenido de debajo */
+    lv_obj_t *bg = flex_glass_create(U->page, FLEX_GLASS_SCRIM);
     lv_obj_set_size(bg, FLEX_SCREEN_W, FLEX_SCREEN_H);
     lv_obj_add_flag(bg, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_style_bg_color(bg, flex_color(FLEX_C_BLACK), 0);
-    lv_obj_set_style_bg_opa(bg, LV_OPA_40, 0);
     lv_obj_add_event_cb(bg, menu_bg_cb, LV_EVENT_CLICKED, NULL);
     U->menu = bg;
-    lv_obj_t *p = watch_theme_tile(bg, FLEX_SCREEN_W - 300, PG_Y + 4, 280, LV_SIZE_CONTENT);
+    lv_obj_t *p = flex_glass_panel(bg, FLEX_GLASS_SHEET, FLEX_SCREEN_W - 300, PG_Y + 4, 280, LV_SIZE_CONTENT, 26);
+    lv_obj_add_flag(p, LV_OBJ_FLAG_CLICKABLE); /* un toque entre opciones no cierra el menú */
     lv_obj_set_style_pad_all(p, 6, 0);
     lv_obj_set_style_pad_row(p, 0, 0);
     lv_obj_set_flex_flow(p, LV_FLEX_FLOW_COLUMN);
@@ -744,7 +742,7 @@ static bool s_row_wrap;
 
 static lv_obj_t *row(lv_obj_t *list, const char *title, const char *sub, act_t a, const void *ud, uint32_t rgb)
 {
-    lv_obj_t *r = watch_theme_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_t *r = flex_glass_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_set_style_pad_ver(r, 10, 0);
     lv_obj_set_flex_flow(r, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(r, 2, 0);
@@ -914,13 +912,13 @@ static void build_inner(int kind)
             flexBrUrlLabel(U->tab[i].url, lbl, sizeof(lbl));
             lv_obj_t *r = row(L, U->tab[i].title[0] ? U->tab[i].title : "Nueva pestaña", lbl, A_TAB,
                               (void *)(intptr_t)i, i == U->act ? FLEX_C_ACCENT_LIGHT : FLEX_C_TXT);
-            lv_obj_t *x = watch_theme_button(r, "×", FLEX_C_SURF2, 48, 40);
+            lv_obj_t *x = flex_glass_button(r, "×", FLEX_GLASS_TINT_NONE, 48, 40);
             lv_obj_add_flag(x, LV_OBJ_FLAG_IGNORE_LAYOUT);
             lv_obj_align(x, LV_ALIGN_RIGHT_MID, 6, 0);
             lv_obj_set_user_data(x, (void *)(intptr_t)i);
             lv_obj_add_event_cb(x, inner_cb, LV_EVENT_CLICKED, (void *)(intptr_t)A_TABCLOSE);
         }
-        lv_obj_t *nb = watch_theme_button(L, "Nueva pestaña", FLEX_C_PRIMARY, LV_PCT(100), 50);
+        lv_obj_t *nb = flex_glass_button(L, "Nueva pestaña", FLEX_C_PRIMARY, LV_PCT(100), 50);
         lv_obj_add_event_cb(nb, inner_cb, LV_EVENT_CLICKED, (void *)(intptr_t)A_NEWTAB);
         return;
     }
@@ -960,7 +958,7 @@ static void build_inner(int kind)
             text(L, FLEX_FONT_SMALL, FLEX_C_MUTE, "Escribe una dirección o una búsqueda en la barra de arriba.");
         }
         if (!(U->caps & FLEXBR_CAP_REMOTE)) {
-            lv_obj_t *b = watch_theme_button(L, "Ajustes del navegador", FLEX_C_PRIMARY, LV_PCT(100), 52);
+            lv_obj_t *b = flex_glass_button(L, "Ajustes del navegador", FLEX_C_PRIMARY, LV_PCT(100), 52);
             lv_obj_add_event_cb(b, menu_item_cb, LV_EVENT_CLICKED, (void *)(intptr_t)M_SETTINGS);
         }
         break;
@@ -1239,7 +1237,7 @@ static void reload_draw_cb(lv_event_t *e)
 
 static lv_obj_t *tb_button(lv_obj_t *parent, int32_t x, lv_event_cb_t cb)
 {
-    lv_obj_t *b = watch_theme_glass_button(parent, x, BB_Y, TB_BTN, TB_BTN);
+    lv_obj_t *b = flex_glass_control(parent, x, BB_Y, TB_BTN, TB_BTN);
     lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, NULL);
     return b;
 }
@@ -1520,7 +1518,7 @@ lv_obj_t *ui_browser_create(lv_obj_t *parent)
     U->page = page;
 
     /* arriba: el omnibox; abajo: [<] [>] [recargar] [menú] */
-    U->omni = watch_theme_glass_button(page, OMNI_X, TB_Y, OMNI_W, TB_BTN);
+    U->omni = flex_glass_control(page, OMNI_X, TB_Y, OMNI_W, TB_BTN);
     lv_obj_set_style_radius(U->omni, TB_BTN / 2, 0);
     lv_obj_add_event_cb(U->omni, omni_cb, LV_EVENT_CLICKED, NULL);
     U->omni_dot = lv_obj_create(U->omni);
@@ -1594,7 +1592,7 @@ lv_obj_t *ui_browser_create(lv_obj_t *parent)
 
     /* barra de error flotante (6 s) */
     /* aviso de 6 s sobre la barra de abajo (dentro del arco), en dos líneas */
-    U->errbar = watch_theme_tile(page, 82, BB_Y - 4, 246, 52);
+    U->errbar = flex_glass_tile(page, 82, BB_Y - 4, 246, 52);
     lv_obj_set_style_bg_color(U->errbar, flex_color(0xB43C3C), 0);
     lv_obj_set_style_pad_ver(U->errbar, 2, 0);
     lv_obj_set_style_pad_hor(U->errbar, 10, 0);

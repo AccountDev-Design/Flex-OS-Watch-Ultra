@@ -1,15 +1,15 @@
 idf_component_register(
     SRCS "watch_theme.c" "flex_wallpaper.c" "flex_glass_math.c" "flex_batt_style.c"
          "flex_icons.c" "flex_battery_icon.c" "flex_safe.c" "flex_app_icons.c" "flex_device_icons.c"
-         "flex_blur.c" "flex_jpeg.c" "flex_thumb.c"
+         "flex_glass.c" "flex_jpeg.c" "flex_thumb.c"
          "fonts/flex_outfit_18.c" "fonts/flex_outfit_22.c" "fonts/flex_outfit_28.c"
          "fonts/flex_outfit_40.c" "fonts/flex_outfit_clock_120.c"
-         "fonts/flex_spartan_16.c" "fonts/flex_spartan_20.c" "fonts/flex_spartan_22.c" "fonts/flex_spartan_24.c"
-         "fonts/flex_spartan_32.c" "fonts/flex_spartan_40.c" "fonts/flex_spartan_clock_188.c"
+         "fonts/flex_spartan_16.c"
          "fonts/flex_outfit_15.c" "fonts/flex_outfit_med_28.c"
          "fonts/flex_cond_156.c" "fonts/flex_cond_196.c" "fonts/flex_cond_248.c"
          "fonts/flex_outfit_xl_105.c" "fonts/flex_outfit_sb_101.c"
          "fonts/flex_outfit_med_34.c" "fonts/flex_outfit_med_48.c"
+         "fonts/flex_outfit_m20.c" "fonts/flex_outfit_m24.c" "fonts/flex_outfit_m30.c"
     INCLUDE_DIRS "include"
     PRIV_REQUIRES heap log esp_timer
 )

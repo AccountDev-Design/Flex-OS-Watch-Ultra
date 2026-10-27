@@ -324,7 +324,7 @@ lv_obj_t *ui_devcare_create(lv_obj_t *parent)
     lv_obj_t *list = watch_theme_list(page);
 
     /* Tarjeta de la puntuación (dcScoreRing): anillo sobre la pista del tema. */
-    lv_obj_t *card = watch_theme_tile(list, 0, 0, LV_PCT(100), CARD_H);
+    lv_obj_t *card = flex_glass_tile(list, 0, 0, LV_PCT(100), CARD_H);
     lv_obj_remove_flag(card, LV_OBJ_FLAG_CLICKABLE);
     p->arc = lv_arc_create(card);
     lv_obj_set_size(p->arc, RING_D, RING_D);

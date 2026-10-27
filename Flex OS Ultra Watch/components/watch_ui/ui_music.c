@@ -62,7 +62,7 @@ static void cmd_cb(lv_event_t *e)
 static lv_obj_t *round_btn(lv_obj_t *parent, mus_page_t *p, int32_t d, flex_icon_t icon, uint8_t cmd,
                            lv_obj_t **icon_out)
 {
-    lv_obj_t *b = watch_theme_glass_button(parent, 0, 0, d, d);
+    lv_obj_t *b = flex_glass_control(parent, 0, 0, d, d);
     lv_obj_set_style_radius(b, LV_RADIUS_CIRCLE, 0);
     lv_obj_t *ic = flex_icon_create(b, icon, d / 3, FLEX_C_TXT);
     lv_obj_center(ic);

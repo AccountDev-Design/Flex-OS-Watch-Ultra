@@ -70,6 +70,8 @@ uint64_t sim_flush_pixels(void);
 lv_obj_t *sim_find_label(lv_obj_t *obj, const char *text);
 /** La etiqueta número nth (0 = la primera) con ese texto. */
 lv_obj_t *sim_find_label_n(lv_obj_t *obj, const char *text, int nth);
+/** La primera etiqueta cuyo texto empieza por prefix. */
+lv_obj_t *sim_find_label_prefix(lv_obj_t *obj, const char *prefix);
 
 /** Caracteres de las etiquetas de obj (y sus hijos) que su fuente no puede dibujar. */
 int sim_missing_glyphs(lv_obj_t *obj, const char *where);
@@ -146,6 +148,8 @@ void sim_suite_settings(const char *out);
 void sim_suite_monkey(const char *out);
 void sim_suite_bench(const char *out);
 void sim_suite_visual(const char *out);
+void sim_suite_ghost(const char *out);
+void sim_suite_glass(const char *out);
 void sim_suite_theme(const char *out);
 void sim_suite_face(const char *out);
 void sim_suite_faces(const char *out);

@@ -120,6 +120,9 @@ static void load(void)
     if (nvs_get_u8(h, "ps_flags", &u8) == ESP_OK) {
         s_cur.ps_flags = u8;
     }
+    if (nvs_get_u8(h, "glass", &u8) == ESP_OK) {
+        s_cur.glass = u8;
+    }
     s_saved = s_cur; /* lo que hay guardado, antes de normalizar */
     if (ws_normalize(&s_cur)) {
         ESP_LOGW(TAG, "valores guardados fuera de rango: corregidos");
@@ -162,6 +165,7 @@ static esp_err_t write_changed(nvs_handle_t h, const watch_settings_t *n, const 
     SET(n->psave_radio != o->psave_radio, nvs_set_u8(h, "ps_radio", n->psave_radio));
     SET(n->ps_bright != o->ps_bright, nvs_set_u8(h, "ps_bright", n->ps_bright));
     SET(n->ps_flags != o->ps_flags, nvs_set_u8(h, "ps_flags", n->ps_flags));
+    SET(n->glass != o->glass, nvs_set_u8(h, "glass", n->glass));
 #undef SET
     return err;
 }

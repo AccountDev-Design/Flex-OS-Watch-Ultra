@@ -15,6 +15,14 @@
  * El texto viene del teléfono y puede traer caracteres que la fuente del
  * reloj no tiene (emoji, otros alfabetos): se sustituyen al pintar en vez de
  * dejar huecos (ui_phone_text).
+ *
+ * Aspecto (Flex Liquid Glass Engine): la página lleva el fondo ambiental del
+ * motor (FLEX_GLASS_AMBIENT, un degradado opaco) y cada notificación es una
+ * tarjeta translúcida (FLEX_GLASS_CARD) que lo deja ver, con borde de luz
+ * fino y separación entre tarjetas. El contenido manda: título en Medium,
+ * cuerpo y metadatos en Regular gris; sin brillos ni tarjetas pesadas. No hay
+ * más superficies debajo (la página no lleva el negro de siempre encima del
+ * ambiente).
  */
 #include "ui_internal.h"
 
@@ -191,32 +199,35 @@ static void clear_cb(lv_event_t *e)
     watch_phone_clear_all();
 }
 
+#define NOTIF_GAP 10 /* separación entre tarjetas */
+
 static lv_obj_t *notif_card(lv_obj_t *list, const FlexPhoneNotif *nt)
 {
     char t[FLP_TEXT_MAX + 16];
-    lv_obj_t *c = watch_theme_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_t *c = flex_glass_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(c, 2, 0);
+    lv_obj_set_style_pad_row(c, 3, 0);
+    lv_obj_set_style_pad_ver(c, 14, 0);
     lv_obj_add_event_cb(c, open_detail_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)nt->id);
     lv_obj_t *top = lv_obj_create(c);
     lv_obj_remove_style_all(top);
     lv_obj_set_size(top, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_remove_flag(top, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    ui_phone_text(nt->app[0] ? nt->app : nt->pkg, t, sizeof(t), FLEX_FONT_SMALL);
-    lv_obj_t *app = watch_theme_label(top, FLEX_FONT_SMALL, FLEX_C_ACCENT, t);
+    ui_phone_text(nt->app[0] ? nt->app : nt->pkg, t, sizeof(t), FLEX_TYPE_CAPTION);
+    lv_obj_t *app = watch_theme_label(top, FLEX_TYPE_CAPTION, FLEX_C_ACCENT_LIGHT, t);
     lv_obj_set_width(app, LV_PCT(65));
     lv_label_set_long_mode(app, LV_LABEL_LONG_MODE_DOTS);
     ui_phone_when(nt->whenMs, t, sizeof(t));
-    lv_obj_t *when = watch_theme_label(top, FLEX_FONT_SMALL, FLEX_C_MUTE, t);
+    lv_obj_t *when = watch_theme_label(top, FLEX_TYPE_CAPTION, FLEX_GLASS_TXT2, t);
     lv_obj_align(when, LV_ALIGN_RIGHT_MID, 0, 0);
-    ui_phone_text(nt->title[0] ? nt->title : "(sin título)", t, sizeof(t), FLEX_FONT_BODY);
-    lv_obj_t *title = watch_theme_label(c, FLEX_FONT_BODY, FLEX_C_TXT, t);
+    ui_phone_text(nt->title[0] ? nt->title : "(sin título)", t, sizeof(t), FLEX_TYPE_LABEL);
+    lv_obj_t *title = watch_theme_label(c, FLEX_TYPE_LABEL, FLEX_GLASS_TXT, t);
     lv_obj_set_width(title, LV_PCT(100));
     lv_label_set_long_mode(title, LV_LABEL_LONG_MODE_DOTS);
     body_text(nt, false, t, sizeof(t));
-    lv_obj_t *body = watch_theme_label(c, FLEX_FONT_SMALL, FLEX_C_TXT2, t);
+    lv_obj_t *body = watch_theme_label(c, FLEX_TYPE_CAPTION, FLEX_GLASS_TXT2, t);
     lv_obj_set_width(body, LV_PCT(100));
-    lv_obj_set_height(body, 2 * lv_font_get_line_height(FLEX_FONT_SMALL));
+    lv_obj_set_height(body, 2 * lv_font_get_line_height(FLEX_TYPE_CAPTION));
     lv_label_set_long_mode(body, LV_LABEL_LONG_MODE_DOTS);
     return c;
 }
@@ -233,13 +244,13 @@ static void empty_card(lv_obj_t *list, const watch_phone_status_t *s)
     } else {
         why = "Conecta el teléfono para recibir sus notificaciones.";
     }
-    lv_obj_t *c = watch_theme_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_t *c = flex_glass_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(c, 4, 0);
-    lv_obj_t *t = watch_theme_label(c, FLEX_FONT_BODY, FLEX_C_TXT, "Sin notificaciones");
+    lv_obj_t *t = watch_theme_label(c, FLEX_TYPE_LABEL, FLEX_GLASS_TXT, "Sin notificaciones");
     (void)t;
-    lv_obj_t *w = watch_theme_label(c, FLEX_FONT_SMALL, FLEX_C_TXT2, why);
+    lv_obj_t *w = watch_theme_label(c, FLEX_TYPE_CAPTION, FLEX_GLASS_TXT2, why);
     lv_label_set_long_mode(w, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_width(w, LV_PCT(100));
 }
@@ -264,7 +275,7 @@ static void nl_refresh(nl_page_t *p)
     for (int i = 0; i < n; i++) {
         notif_card(p->list, &p->buf[i]);
     }
-    lv_obj_t *b = watch_theme_button(p->list, "Borrar el historial", FLEX_C_SURF2, LV_PCT(100), 60);
+    lv_obj_t *b = flex_glass_button(p->list, "Borrar el historial", FLEX_GLASS_TINT_NONE, LV_PCT(100), 60);
     lv_obj_add_event_cb(b, clear_cb, LV_EVENT_CLICKED, NULL);
 }
 
@@ -286,9 +297,10 @@ lv_obj_t *ui_notifs_create(lv_obj_t *parent)
     LV_ASSERT_MALLOC(p);
     p->buf = lv_malloc(sizeof(FlexPhoneNotif) * WATCH_PHONE_NOTIF_MAX);
     lv_obj_t *page = ui_page_new(parent);
-    watch_theme_page(page);
+    flex_glass_apply(page, FLEX_GLASS_AMBIENT, 0);
     watch_theme_header(page, "Notificaciones", back_cb, NULL);
     p->list = watch_theme_list(page);
+    lv_obj_set_style_pad_row(p->list, NOTIF_GAP, 0);
     p->gen = 0xFFFFFFFFu;
     nl_refresh(p);
     lv_obj_add_event_cb(page, nl_free_cb, LV_EVENT_DELETE, p);
@@ -375,24 +387,25 @@ lv_obj_t *ui_notif_detail_create(lv_obj_t *parent)
     const bool have = watch_phone_notif(p->id, &nt);
     char t[FLP_TEXT_MAX + 48];
     lv_obj_t *page = ui_page_new(parent);
-    watch_theme_page(page);
+    flex_glass_apply(page, FLEX_GLASS_AMBIENT, 0);
     ui_phone_text(have ? (nt.app[0] ? nt.app : nt.pkg) : "Notificación", t, sizeof(t), FLEX_FONT_TITLE);
     watch_theme_header(page, t, back_cb, NULL);
     lv_obj_t *list = watch_theme_list(page);
+    lv_obj_set_style_pad_row(list, NOTIF_GAP, 0);
 
-    lv_obj_t *c = watch_theme_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_t *c = flex_glass_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(c, 4, 0);
     if (have) {
-        ui_phone_text(nt.title[0] ? nt.title : "(sin título)", t, sizeof(t), FLEX_FONT_TITLE);
-        lv_obj_t *title = watch_theme_label(c, FLEX_FONT_TITLE, FLEX_C_TXT, t);
+        ui_phone_text(nt.title[0] ? nt.title : "(sin título)", t, sizeof(t), FLEX_TYPE_HEADLINE);
+        lv_obj_t *title = watch_theme_label(c, FLEX_TYPE_HEADLINE, FLEX_GLASS_TXT, t);
         lv_label_set_long_mode(title, LV_LABEL_LONG_MODE_WRAP);
         lv_obj_set_width(title, LV_PCT(100));
         ui_phone_when(nt.whenMs, t, sizeof(t));
-        watch_theme_label(c, FLEX_FONT_SMALL, FLEX_C_MUTE, t);
+        watch_theme_label(c, FLEX_TYPE_CAPTION, FLEX_GLASS_TXT2, t);
         body_text(&nt, false, t, sizeof(t));
-        lv_obj_t *body = watch_theme_label(c, FLEX_FONT_BODY, FLEX_C_TXT2, t);
+        lv_obj_t *body = watch_theme_label(c, FLEX_TYPE_BODY, FLEX_GLASS_TXT2, t);
         lv_label_set_long_mode(body, LV_LABEL_LONG_MODE_WRAP);
         lv_obj_set_width(body, LV_PCT(100));
     }
@@ -405,14 +418,14 @@ lv_obj_t *ui_notif_detail_create(lv_obj_t *parent)
     for (int i = 0; have && i < nt.actionCount && i < FLP_ACTION_MAX; i++) {
         ui_phone_text(nt.actions[i], t, sizeof(t), FLEX_FONT_BODY);
         const bool reply = nt.canReply && i == nt.replyAction;
-        p->btns[i] = watch_theme_button(list, t, reply ? FLEX_C_PRIMARY : FLEX_C_SURF2, LV_PCT(100), 60);
+        p->btns[i] = flex_glass_button(list, t, reply ? FLEX_C_PRIMARY : FLEX_GLASS_TINT_NONE, LV_PCT(100), 60);
         lv_obj_add_event_cb(p->btns[i], action_cb, LV_EVENT_CLICKED, p);
         p->nbtn++;
     }
     p->status = watch_theme_label(list, FLEX_FONT_SMALL, FLEX_C_TXT2, "");
     lv_label_set_long_mode(p->status, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_width(p->status, LV_PCT(100));
-    lv_obj_t *d = watch_theme_button(list, "Descartar", FLEX_C_SURF2, LV_PCT(100), 60);
+    lv_obj_t *d = flex_glass_button(list, "Descartar", FLEX_GLASS_TINT_NONE, LV_PCT(100), 60);
     lv_obj_add_event_cb(d, dismiss_cb, LV_EVENT_CLICKED, p);
     p->was_ready = true;
     nd_refresh(p);
@@ -492,7 +505,7 @@ lv_obj_t *ui_notif_reply_create(lv_obj_t *parent)
     LV_ASSERT_MALLOC(p);
     p->id = s_sel_id;
     lv_obj_t *page = ui_page_new(parent);
-    watch_theme_page(page);
+    flex_glass_apply(page, FLEX_GLASS_AMBIENT, 0);
     watch_theme_header(page, "Responder", back_cb, NULL);
     lv_obj_t *list = watch_theme_list(page);
     for (size_t i = 0; i < sizeof(kQuick) / sizeof(kQuick[0]); i++) {

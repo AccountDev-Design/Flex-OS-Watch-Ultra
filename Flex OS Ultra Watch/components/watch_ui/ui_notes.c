@@ -83,7 +83,7 @@ static void build(nl_page_t *p)
         ui_fs_notice(p->list, "Notas", why);
         return;
     }
-    lv_obj_t *nb = watch_theme_button(p->list, "Nueva nota", FLEX_C_PRIMARY, LV_PCT(100), 60);
+    lv_obj_t *nb = flex_glass_button(p->list, "Nueva nota", FLEX_C_PRIMARY, LV_PCT(100), 60);
     lv_obj_add_event_cb(nb, new_cb, LV_EVENT_CLICKED, NULL);
     ffs_entry_t *e = lv_malloc(sizeof(ffs_entry_t) * FFS_LIST_MAX);
     LV_ASSERT_MALLOC(e);
@@ -97,7 +97,7 @@ static void build(nl_page_t *p)
         if (!fl_join(FFS_DIR_NOTAS, e[i].name, path, sizeof(path))) {
             continue;
         }
-        lv_obj_t *c = watch_theme_tile(p->list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+        lv_obj_t *c = flex_glass_tile(p->list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
         lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_style_pad_row(c, 2, 0);
         fl_stem(e[i].name, stem, sizeof(stem));

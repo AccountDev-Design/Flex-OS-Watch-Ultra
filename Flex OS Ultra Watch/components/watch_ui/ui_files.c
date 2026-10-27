@@ -76,7 +76,7 @@ bool ui_fs_ready(const char **why)
 
 lv_obj_t *ui_fs_notice(lv_obj_t *list, const char *app, const char *why)
 {
-    lv_obj_t *c = watch_theme_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_t *c = flex_glass_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(c, 4, 0);
@@ -153,7 +153,7 @@ static void empty_cb(lv_event_t *e)
         return;
     }
     p->empty_at = now;
-    watch_theme_button_set(p->empty_btn, "Toca otra vez para vaciar", FLEX_C_DANGER);
+    flex_glass_button_set(p->empty_btn, "Toca otra vez para vaciar", FLEX_C_DANGER);
 }
 
 static void name_free_cb(lv_event_t *e)
@@ -208,7 +208,7 @@ static void build(fl_page_t *p)
     }
     lv_free(e);
     if (trash && n > 0) {
-        p->empty_btn = watch_theme_button(p->list, "Vaciar la papelera", FLEX_C_SURF2, LV_PCT(100), 60);
+        p->empty_btn = flex_glass_button(p->list, "Vaciar la papelera", FLEX_GLASS_TINT_NONE, LV_PCT(100), 60);
         lv_obj_add_event_cb(p->empty_btn, empty_cb, LV_EVENT_CLICKED, p);
     }
     lv_obj_t *hint = watch_theme_label(p->list, FLEX_FONT_SMALL, FLEX_C_MUTE,
@@ -229,7 +229,7 @@ static void fl_tick_cb(lv_timer_t *t)
     }
     if (p->empty_at && lv_tick_get() - p->empty_at >= CONFIRM_MS) {
         p->empty_at = 0;
-        watch_theme_button_set(p->empty_btn, "Vaciar la papelera", FLEX_C_SURF2);
+        flex_glass_button_set(p->empty_btn, "Vaciar la papelera", FLEX_GLASS_TINT_NONE);
     }
 }
 
@@ -308,7 +308,7 @@ static void op_delete_cb(lv_event_t *e)
         return;
     }
     p->del_at = now;
-    watch_theme_button_set(p->del, "Toca otra vez para borrar", FLEX_C_DANGER);
+    flex_glass_button_set(p->del, "Toca otra vez para borrar", FLEX_C_DANGER);
 }
 
 static void op_tick_cb(lv_timer_t *t)
@@ -324,13 +324,13 @@ static void op_tick_cb(lv_timer_t *t)
     }
     if (p->del_at && lv_tick_get() - p->del_at >= CONFIRM_MS) {
         p->del_at = 0;
-        watch_theme_button_set(p->del, "Borrar definitivamente", FLEX_C_SURF2);
+        flex_glass_button_set(p->del, "Borrar definitivamente", FLEX_GLASS_TINT_NONE);
     }
 }
 
 static lv_obj_t *op_button(lv_obj_t *list, const char *t, uint32_t rgb, lv_event_cb_t cb, op_page_t *p)
 {
-    lv_obj_t *b = watch_theme_button(list, t, rgb, LV_PCT(100), 60);
+    lv_obj_t *b = flex_glass_button(list, t, rgb, LV_PCT(100), 60);
     lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, p);
     return b;
 }
@@ -347,7 +347,7 @@ lv_obj_t *ui_file_opts_create(lv_obj_t *parent)
     watch_theme_page(page);
     watch_theme_header(page, "Opciones", back_cb, NULL);
     lv_obj_t *list = watch_theme_list(page);
-    lv_obj_t *c = watch_theme_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_t *c = flex_glass_tile(list, 0, 0, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(c, 4, 0);
@@ -375,10 +375,10 @@ lv_obj_t *ui_file_opts_create(lv_obj_t *parent)
         } else if (!ffs_is_dir(p->path)) {
             watch_theme_label(list, FLEX_FONT_SMALL, FLEX_C_TXT2, "El reloj no abre este tipo de archivo");
         }
-        op_button(list, "Renombrar", FLEX_C_SURF2, op_rename_cb, p);
-        op_button(list, "Mover a la papelera", FLEX_C_SURF2, op_trash_cb, p);
+        op_button(list, "Renombrar", FLEX_GLASS_TINT_NONE, op_rename_cb, p);
+        op_button(list, "Mover a la papelera", FLEX_GLASS_TINT_NONE, op_trash_cb, p);
     }
-    p->del = op_button(list, "Borrar definitivamente", FLEX_C_SURF2, op_delete_cb, p);
+    p->del = op_button(list, "Borrar definitivamente", FLEX_GLASS_TINT_NONE, op_delete_cb, p);
     p->status = watch_theme_label(list, FLEX_FONT_SMALL, FLEX_C_WARN, "");
     lv_label_set_long_mode(p->status, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_width(p->status, LV_PCT(100));

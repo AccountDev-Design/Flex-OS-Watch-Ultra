@@ -116,12 +116,18 @@ static bool is_drawer(int i)
 
 /* Paralaje: la de debajo está desplazada un 30 % hacia el lado contrario al
  * que sale la de arriba, y llega a 0 cuando la de arriba ha salido del todo.
- * En vertical (cajón desde arriba, esfera por abajo) la de debajo no se mueve. */
+ * En vertical (cajón desde arriba, esfera por abajo) la de debajo no se mueve.
+ * El cajón en vertical tampoco se mueve entero: solo su rejilla, sobre un
+ * velo que cubre poco a poco la esfera quieta (ui_apps_transition). */
 static void place(int32_t v)
 {
     lv_obj_t *t = top_page();
     if (s_nav.vertical) {
-        lv_obj_set_y(t, v);
+        if (is_drawer(s_nav.depth - 1)) {
+            ui_apps_transition(t, v);
+        } else {
+            lv_obj_set_y(t, v);
+        }
         return;
     }
     lv_obj_set_x(t, v);
@@ -147,6 +153,7 @@ static void reset_pos(lv_obj_t *o)
 {
     if (o) {
         lv_obj_set_pos(o, 0, 0);
+        ui_apps_transition(o, 0); /* solo hace algo en un cajón */
     }
 }
 

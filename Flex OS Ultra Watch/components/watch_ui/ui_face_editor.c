@@ -559,13 +559,13 @@ lv_obj_t *ui_face_editor_create(lv_obj_t *parent)
         lv_obj_remove_flag(d, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
         e->dot[i] = d;
     }
-    e->name = watch_theme_label(page, FLEX_FONT_S20, 0xA8A8A8, "");
+    e->name = watch_theme_label(page, FLEX_TYPE_LABEL, 0xA8A8A8, "");
     lv_obj_set_width(e->name, FLEX_SCREEN_W);
     lv_obj_set_style_text_align(e->name, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_pos(e->name, 0, NAME_Y);
     if (ui_psave_active()) {
         /* En ahorro de energía la esfera a la vista es la mínima: se dice. */
-        lv_obj_t *hint = watch_theme_label(page, FLEX_FONT_S16, FLEX_C_MUTE, "En ahorro de energía: esfera mínima");
+        lv_obj_t *hint = watch_theme_label(page, FLEX_TYPE_FOOTNOTE, FLEX_C_MUTE, "En ahorro de energía: esfera mínima");
         lv_obj_set_width(hint, FLEX_SCREEN_W);
         lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_pos(hint, 0, NAME_Y + 26);

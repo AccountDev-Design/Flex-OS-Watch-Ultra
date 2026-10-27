@@ -57,7 +57,13 @@ typedef struct {
     uint8_t psave_radio; /**< WS_PS_RADIO_* */
     uint8_t ps_bright;   /**< brillo del usuario antes de activarlo */
     uint8_t ps_flags;    /**< WS_PS_PREV_*: AOD y radios antes de activarlo */
+    /* Flex Liquid Glass Engine */
+    uint8_t glass;       /**< WS_GLASS_*: calidad de los efectos de vidrio */
 } ws_settings_t;
+
+/* Calidad de los efectos de vidrio (flex_glass): automática (Premium y baja
+ * sola si el reloj no llega), o fija. El ahorro de energía usa Ligero. */
+enum { WS_GLASS_AUTO = 0, WS_GLASS_PREMIUM, WS_GLASS_STANDARD, WS_GLASS_LITE, WS_GLASS_COUNT };
 
 /** Número de fondos (= FLEX_WALL_COUNT_ de watch_theme; lo comprueba ui_wallpaper.c). */
 #define WS_WALLPAPER_COUNT 9

@@ -76,7 +76,7 @@ static void push_cb(lv_event_t *e)
 static void week_chart(lv_obj_t *list, const hist_page_t *p, uint32_t today_steps)
 {
     lv_obj_t *c = ui_wb_card(list, CH_H + 108, false);
-    lv_obj_t *t = watch_theme_label(c, FLEX_FONT_S20, FLEX_C_TXT, "Últimos 7 días");
+    lv_obj_t *t = watch_theme_label(c, FLEX_TYPE_LABEL, FLEX_C_TXT, "Últimos 7 días");
     lv_obj_align(t, LV_ALIGN_TOP_LEFT, 18, 14);
     uint32_t v[CH_BARS], mx = p->cfg.goal_steps, sum = 0;
     int days = 0;
@@ -175,7 +175,7 @@ lv_obj_t *ui_wb_history_create(lv_obj_t *parent)
         lv_obj_t *r = ui_wb_card(list, 64, false);
         lv_obj_t *ic = ui_wb_icon_create(r, ACT_IC_STAR, 30, got ? 0xFFC233 : 0x3A3E48);
         lv_obj_align(ic, LV_ALIGN_LEFT_MID, 16, 0);
-        lv_obj_t *t = watch_theme_label(r, FLEX_FONT_S16, got ? FLEX_C_TXT : FLEX_C_MUTE, act_ach_name(i));
+        lv_obj_t *t = watch_theme_label(r, FLEX_TYPE_FOOTNOTE, got ? FLEX_C_TXT : FLEX_C_MUTE, act_ach_name(i));
         lv_obj_align(t, LV_ALIGN_TOP_LEFT, 60, 10);
         lv_obj_t *d = watch_theme_label(r, FLEX_FONT_TINY, FLEX_C_TXT2, act_ach_desc(i));
         lv_obj_align(d, LV_ALIGN_BOTTOM_LEFT, 60, -10);
@@ -250,13 +250,13 @@ static void ses_build(sessions_t *p)
         ses_row(p->list, &p->recs[i], p->today);
     }
     if (p->skip) {
-        lv_obj_t *b = watch_theme_button(p->list, "Más recientes", FLEX_C_SURF2, CARD_W, 52);
+        lv_obj_t *b = flex_glass_button(p->list, "Más recientes", FLEX_GLASS_TINT_NONE, CARD_W, 52);
         lv_obj_set_width(b, LV_PCT(100));
         lv_obj_set_user_data(b, (void *)(uintptr_t)0);
         lv_obj_add_event_cb(b, more_cb, LV_EVENT_CLICKED, p);
     }
     if (p->n == WB_PAGE) {
-        lv_obj_t *b = watch_theme_button(p->list, "Más antiguos", FLEX_C_SURF2, CARD_W, 52);
+        lv_obj_t *b = flex_glass_button(p->list, "Más antiguos", FLEX_GLASS_TINT_NONE, CARD_W, 52);
         lv_obj_set_width(b, LV_PCT(100));
         lv_obj_set_user_data(b, (void *)(uintptr_t)1);
         lv_obj_add_event_cb(b, more_cb, LV_EVENT_CLICKED, p);

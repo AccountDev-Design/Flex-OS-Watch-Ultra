@@ -265,6 +265,20 @@ lv_obj_t *sim_find_label_n(lv_obj_t *obj, const char *text, int nth)
     return find_nth(obj, text, &nth);
 }
 
+lv_obj_t *sim_find_label_prefix(lv_obj_t *obj, const char *prefix)
+{
+    if (lv_obj_check_type(obj, &lv_label_class) && strncmp(lv_label_get_text(obj), prefix, strlen(prefix)) == 0) {
+        return obj;
+    }
+    for (uint32_t i = 0; i < lv_obj_get_child_count(obj); i++) {
+        lv_obj_t *r = sim_find_label_prefix(lv_obj_get_child(obj, (int32_t)i), prefix);
+        if (r) {
+            return r;
+        }
+    }
+    return NULL;
+}
+
 int sim_timer_count(void)
 {
     int n = 0;
@@ -577,7 +591,7 @@ static int real_main(int argc, char **argv)
         {"bienestar", sim_suite_wellness},
         {"reposo", sim_suite_redraw},
         {"memoria", sim_suite_mem},
-        {"mono", sim_suite_monkey},      {"visual", sim_suite_visual}, {"banco", sim_suite_bench},
+        {"mono", sim_suite_monkey},      {"visual", sim_suite_visual}, {"rastros", sim_suite_ghost}, {"vidrio", sim_suite_glass}, {"banco", sim_suite_bench},
     };
     for (size_t i = 0; i < sizeof(suites) / sizeof(suites[0]); i++) {
         if (!only || strcmp(only, suites[i].name) == 0 || strcmp(suites[i].name, "arranque") == 0) {

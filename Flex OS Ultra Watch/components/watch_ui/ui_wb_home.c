@@ -82,20 +82,20 @@ int ui_wb_fit(lv_obj_t *label, const char *text, int32_t w, const lv_font_t *big
 
 lv_obj_t *ui_wb_card(lv_obj_t *list, int32_t h, bool clickable)
 {
-    lv_obj_t *c = clickable ? watch_theme_lg_button(list, FLEX_LG_DARK, 0, 0, CARD_W, h, FLEX_RADIUS_CARD, FLEX_GLOW_NONE)
-                            : watch_theme_lg(list, FLEX_LG_DARK, 0, 0, CARD_W, h, FLEX_RADIUS_CARD, FLEX_GLOW_NONE);
+    lv_obj_t *c = clickable ? flex_glass_pressable(list, FLEX_GLASS_CARD, 0, 0, CARD_W, h, FLEX_RADIUS_CARD)
+                            : flex_glass_panel(list, FLEX_GLASS_CARD, 0, 0, CARD_W, h, FLEX_RADIUS_CARD);
     lv_obj_set_width(c, LV_PCT(100));
     return c;
 }
 
 lv_obj_t *ui_wb_row(lv_obj_t *list, act_icon_t icon, uint32_t color, const char *title, const char *sub)
 {
-    lv_obj_t *r = watch_theme_lg_button(list, FLEX_LG_DARK, 0, 0, CARD_W, FLEX_ROW_H, FLEX_RADIUS_ROW, FLEX_GLOW_NONE);
+    lv_obj_t *r = flex_glass_pressable(list, FLEX_GLASS_ROW, 0, 0, CARD_W, FLEX_ROW_H, FLEX_RADIUS_ROW);
     lv_obj_set_width(r, LV_PCT(100));
     lv_obj_t *b = ui_wb_icon_badge(r, icon, 46, color);
     lv_obj_align(b, LV_ALIGN_LEFT_MID, 12, 0);
-    lv_obj_t *t = watch_theme_label(r, FLEX_FONT_S20, FLEX_C_TXT, "");
-    const int lines = ui_wb_fit(t, title, CARD_W - 76 - 36, FLEX_FONT_S20, FLEX_FONT_S16);
+    lv_obj_t *t = watch_theme_label(r, FLEX_TYPE_LABEL, FLEX_C_TXT, "");
+    const int lines = ui_wb_fit(t, title, CARD_W - 76 - 36, FLEX_TYPE_LABEL, FLEX_TYPE_FOOTNOTE);
     if (sub) {
         lv_obj_align(t, LV_ALIGN_TOP_LEFT, 70, lines > 1 ? 5 : 12);
         lv_obj_t *s = watch_theme_label(r, FLEX_FONT_TINY, FLEX_C_TXT2, sub);
@@ -200,7 +200,7 @@ static void last_cb(lv_event_t *e)
 
 static lv_obj_t *card_title(lv_obj_t *card, const char *title, bool chevron)
 {
-    lv_obj_t *t = watch_theme_label(card, FLEX_FONT_S20, FLEX_C_TXT, title);
+    lv_obj_t *t = watch_theme_label(card, FLEX_TYPE_LABEL, FLEX_C_TXT, title);
     lv_obj_align(t, LV_ALIGN_TOP_LEFT, 18, 14);
     if (chevron) {
         lv_obj_t *ch = flex_icon_create(card, FLEX_ICON_CHEVRON_RIGHT, 18, WB_C_EXER);
@@ -231,7 +231,7 @@ static lv_obj_t *simple_card(lv_obj_t *list, const char *title, bool click, uint
 {
     lv_obj_t *c = ui_wb_card(list, 116, click);
     card_title(c, title, click);
-    *val = watch_theme_label(c, FLEX_FONT_S32, rgb, "--");
+    *val = watch_theme_label(c, FLEX_TYPE_TITLE, rgb, "--");
     lv_obj_align(*val, LV_ALIGN_TOP_LEFT, 18, 44);
     *sub = watch_theme_label(c, FLEX_FONT_TINY, FLEX_C_TXT2, "");
     lv_obj_align(*sub, LV_ALIGN_BOTTOM_LEFT, 18, -12);
@@ -250,14 +250,14 @@ static void build(home_t *h, lv_obj_t *page)
     static const char *const kUnit[3] = {"KCAL", "MIN", ""};
     static const uint32_t kCol[3] = {WB_C_MOVE, WB_C_EXER, WB_C_STEPS};
     for (int i = 0; i < 3; i++) {
-        lv_obj_t *n = watch_theme_label(rc, FLEX_FONT_S16, FLEX_C_TXT, kName[i]);
+        lv_obj_t *n = watch_theme_label(rc, FLEX_TYPE_FOOTNOTE, FLEX_C_TXT, kName[i]);
         lv_obj_set_pos(n, RING_D + 22, 14 + i * 64);
         lv_obj_t *box = lv_obj_create(rc);
         lv_obj_remove_style_all(box);
         lv_obj_set_size(box, CARD_W - RING_D - 26, 34);
         lv_obj_set_pos(box, RING_D + 22, 34 + i * 64);
         lv_obj_remove_flag(box, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-        value_unit(box, FLEX_FONT_S22, kCol[i], &h->val[i], &h->unit[i], kUnit[i]);
+        value_unit(box, FLEX_TYPE_BODY, kCol[i], &h->val[i], &h->unit[i], kUnit[i]);
     }
 
     /* Avisos del sensor y del almacenamiento (ocultos si todo va bien) */
@@ -275,24 +275,24 @@ static void build(home_t *h, lv_obj_t *page)
     lv_obj_set_style_border_opa(h->wk_card, LV_OPA_COVER, 0);
     h->wk_icon = ui_wb_icon_badge(h->wk_card, ACT_IC_RUN, 52, WB_C_GO);
     lv_obj_align(h->wk_icon, LV_ALIGN_LEFT_MID, 14, 0);
-    h->wk_name = watch_theme_label(h->wk_card, FLEX_FONT_S20, FLEX_C_TXT, "");
+    h->wk_name = watch_theme_label(h->wk_card, FLEX_TYPE_LABEL, FLEX_C_TXT, "");
     lv_obj_align(h->wk_name, LV_ALIGN_TOP_LEFT, 80, 10);
     h->wk_state = watch_theme_label(h->wk_card, FLEX_FONT_TINY, WB_C_GO, "");
     lv_obj_align(h->wk_state, LV_ALIGN_BOTTOM_LEFT, 80, -10);
-    h->wk_time = watch_theme_label(h->wk_card, FLEX_FONT_S24, WB_C_TIMER, "");
+    h->wk_time = watch_theme_label(h->wk_card, FLEX_TYPE_HEADLINE, WB_C_TIMER, "");
     lv_obj_align(h->wk_time, LV_ALIGN_RIGHT_MID, -16, 0);
     lv_obj_add_event_cb(h->wk_card, workout_cb, LV_EVENT_CLICKED, h);
     lv_obj_add_flag(h->wk_card, LV_OBJ_FLAG_HIDDEN);
 
     /* ¿Estás entrenando? */
     h->sg_card = ui_wb_card(list, 150, false);
-    h->sg_title = watch_theme_label(h->sg_card, FLEX_FONT_S20, WB_C_GO, "¿Estás entrenando?");
+    h->sg_title = watch_theme_label(h->sg_card, FLEX_TYPE_LABEL, WB_C_GO, "¿Estás entrenando?");
     lv_obj_align(h->sg_title, LV_ALIGN_TOP_LEFT, 18, 12);
     h->sg_sub = watch_theme_label(h->sg_card, FLEX_FONT_TINY, FLEX_C_TXT2, "");
     lv_obj_align(h->sg_sub, LV_ALIGN_TOP_LEFT, 18, 40);
     static const char *const kWhere[2] = {"Al aire libre", "En interior"};
     for (int i = 0; i < 2; i++) {
-        lv_obj_t *b = watch_theme_button(h->sg_card, kWhere[i], i == 0 ? WB_C_GO : FLEX_C_SURF2, 160, 48);
+        lv_obj_t *b = flex_glass_button(h->sg_card, kWhere[i], i == 0 ? WB_C_GO : FLEX_GLASS_TINT_NONE, 160, 48);
         if (i == 0) {
             lv_obj_set_style_text_color(b, flex_color(FLEX_C_BLACK), 0);
         }
@@ -311,7 +311,7 @@ static void build(home_t *h, lv_obj_t *page)
     h->last_card = ui_wb_card(list, 88, true);
     lv_obj_t *lt = watch_theme_label(h->last_card, FLEX_FONT_TINY, FLEX_C_TXT2, "Último entrenamiento");
     lv_obj_align(lt, LV_ALIGN_TOP_LEFT, 18, 12);
-    h->last_name = watch_theme_label(h->last_card, FLEX_FONT_S20, FLEX_C_TXT, "");
+    h->last_name = watch_theme_label(h->last_card, FLEX_TYPE_LABEL, FLEX_C_TXT, "");
     lv_obj_align(h->last_name, LV_ALIGN_TOP_LEFT, 18, 32);
     h->last_sub = watch_theme_label(h->last_card, FLEX_FONT_TINY, WB_C_EXER, "");
     lv_obj_align(h->last_sub, LV_ALIGN_BOTTOM_LEFT, 18, -10);
@@ -325,7 +325,7 @@ static void build(home_t *h, lv_obj_t *page)
     card_title(sc, "Pasos", true);
     lv_obj_t *hoy = watch_theme_label(sc, FLEX_FONT_TINY, FLEX_C_TXT2, "Hoy");
     lv_obj_align(hoy, LV_ALIGN_TOP_LEFT, 18, 46);
-    h->steps_val = watch_theme_label(sc, FLEX_FONT_S40, WB_C_STEPS_TXT, "--");
+    h->steps_val = watch_theme_label(sc, FLEX_TYPE_NUMBER, WB_C_STEPS_TXT, "--");
     lv_obj_align(h->steps_val, LV_ALIGN_TOP_LEFT, 18, 66);
     const int32_t bx = CARD_W - 18 - (BARS * BAR_W + (BARS - 1) * BAR_GAP);
     for (int i = 0; i < BARS; i++) {
@@ -353,9 +353,8 @@ static void build(home_t *h, lv_obj_t *page)
     lv_obj_add_event_cb(c, push_cb, LV_EVENT_CLICKED, (void *)ui_wb_history_create);
 
     /* Acciones */
-    lv_obj_t *go = watch_theme_button(list, "Entrenar", WB_C_GO, CARD_W, 64);
+    lv_obj_t *go = flex_glass_button(list, "Entrenar", WB_C_GO, CARD_W, 64);
     lv_obj_set_width(go, LV_PCT(100));
-    lv_obj_set_style_text_font(go, FLEX_FONT_S24, 0);
     lv_obj_set_style_text_color(go, flex_color(FLEX_C_BLACK), 0);
     lv_obj_add_event_cb(go, push_cb, LV_EVENT_CLICKED, (void *)ui_wb_workouts_create);
     lv_obj_t *r = ui_wb_row(list, ACT_IC_STAR, WB_C_STEPS_TXT, "Historial y logros", NULL);
@@ -419,7 +418,7 @@ static void refresh_hist(home_t *h, const watch_activity_status_t *st)
     watch_theme_set_visible(h->last_card, show_last);
     if (show_last) {
         h->last = hs->last;
-        ui_wb_fit(h->last_name, act_catalog_get(hs->last.type)->name, CARD_W - 60, FLEX_FONT_S20, FLEX_FONT_S16);
+        ui_wb_fit(h->last_name, act_catalog_get(hs->last.type)->name, CARD_W - 60, FLEX_TYPE_LABEL, FLEX_TYPE_FOOTNOTE);
         char d[20], k[20];
         wb_fmt_dur_words(d, sizeof(d), hs->last.active_s);
         if (hs->last.kcal_valid) {
@@ -482,7 +481,7 @@ static void refresh(home_t *h)
     watch_theme_set_visible(h->wk_card, run);
     if (run) {
         const act_type_t *t = act_catalog_get(v->type);
-        ui_wb_fit(h->wk_name, t->name, CARD_W - 90 - 110, FLEX_FONT_S20, FLEX_FONT_S16);
+        ui_wb_fit(h->wk_name, t->name, CARD_W - 90 - 110, FLEX_TYPE_LABEL, FLEX_TYPE_FOOTNOTE);
         ui_wb_set_text(h->wk_state, ui_wb_state_text(v));
         wb_fmt_dur(b, sizeof(b), v->active_ms);
         ui_wb_set_text(h->wk_time, b);

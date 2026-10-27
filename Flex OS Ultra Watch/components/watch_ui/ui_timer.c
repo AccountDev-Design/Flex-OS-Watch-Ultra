@@ -27,10 +27,9 @@
 #define CHIP_DX     88    /* atajos centrados en 117, 205 y 293 */
 #define CHIP_H      34
 #define CHIP_Y      360
-#define BTN_W       100
+#define BTN_W       116
 #define BTN_H       61
 #define BTN_Y       413
-#define BTN_R       30
 #define RING_R      111
 #define RING_CY     236
 
@@ -185,17 +184,12 @@ static lv_obj_t *roller(lv_obj_t *parent, const char *opts, lv_roller_mode_t mod
     return r;
 }
 
+/* Píldoras del motor: la acción principal (iniciar, seguir) con el tinte
+ * morado del diseño; el resto, vidrio sin tinte. */
 static lv_obj_t *button(lv_obj_t *parent, int32_t x, const char *txt, bool primary, lv_event_cb_t cb, void *ud)
 {
-    lv_obj_t *b = watch_theme_lg_button(parent, FLEX_LG_DARK, x, VY(BTN_Y), BTN_W, BTN_H, BTN_R, FLEX_GLOW_BOTTOM);
-    if (primary) {
-        lv_obj_set_style_bg_color(b, flex_color(FLEX_RD_START), 0);
-        lv_obj_set_style_bg_grad_color(b, flex_color(FLEX_RD_START_BOT), 0);
-        lv_obj_set_style_border_color(b, flex_color(0xC79BFF), 0);
-    }
-    lv_obj_t *l = watch_theme_label(b, FLEX_FONT_S24, FLEX_C_WHITE, txt);
-    lv_obj_set_style_text_color(l, flex_color(FLEX_C_MUTE), LV_STATE_DISABLED);
-    lv_obj_center(l);
+    lv_obj_t *b = flex_glass_button(parent, txt, primary ? FLEX_TINT_PURPLE : FLEX_GLASS_TINT_NONE, BTN_W, BTN_H);
+    lv_obj_set_pos(b, x, VY(BTN_Y));
     lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, ud);
     return b;
 }
@@ -222,7 +216,7 @@ lv_obj_t *ui_timer_view(lv_obj_t *page)
     }
     static const char *const kLabels[3] = {"Horas", "Minutos", "Segundos"};
     for (int c = 0; c < 3; c++) {
-        lv_obj_t *l = watch_theme_label(p->idle, FLEX_FONT_TINY, FLEX_C_TXT2, kLabels[c]);
+        lv_obj_t *l = watch_theme_label(p->idle, FLEX_TYPE_FOOTNOTE, FLEX_GLASS_TXT2, kLabels[c]);
         lv_obj_align(l, LV_ALIGN_TOP_MID, (c - 1) * COL_DX, VY(LABEL_Y));
         p->roll[c] = roller(p->idle, c == 0 ? hours : mins, LV_ROLLER_MODE_INFINITE); /* 99 sobre 00, como en el diseño */
         lv_obj_align(p->roll[c], LV_ALIGN_TOP_MID, (c - 1) * COL_DX, VY(ROLLER_Y));
@@ -241,15 +235,16 @@ lv_obj_t *ui_timer_view(lv_obj_t *page)
         char t[12];
         snprintf(t, sizeof(t), "%02d:%02d:00", PRESETS_MIN[i] / 60, PRESETS_MIN[i] % 60);
         const int32_t cx = FLEX_SCREEN_W / 2 + (i - 1) * CHIP_DX;
-        lv_obj_t *c = watch_theme_lg_button(p->idle, FLEX_LG_DARK, cx - CHIP_W / 2, VY(CHIP_Y), CHIP_W, CHIP_H, 14,
-                                            FLEX_GLOW_BOTTOM);
-        lv_obj_t *l = watch_theme_label(c, FLEX_FONT_TINY, FLEX_C_WHITE, t);
+        lv_obj_t *c = flex_glass_panel(p->idle, FLEX_GLASS_CONTROL, cx - CHIP_W / 2, VY(CHIP_Y), CHIP_W, CHIP_H,
+                                       LV_RADIUS_CIRCLE);
+        flex_glass_interactive(c);
+        lv_obj_t *l = watch_theme_label(c, FLEX_TYPE_FOOTNOTE, FLEX_GLASS_TXT, t);
         lv_obj_center(l);
         lv_obj_set_ext_click_area(c, 12); /* zona táctil mayor que el dibujo (FLEX_TOUCH_MIN) */
         lv_obj_set_user_data(c, p);
         lv_obj_add_event_cb(c, preset_cb, LV_EVENT_CLICKED, (void *)(intptr_t)PRESETS_MIN[i]);
     }
-    p->start = button(p->idle, (FLEX_SCREEN_W - BTN_W) / 2, "Iniciar", false, start_cb, p);
+    p->start = button(p->idle, (FLEX_SCREEN_W - BTN_W) / 2, "Iniciar", true, start_cb, p);
 
     /* ---- En marcha o en pausa ---- */
     p->run = box(v);
@@ -274,8 +269,8 @@ lv_obj_t *ui_timer_view(lv_obj_t *page)
     lv_obj_align(p->left, LV_ALIGN_TOP_MID, 0, VY(RING_CY) - 34);
     p->of = watch_theme_label(p->run, FLEX_FONT_SMALL, FLEX_C_TXT2, "");
     lv_obj_align(p->of, LV_ALIGN_TOP_MID, 0, VY(RING_CY) + 26);
-    p->pause = button(p->run, 75, "Pausa", false, pause_cb, p);
-    p->cancel = button(p->run, 235, "Cancelar", true, cancel_cb, p);
+    p->pause = button(p->run, 67, "Pausa", true, pause_cb, p);
+    p->cancel = button(p->run, 227, "Cancelar", false, cancel_cb, p);
 
     paint(p);
     lv_obj_add_event_cb(v, free_cb, LV_EVENT_DELETE, p);

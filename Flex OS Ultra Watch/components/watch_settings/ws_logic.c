@@ -24,6 +24,7 @@ void ws_defaults(ws_settings_t *s)
     s->psave_radio = WS_PS_RADIO_WIFI;
     s->ps_bright = 0;
     s->ps_flags = 0;
+    s->glass = WS_GLASS_AUTO;
 }
 
 int ws_dim_level(uint8_t dim, int user_percent)
@@ -102,6 +103,9 @@ bool ws_normalize(ws_settings_t *s)
         s->ps_bright = 0;
     }
     s->ps_flags &= (uint8_t)(WS_PS_PREV_VALID | WS_PS_PREV_AOD | WS_PS_PREV_WIFI | WS_PS_PREV_BT);
+    if (s->glass >= WS_GLASS_COUNT) {
+        s->glass = WS_GLASS_AUTO;
+    }
     return !ws_equal(&before, s);
 }
 
@@ -110,7 +114,8 @@ bool ws_equal(const ws_settings_t *a, const ws_settings_t *b)
     return a->brightness == b->brightness && a->screen_to_s == b->screen_to_s && a->h24 == b->h24 &&
            a->tz_min == b->tz_min && a->wallpaper == b->wallpaper && a->face == b->face && a->aod == b->aod &&
            a->pshift == b->pshift && a->dim == b->dim && a->psave == b->psave &&
-           a->psave_radio == b->psave_radio && a->ps_bright == b->ps_bright && a->ps_flags == b->ps_flags;
+           a->psave_radio == b->psave_radio && a->ps_bright == b->ps_bright && a->ps_flags == b->ps_flags &&
+           a->glass == b->glass;
 }
 
 int64_t ws_commit_deadline(int64_t first_dirty_ms, int64_t last_change_ms)

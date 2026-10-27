@@ -2,11 +2,13 @@
  * ui_qp — panel rápido: cortina que baja desde el borde superior de la
  * esfera siguiendo al dedo.
  *
- * Rediseño 2026-10 (diseño del usuario: design/referencias/panel_rapido.png):
- * degradado turquesa-verde, cabecera con hora, fecha y batería, seis mosaicos
- * de vidrio claro solo con icono y la barra de brillo con relleno cian. Cada
- * mosaico enseña el estado REAL de su servicio: activo = relleno cian
- * (LV_STATE_CHECKED), no disponible = más transparente (LV_STATE_DISABLED).
+ * Flex Liquid Glass Engine (docs/LIQUID-GLASS.md): un velo translúcido
+ * (FLEX_GLASS_SCRIM) atenúa la esfera, que se sigue viendo detrás; encima, la
+ * cabecera con hora, fecha y batería, seis cápsulas de vidrio (CONTROL) solo
+ * con icono y el deslizador de brillo de vidrio. Cada cápsula enseña el estado
+ * REAL de su servicio: activo = vidrio tintado con el color de su función
+ * (LV_STATE_CHECKED), no disponible = apagado (LV_STATE_DISABLED). Con el
+ * perfil Ligero el velo es negro opaco y LVGL no dibuja la esfera debajo.
  * Solo lleva controles con función real:
  *  - Wi-Fi: tocarlo lo enciende o lo apaga (watch_net, F5.1).
  *  - Bluetooth: enciende o apaga el enlace con Flex Phone (watch_phone, F5.5).
@@ -27,8 +29,10 @@
  * falta (base 210/190 ms).
  *
  * El panel es hijo de la pantalla de navegación, encima de las páginas
- * (ui_overlay_parent: así LVGL no dibuja la parte de la esfera que tapa), y
- * se borra al cerrarse (con él, su temporizador y sus animaciones).
+ * (ui_overlay_parent), y se borra al cerrarse (con él, su temporizador y sus
+ * animaciones). Al moverse, LVGL invalida su área vieja y la nueva y vuelve a
+ * componer la esfera y el velo en las dos: no queda rastro de la posición
+ * anterior (tools/sim/sim_ghost.c lo comprueba cuadro a cuadro).
  */
 #include "ui_internal.h"
 
@@ -55,14 +59,16 @@
 #define TILE_X0     30
 #define TILE_GAP    10
 #define TILE_W      170
-#define TILE_H      98
-#define TILE_R      38
-#define TILE_Y0     66
-#define TILE_DY     (TILE_H + 10)
-#define SLIDER_Y    (TILE_Y0 + 3 * TILE_DY + 4)
-#define SLIDER_H    60
+#define TILE_H      94
+#define TILE_R      (TILE_H / 2) /* cápsula */
+#define TILE_Y0     70
+#define TILE_DY     (TILE_H + 12)
+#define TILE_ICON   52
+#define SLIDER_Y    (TILE_Y0 + 3 * TILE_DY + 2)
+#define SLIDER_H    58
 #define HANDLE_H    44          /* zona táctil del asa inferior */
-#define C_CLOCK_HANDS 0x63C5B4  /* agujas del reloj macizo: el tono del mosaico */
+#define C_ICON_INNER 0x2C2C2E   /* agujas del reloj y nervios de la hoja sobre el icono blanco */
+#define C_SUN        0x8E8E93   /* sol del brillo: se lee sobre el relleno blanco y sobre el vidrio */
 
 typedef enum {
     QP_CLOSED = 0,
@@ -166,7 +172,7 @@ static void update(void)
         } else {
             lv_obj_remove_state(s_qp.tile[UI_QP_AOD], LV_STATE_DISABLED);
         }
-        flex_icon_set_color(s_qp.aod_icon, on ? 0xB8E6DC : FLEX_C_WHITE);
+        flex_icon_set_color(s_qp.aod_icon, on ? FLEX_GLASS_TXT_OFF : FLEX_GLASS_TXT);
     }
 }
 
@@ -204,12 +210,18 @@ static void power_cb(lv_obj_t *root, const watch_power_snapshot_t *snap)
     update_battery(snap);
 }
 
-/* Mosaico de vidrio claro con un icono blanco centrado. */
-static lv_obj_t *tile(lv_obj_t *parent, int i, flex_icon_t icon, int32_t size, lv_event_cb_t cb)
+/* Cápsula de vidrio con un icono blanco centrado; activa = tintada con
+ * active_tint (FLEX_GLASS_TINT_NONE: nunca se marca, abre algo). */
+static lv_obj_t *tile(lv_obj_t *parent, int i, flex_icon_t icon, int32_t size, uint32_t active_tint,
+                      lv_event_cb_t cb)
 {
     const int32_t x = TILE_X0 + (i % 2) * (TILE_W + TILE_GAP), y = TILE_Y0 + (i / 2) * TILE_DY;
-    lv_obj_t *t = watch_theme_lg_button(parent, FLEX_LG_LIGHT, x, y, TILE_W, TILE_H, TILE_R, FLEX_GLOW_NONE);
-    lv_obj_t *ic = flex_icon_create(t, icon, size, FLEX_C_WHITE);
+    lv_obj_t *t = flex_glass_panel(parent, FLEX_GLASS_CONTROL, x, y, TILE_W, TILE_H, TILE_R);
+    flex_glass_interactive(t);
+    if (active_tint != FLEX_GLASS_TINT_NONE) {
+        flex_glass_set_tint(t, active_tint, LV_STATE_CHECKED);
+    }
+    lv_obj_t *ic = flex_icon_create(t, icon, size, FLEX_GLASS_TXT);
     lv_obj_center(ic);
     lv_obj_add_event_cb(t, cb, LV_EVENT_CLICKED, NULL);
     return t;
@@ -341,23 +353,11 @@ static void build(void)
     s_qp.last_state = -1;
     s_qp.last_level = -1;
 
-    lv_obj_t *root = lv_obj_create(ui_overlay_parent());
-    lv_obj_remove_style_all(root);
+    /* Velo del motor a pantalla completa, sin radio ni borde: la esfera se ve
+     * atenuada detrás (Premium y Estándar) o nada (Ligero: opaco). */
+    lv_obj_t *root = flex_glass_create(ui_overlay_parent(), FLEX_GLASS_SCRIM);
     lv_obj_set_size(root, QP_W, QP_H);
     lv_obj_set_pos(root, 0, -QP_H);
-    /* Degradado horizontal opaco: LVGL no dibuja la esfera bajo el panel.
-     * Sin radio: un rectángulo opaco que cubre la pantalla entera (con radio,
-     * las esquinas obligaban a redibujar la esfera en cada cuadro). Una línea
-     * abajo marca el borde mientras baja siguiendo al dedo. */
-    lv_obj_set_style_bg_color(root, flex_color(FLEX_QP_GRAD_L), 0);
-    lv_obj_set_style_bg_grad_color(root, flex_color(FLEX_QP_GRAD_R), 0);
-    lv_obj_set_style_bg_grad_dir(root, LV_GRAD_DIR_HOR, 0);
-    lv_obj_set_style_bg_opa(root, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(root, 2, 0);
-    lv_obj_set_style_border_side(root, LV_BORDER_SIDE_BOTTOM, 0);
-    lv_obj_set_style_border_color(root, flex_color(FLEX_C_WHITE), 0);
-    lv_obj_set_style_border_opa(root, FLEX_LG_LIGHT_EDGE_OPA, 0);
-    lv_obj_remove_flag(root, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(root, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_PRESS_LOCK);
     lv_obj_add_event_cb(root, close_drag_cb, LV_EVENT_PRESSED, NULL);
     lv_obj_add_event_cb(root, close_drag_cb, LV_EVENT_PRESSING, NULL);
@@ -368,7 +368,7 @@ static void build(void)
     /* Cabecera: hora y fecha corta a la izquierda, % y batería a la
      * derecha, dentro de lo que dejan ver las esquinas redondeadas a esa
      * altura (en la foto del reloj el icono de batería quedaba cortado). */
-    const int32_t hh = lv_font_get_line_height(FLEX_FONT_S32);
+    const int32_t hh = lv_font_get_line_height(FLEX_TYPE_TITLE);
     const int32_t hx = flex_safe_left(HDR_Y, HDR_Y + hh - 1, FLEX_SAFE_MARGIN);
     lv_obj_t *hdr = row_box(root);
     s_qp.hdr = hdr;
@@ -380,9 +380,9 @@ static void build(void)
     lv_obj_set_size(left, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_flex_align(left, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_END);
     lv_obj_set_style_pad_column(left, 10, 0);
-    s_qp.time = watch_theme_label(left, FLEX_FONT_S32, FLEX_C_WHITE, "--:--");
-    s_qp.date = watch_theme_label(left, FLEX_FONT_S20, FLEX_C_WHITE, "");
-    lv_obj_set_style_pad_bottom(s_qp.date, 4, 0);
+    s_qp.time = watch_theme_label(left, FLEX_TYPE_TITLE, FLEX_GLASS_TXT, "--:--");
+    s_qp.date = watch_theme_label(left, FLEX_TYPE_CAPTION, FLEX_GLASS_TXT2, "");
+    lv_obj_set_style_pad_bottom(s_qp.date, 5, 0);
     lv_obj_t *right = row_box(hdr);
     s_qp.hdr_right = right;
     lv_obj_set_size(right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -390,20 +390,20 @@ static void build(void)
     lv_obj_add_flag(right, LV_OBJ_FLAG_CLICKABLE); /* abre Ajustes > Batería */
     lv_obj_set_ext_click_area(right, 10);
     lv_obj_add_event_cb(right, battery_cb, LV_EVENT_CLICKED, NULL);
-    s_qp.batt_pct = watch_theme_label(right, FLEX_FONT_S32, FLEX_C_WHITE, "--");
-    s_qp.batt_icon = flex_battery_icon_create(right, 46, 22);
+    s_qp.batt_pct = watch_theme_label(right, FLEX_TYPE_BODY, FLEX_GLASS_TXT, "--");
+    s_qp.batt_icon = flex_battery_icon_create(right, 42, 20);
     flex_battery_icon_set_mono(s_qp.batt_icon, true);
 
     /* Mosaicos (orden de la referencia) */
-    s_qp.tile[UI_QP_WIFI] = tile(root, 0, FLEX_ICON_WIFI, 66, wifi_cb);
-    s_qp.tile[UI_QP_BT] = tile(root, 1, FLEX_ICON_BLUETOOTH, 70, bt_cb);
-    s_qp.tile[UI_QP_SETTINGS] = tile(root, 2, FLEX_ICON_GEAR_SOLID, 64, settings_cb);
-    s_qp.tile[UI_QP_AOD] = tile(root, 3, FLEX_ICON_MOON_SOLID, 60, aod_cb);
+    s_qp.tile[UI_QP_WIFI] = tile(root, 0, FLEX_ICON_WIFI, TILE_ICON, FLEX_TINT_BLUE, wifi_cb);
+    s_qp.tile[UI_QP_BT] = tile(root, 1, FLEX_ICON_BLUETOOTH, TILE_ICON + 4, FLEX_TINT_BLUE, bt_cb);
+    s_qp.tile[UI_QP_SETTINGS] = tile(root, 2, FLEX_ICON_GEAR_SOLID, TILE_ICON - 2, FLEX_GLASS_TINT_NONE, settings_cb);
+    s_qp.tile[UI_QP_AOD] = tile(root, 3, FLEX_ICON_MOON_SOLID, TILE_ICON - 4, FLEX_TINT_INDIGO, aod_cb);
     s_qp.aod_icon = lv_obj_get_child(s_qp.tile[UI_QP_AOD], 0);
-    s_qp.tile[UI_QP_PSAVE] = tile(root, 4, FLEX_ICON_BATT_LEAF, 84, psave_cb);
-    flex_icon_set_color2(lv_obj_get_child(s_qp.tile[UI_QP_PSAVE], 0), C_CLOCK_HANDS); /* nervios de la hoja */
-    s_qp.tile[UI_QP_CLOCK] = tile(root, 5, FLEX_ICON_CLOCK_SOLID, 64, clock_cb);
-    flex_icon_set_color2(lv_obj_get_child(s_qp.tile[UI_QP_CLOCK], 0), C_CLOCK_HANDS);
+    s_qp.tile[UI_QP_PSAVE] = tile(root, 4, FLEX_ICON_BATT_LEAF, TILE_ICON + 14, FLEX_TINT_AMBER, psave_cb);
+    flex_icon_set_color2(lv_obj_get_child(s_qp.tile[UI_QP_PSAVE], 0), C_ICON_INNER); /* nervios de la hoja */
+    s_qp.tile[UI_QP_CLOCK] = tile(root, 5, FLEX_ICON_CLOCK_SOLID, TILE_ICON - 2, FLEX_GLASS_TINT_NONE, clock_cb);
+    flex_icon_set_color2(lv_obj_get_child(s_qp.tile[UI_QP_CLOCK], 0), C_ICON_INNER);
 
     ui_bright_create_light(root, TILE_X0, SLIDER_Y, 2 * TILE_W + TILE_GAP, SLIDER_H);
 
@@ -421,7 +421,7 @@ static void build(void)
     lv_obj_set_size(pill, 44, 5);
     lv_obj_set_style_radius(pill, 3, 0);
     lv_obj_set_style_bg_color(pill, flex_color(FLEX_C_WHITE), 0);
-    lv_obj_set_style_bg_opa(pill, LV_OPA_70, 0);
+    lv_obj_set_style_bg_opa(pill, LV_OPA_60, 0);
     lv_obj_align(pill, LV_ALIGN_CENTER, 0, 4);
     lv_obj_remove_flag(pill, LV_OBJ_FLAG_CLICKABLE);
 

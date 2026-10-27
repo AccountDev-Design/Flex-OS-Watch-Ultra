@@ -24,10 +24,9 @@
 #define TICK_R0    124
 #define TICK_R1    136
 #define HAND_R     132
-#define BTN_W      100
+#define BTN_W      116
 #define BTN_H      61
 #define BTN_Y      413
-#define BTN_R      30
 #define LAP_ROWS   2
 
 typedef struct {
@@ -175,20 +174,12 @@ static void free_cb(lv_event_t *e)
     lv_free(lv_event_get_user_data(e));
 }
 
+/* Píldoras del motor: la acción principal ("Iniciar") con el tinte morado
+ * del diseño; la secundaria, vidrio sin tinte. */
 static lv_obj_t *button(lv_obj_t *v, int32_t x, const char *txt, bool primary, lv_event_cb_t cb, void *ud)
 {
-    lv_obj_t *b = watch_theme_lg_button(v, FLEX_LG_DARK, x, VY(BTN_Y), BTN_W, BTN_H, BTN_R, FLEX_GLOW_BOTTOM);
-    if (primary) {
-        /* "Iniciar": morado con degradado, como en el diseño */
-        lv_obj_set_style_bg_color(b, flex_color(FLEX_RD_START), 0);
-        lv_obj_set_style_bg_grad_color(b, flex_color(FLEX_RD_START_BOT), 0);
-        lv_obj_set_style_border_color(b, flex_color(0xC79BFF), 0);
-        lv_obj_set_style_bg_color(b, flex_color(0x7B22C8), LV_STATE_PRESSED);
-        lv_obj_set_style_bg_grad_color(b, flex_color(0x6A1DB0), LV_STATE_PRESSED);
-    }
-    lv_obj_t *l = watch_theme_label(b, FLEX_FONT_S24, FLEX_C_WHITE, txt);
-    lv_obj_set_style_text_color(l, flex_color(FLEX_C_MUTE), LV_STATE_DISABLED);
-    lv_obj_center(l);
+    lv_obj_t *b = flex_glass_button(v, txt, primary ? FLEX_TINT_PURPLE : FLEX_GLASS_TINT_NONE, BTN_W, BTN_H);
+    lv_obj_set_pos(b, x, VY(BTN_Y));
     lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, ud);
     return b;
 }
@@ -260,8 +251,8 @@ lv_obj_t *ui_stopwatch_view(lv_obj_t *page)
     lv_obj_set_pos(dot, DIAL_CX - 6, VY(DIAL_CY) - 6);
     lv_obj_remove_flag(dot, LV_OBJ_FLAG_CLICKABLE);
 
-    p->left = button(v, 75, "Parcial", false, left_cb, p);
-    p->right = button(v, 235, "Iniciar", true, right_cb, p);
+    p->left = button(v, 67, "Parcial", false, left_cb, p);
+    p->right = button(v, 227, "Iniciar", true, right_cb, p);
 
     paint(p, true);
     lv_obj_add_event_cb(v, free_cb, LV_EVENT_DELETE, p);

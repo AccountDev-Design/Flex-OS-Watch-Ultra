@@ -1,12 +1,11 @@
 /*
- * Pruebas del cajón en panal infinito (ui_grid_logic) y del desenfoque de su
- * fondo (flex_blur): lógica pura, sin LVGL.
+ * Pruebas del cajón en panal infinito (ui_grid_logic) y de las miniaturas
+ * (flex_thumb): lógica pura, sin LVGL.
  */
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "flex_blur.h"
 #include "flex_thumb.h"
 #include "flex_tokens.h"
 #include "ui_grid_logic.h"
@@ -184,58 +183,6 @@ static void test_physics(void)
     CHECK(sp.x <= GRID_MAX_SPEED + 0.5f);
 }
 
-static void test_blur(void)
-{
-    const int W = FLEX_SCREEN_W, H = FLEX_SCREEN_H;
-    uint16_t *src = malloc((size_t)W * H * 2), *dst = malloc((size_t)W * H * 2);
-    uint8_t *small = malloc(flex_blur_small_bytes(W, H)), *tmp = malloc(flex_blur_tmp_bytes(W, H));
-    int sw, sh;
-    flex_blur_small_size(W, H, &sw, &sh);
-    CHECK_EQ(sw, 103);
-    CHECK_EQ(sh, 126);
-    /* Color uniforme: sale el mismo (con dim = 255), sin bordes raros */
-    for (int i = 0; i < W * H; i++) {
-        src[i] = (uint16_t)((20 << 11) | (40 << 5) | 10);
-    }
-    flex_blur_t b;
-    flex_blur_begin(&b, src, dst, W, H, small, tmp, 255);
-    int steps = 0;
-    while (!flex_blur_step(&b, 48)) {
-        steps++;
-    }
-    CHECK(steps > 10); /* de verdad se reparte en muchos pasos */
-    int bad = 0;
-    for (int i = 0; i < W * H; i++) {
-        const int r = dst[i] >> 11, g = (dst[i] >> 5) & 0x3F, bl = dst[i] & 0x1F;
-        bad += abs(r - 20) > 1 || abs(g - 40) > 1 || abs(bl - 10) > 1;
-    }
-    CHECK_EQ(bad, 0);
-    /* Un borde nítido blanco/negro queda suave (desenfocado) y oscurecido con dim */
-    for (int y = 0; y < H; y++) {
-        for (int x = 0; x < W; x++) {
-            src[y * W + x] = x < W / 2 ? 0xFFFF : 0x0000;
-        }
-    }
-    flex_blur_begin(&b, src, dst, W, H, small, tmp, 165);
-    flex_blur_run(&b);
-    const int row = H / 2;
-    const int g_l = (dst[row * W + 10] >> 5) & 0x3F, g_r = (dst[row * W + W - 10] >> 5) & 0x3F;
-    const int g_m = (dst[row * W + W / 2] >> 5) & 0x3F;
-    CHECK(g_l >= 38 && g_l <= 43); /* 63 * 165 / 255 = 40,8 */
-    CHECK(g_r <= 1);
-    CHECK(g_m > 10 && g_m < 32); /* transición suave en el borde */
-    int ramp = 0;
-    for (int x = 0; x < W; x++) {
-        const int g = (dst[row * W + x] >> 5) & 0x3F;
-        ramp += g > 3 && g < 37;
-    }
-    CHECK(ramp >= 16); /* el salto se reparte en decenas de píxeles */
-    free(src);
-    free(dst);
-    free(small);
-    free(tmp);
-}
-
 
 /* ---- Miniaturas del selector de esferas (flex_thumb) ---- */
 
@@ -326,6 +273,5 @@ void test_grid_all(void)
     test_torus();
     test_layout();
     test_physics();
-    test_blur();
     test_thumb();
 }
