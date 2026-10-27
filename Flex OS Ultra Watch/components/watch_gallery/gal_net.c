@@ -519,7 +519,7 @@ typedef struct {
     gal_engine_t *e;
     gal_conn_t *c;
     uint64_t left;      /* tope de bytes que se aceptan */
-    uint64_t *done;     /* progreso (puede ser NULL; se lee sin cerrojo, solo para enseñarlo) */
+    _Atomic uint32_t *done; /* progreso del visor (puede ser NULL; atómico: lo lee la interfaz) */
     bool failed;
 } body_rd_t;
 
@@ -540,7 +540,7 @@ static int body_read(void *ud, uint8_t *buf, size_t n)
     }
     b->left -= (uint64_t)r;
     if (b->done) {
-        *b->done += (uint64_t)r;
+        atomic_fetch_add_explicit(b->done, (uint32_t)r, memory_order_relaxed);
     }
     return r;
 }
@@ -857,7 +857,9 @@ static gal_err_t do_download(gal_engine_t *e, gal_xfer_t *x)
         }
         ota_hash_update(h, buf, (size_t)r);
         have += (uint64_t)r;
-        x->done = have; /* progreso (se lee sin cerrojo: solo para enseñarlo) */
+        gal__lock(e); /* 64 bits: con el cerrojo, la interfaz nunca lee una mitad */
+        x->done = have;
+        gal__unlock(e);
     }
     if (fclose(f) != 0 && er == GAL_E_OK) {
         er = GAL_E_FS;
@@ -1060,7 +1062,9 @@ static gal_err_t do_upload_cloud(gal_engine_t *e, gal_xfer_t *x)
             er = err_of(&k, st, code);
             if (er == GAL_E_OK) {
                 up.got[(p - 1) / 8] |= (uint8_t)(1u << ((p - 1) % 8));
+                gal__lock(e);
                 x->done = x->done + len > size ? size : x->done + len;
+                gal__unlock(e);
             } else if (er == GAL_E_EXPIRED || er == GAL_E_NOTFOUND) {
                 x->up_id[0] = 0; /* la sesión ya no existe: la próxima vez, una nueva */
                 er = GAL_E_EXPIRED;

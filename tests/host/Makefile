@@ -101,6 +101,21 @@ $(BUILD)/gal_e2e: $(GAL_E2E_SRC) $(wildcard $(GAL_DIR)/include/*.h) gal_posix_io
 gallery-e2e: $(BUILD)/gal_e2e
 	./gallery_e2e.sh
 
+# Galería con DOS hilos (la tarea del motor y la interfaz, como en el reloj)
+# bajo ThreadSanitizer: las demás pruebas ejecutan el motor en un solo hilo.
+#   make -C tests/host race LVGL_DIR=/ruta/a/lvgl-9.5.0
+RACE_SRC := gal_race.c $(GAL_CORE) $(FW)/components/watch_files/files_logic.c $(FW)/components/watch_files/flexfs.c \
+            $(FW)/components/watch_ota/ota_sig.c
+$(BUILD)/tsan/tjpgd.o: $(LVGL_DIR)/src/libs/tjpgd/tjpgd.c
+	@mkdir -p $(BUILD)/tsan
+	$(CC) -std=c11 -O2 -w -fsanitize=thread $(TJPGD_FLAGS) -c $< -o $@
+$(BUILD)/tsan/gal_race: $(RACE_SRC) $(wildcard $(GAL_DIR)/include/*.h) $(GAL_DIR)/gal_priv.h $(BUILD)/tsan/tjpgd.o $(MBT_LIB)
+	$(CC) -std=gnu11 -O1 -g -Wall -Wextra -Werror -fsanitize=thread $(TJPGD_FLAGS) $(GAL_INC) $(MBT_INC) $(RACE_SRC) \
+	    $(BUILD)/tsan/tjpgd.o $(MBT_LIB) -lm -lpthread -o $@
+.PHONY: race
+race: $(BUILD)/tsan/gal_race
+	TSAN_OPTIONS="halt_on_error=1" ./$(BUILD)/tsan/gal_race 60
+
 # El motor del reloj como proceso de PC, para la prueba de interoperabilidad
 # con el lado Android (FlexPhone: WatchPeerInteropTest).
 PEER_SRC := flexlink_watch_peer.c $(FW)/components/flexlink/flex_link.c $(FW)/components/flexlink/flex_auth.c \

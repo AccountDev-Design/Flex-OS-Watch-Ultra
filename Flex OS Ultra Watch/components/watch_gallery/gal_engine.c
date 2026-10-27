@@ -560,8 +560,9 @@ void gal_thumb_request(gal_engine_t *e, const gal_item_t *it)
         if (t->state == GAL_TH_FAILED && now - t->fail_ms > 60000u) {
             t->state = GAL_TH_WANTED; /* se reintenta, pero no en bucle */
         }
+        const bool wanted = t->state == GAL_TH_WANTED; /* leído con el cerrojo: la tarea lo cambia */
         gal__unlock(e);
-        if (t->state == GAL_TH_WANTED) {
+        if (wanted) {
             kick(e);
         }
         return;
@@ -644,7 +645,8 @@ bool gal_view_open(gal_engine_t *e, const gal_item_t *it)
     e->view_req = true;
     e->view_state = GAL_V_LOADING;
     e->view_gen++;
-    e->view_done = e->view_total = 0;
+    atomic_store(&e->view_done, 0);
+    e->view_total = 0;
     e->view_err[0] = 0;
     e->abort_job = true; /* lo que se estuviera haciendo cede el sitio (una descarga sigue después) */
     gal__unlock(e);
@@ -669,7 +671,7 @@ void gal_view_get(gal_engine_t *e, gal_view_t *o)
     gal__lock(e);
     o->state = e->view_state;
     o->gen = e->view_gen;
-    o->done = e->view_done;
+    o->done = atomic_load_explicit(&e->view_done, memory_order_relaxed);
     o->total = e->view_total;
     o->src_w = e->src_w;
     o->src_h = e->src_h;

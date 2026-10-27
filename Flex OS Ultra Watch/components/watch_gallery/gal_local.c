@@ -65,10 +65,20 @@ bool gal__unique_photo(const char *name, char *vpath, size_t n)
 
 /* ======================= origen.txt ======================= */
 
+/* La tabla (GAL_ORIGINS x gal_origin_t, unos 8 KB) va al montón del motor
+ * (PSRAM), NUNCA a la pila: en la pila de 12 KB de la tarea "watch_gal",
+ * debajo de gal_engine_step y encima de la lectura de LittleFS, la
+ * desbordaba al abrir la Galería (causa de los reinicios: -fstack-usage del
+ * Xtensa daba 8224 B a esta función y 8256 B a gal__origin_add;
+ * docs/GALERIA.md §13). Sin memoria, no se cargan las marcas de origen: las
+ * copias se ven igual, solo sin "copia de ...". */
 void gal__origin_load(gal_engine_t *e)
 {
     char real[GAL_PATH_MAX + 32], line[256];
-    gal_origin_t tab[GAL_ORIGINS];
+    gal_origin_t *tab = gal__alloc(e, sizeof(gal_origin_t) * GAL_ORIGINS);
+    if (!tab) {
+        return;
+    }
     int n = 0;
     FILE *f = gal__real(GAL_ORIGIN, real, sizeof(real)) ? fopen(real, "r") : NULL;
     while (f && fgets(line, sizeof(line), f)) {
@@ -89,6 +99,7 @@ void gal__origin_load(gal_engine_t *e)
     memcpy(e->origins, tab, sizeof(tab[0]) * (size_t)n);
     e->norigins = n;
     gal__unlock(e);
+    gal__free(e, tab);
 }
 
 bool gal__origin_add(gal_engine_t *e, const gal_origin_t *o)
@@ -99,14 +110,20 @@ bool gal__origin_add(gal_engine_t *e, const gal_origin_t *o)
         e->norigins--;
     }
     e->origins[e->norigins++] = *o;
-    gal_origin_t tab[GAL_ORIGINS];
     const int n = e->norigins;
-    memcpy(tab, e->origins, sizeof(tab[0]) * (size_t)n);
+    gal_origin_t *tab = gal__alloc(e, sizeof(gal_origin_t) * GAL_ORIGINS); /* fuera de la pila (ver arriba) */
+    if (tab) {
+        memcpy(tab, e->origins, sizeof(tab[0]) * (size_t)n);
+    }
     gal__unlock(e);
+    if (!tab) {
+        return false; /* queda en memoria; se escribirá con la próxima */
+    }
     /* se reescribe entero (como mucho 64 líneas) y de forma atómica */
     gal__mkdirs(GAL_DIR_SYS);
     char real[GAL_PATH_MAX + 32], tmp[GAL_PATH_MAX + 40], line[256];
     if (!gal__real(GAL_ORIGIN, real, sizeof(real))) {
+        gal__free(e, tab);
         return false;
     }
     snprintf(tmp, sizeof(tmp), "%s.tmp", real);
@@ -125,6 +142,7 @@ bool gal__origin_add(gal_engine_t *e, const gal_origin_t *o)
     if (!ok) {
         remove(tmp);
     }
+    gal__free(e, tab);
     return ok;
 }
 
@@ -229,7 +247,7 @@ static uint32_t fnv(const char *s)
 typedef struct {
     FILE *f;
     gal_engine_t *e;
-    uint64_t *done;
+    _Atomic uint32_t *done; /* progreso del visor (atómico: lo lee la interfaz) */
 } file_src_t;
 
 static int fs_read(void *ud, uint8_t *buf, size_t n)
@@ -237,7 +255,7 @@ static int fs_read(void *ud, uint8_t *buf, size_t n)
     file_src_t *s = ud;
     const size_t r = fread(buf, 1, n, s->f);
     if (s->done) {
-        *s->done += r;
+        atomic_fetch_add_explicit(s->done, (uint32_t)r, memory_order_relaxed);
     }
     return r ? (int)r : (ferror(s->f) ? -1 : 0);
 }

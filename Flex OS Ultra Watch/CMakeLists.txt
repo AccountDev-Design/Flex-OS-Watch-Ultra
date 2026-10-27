@@ -20,6 +20,13 @@ idf_build_set_property(COMPILE_DEFINITIONS "LV_USE_ARCLABEL=1" APPEND)
 # estilos y estado de las páginas en PSRAM, no en la RAM interna que necesitan
 # Wi-Fi, BLE, lwIP y las pilas de las tareas.
 idf_build_set_property(COMPILE_DEFINITIONS "LV_USE_STDLIB_MALLOC=LV_STDLIB_CUSTOM" APPEND)
+# Medir los marcos de pila con el compilador del chip (un .su por archivo):
+#   idf.py -DFLEX_STACK_USAGE=1 build
+#   python3 ../tools/stack/check_frames.py build
+# (la Galería se reiniciaba por un array de 8 KB en la pila de su tarea).
+if(FLEX_STACK_USAGE)
+    idf_build_set_property(COMPILE_OPTIONS "-fstack-usage" APPEND)
+endif()
 if(FLEX_PERF_MONITOR)
     idf_build_set_property(COMPILE_DEFINITIONS "FLEX_PERF_MONITOR=1" APPEND)
 else()

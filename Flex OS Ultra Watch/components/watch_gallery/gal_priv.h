@@ -5,6 +5,7 @@
  */
 #pragma once
 
+#include <stdatomic.h>
 #include "gal_engine.h"
 
 #define THUMB_PX ((size_t)GAL_THUMB_SIDE * GAL_THUMB_SIDE)
@@ -86,7 +87,12 @@ struct gal_engine {
     uint16_t *view_zoom, *view_fit;
     size_t view_zoom_sz, view_fit_sz;
     int fit_w, fit_h, zoom_w, zoom_h, src_w, src_h;
-    uint64_t view_done, view_total;
+    /* Progreso del visor: lo escribe la tarea sin cerrojo (cada lectura del
+     * flujo) y lo lee la interfaz. 32 bits atómicos: en el Xtensa de 32 bits un
+     * uint64_t se escribe en dos mitades y la interfaz podía leer una mezcla
+     * (ThreadSanitizer, tests/host/gal_race.c). Una foto no pasa de 4 GB. */
+    _Atomic uint32_t view_done;
+    uint64_t view_total;
     char view_err[112];
     uint32_t views_done;
     /* transferencias */
@@ -97,7 +103,7 @@ struct gal_engine {
     size_t parts_bytes;
     /* trabajo en curso que se puede abandonar */
     uint32_t job_gen;       /* la tarea apunta qué generación del visor/lista está sirviendo */
-    volatile bool abort_job;
+    atomic_bool abort_job; /* aviso de cortar: lo escribe la interfaz y lo lee la tarea */
     /* red */
     gal_conn_t lan, cloud;
     char *json;
