@@ -66,7 +66,7 @@ include mbedtls_host.mk
 .DEFAULT_GOAL := all
 
 .PHONY: all test clean peer gallery gallery-skip
-all: test $(if $(LVGL_DIR),gallery,gallery-skip)
+all: test $(if $(LVGL_DIR),gallery,gallery-skip) $(if $(LVGL_DIR),flexmedia,flexmedia-skip)
 
 # Galería (watch_gallery): binario aparte porque decodifica con el TJpgDec de
 # LVGL (en el reloj, el de la ROM del S3). Sin LVGL_DIR se dice, no se da por pasada.
@@ -79,6 +79,7 @@ GAL_SRC := test_gallery.c gal_fake.c gal_fake_eco.c $(GAL_CORE) \
 GAL_INC := -I. -I$(GAL_DIR)/include -I$(GAL_DIR) -I$(FW)/components/watch_files/include \
            -I$(FW)/components/watch_ota/include
 TJPGD_FLAGS = -DLV_CONF_SKIP -DLV_USE_TJPGD=1 -I$(LVGL_DIR) -I$(LVGL_DIR)/src
+include flexmedia.mk
 $(BUILD)/tjpgd.o: $(LVGL_DIR)/src/libs/tjpgd/tjpgd.c
 	$(CC) -std=c11 -O2 -w $(TJPGD_FLAGS) -c $< -o $@
 $(BUILD)/test_gallery: $(GAL_SRC) $(wildcard $(GAL_DIR)/include/*.h) $(GAL_DIR)/gal_priv.h gal_fake.h gal_fake_eco.h \
