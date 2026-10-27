@@ -20,7 +20,7 @@ Auditoría inicial: [AUDITORIA-FASE0.md](AUDITORIA-FASE0.md).
 | Categoría | Ejemplos en la referencia | Destino en el reloj |
 |---|---|---|
 | Lógica pura (sin hardware) | calculadora `calcKey()` (AppsBasic.h:98), calendario, Flex Link (`FlexLink.kt` ↔ `FlexOS_FlexLink.cpp`), FlexAuth, codecs de Flex Phone, FBP/1 | **Transcrita a C** en módulos `*_logic.c` probados en el PC (`tests/host`) con los mismos vectores que la referencia |
-| Componentes de interfaz | `drawLiquidGlassPanel`, `setRowCard`, cortina del panel, caja de apps | Componentes LVGL en `watch_theme` (`watch_theme_glass_card`, `watch_theme_list_row`...) |
+| Componentes de interfaz | `drawLiquidGlassPanel`, `setRowCard`, cortina del panel, caja de apps | Componentes LVGL en `watch_theme`: motor de vidrio `flex_glass_*` ([LIQUID-GLASS.md](LIQUID-GLASS.md)), `watch_theme_list_row`... |
 | Iconos y fondos | `drawAppIcon()` (Icons.h), `wall*()` (Wallpaper.h) — vectoriales/procedurales | **El mismo código de dibujo** ejecutado en el PC (`tools/icons`) o en el reloj (`flex_wallpapers.c`); ver §3 |
 | Controladores | GT911, DSI, BNO085, ES8311 del P4 | BSP oficial de Waveshare (CO5300, FT3168) + controladores propios (AXP2101, PCF85063, QMI8658) |
 | APIs de Arduino | `WiFi.begin`, `Preferences`, `String`, `millis`, `delay` | `esp_wifi` + `esp_netif`, NVS (`watch_settings`), `snprintf`, `esp_timer`, temporizadores de LVGL |

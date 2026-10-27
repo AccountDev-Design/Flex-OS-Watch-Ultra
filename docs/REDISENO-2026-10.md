@@ -8,6 +8,12 @@ componentes reales de LVGL y con los datos reales de los servicios del reloj.
 y la vista previa de LVGL en el PC (con datos simulados). Las pruebas físicas están en `PRUEBAS-RELOJ.md` §15
 (T167-T184).
 
+**Actualización 2026-10-26:** el vidrio de este rediseño, el panel rápido, el fondo del cajón y la tipografía de las
+apps se sustituyeron por el Flex Liquid Glass Engine ([LIQUID-GLASS.md](LIQUID-GLASS.md)): panel rápido translúcido,
+cajón sin fondo desenfocado (la esfera se queda quieta bajo un velo), Reloj y Almacenamiento con el material del motor
+y Outfit Regular/Medium en lugar de League Spartan Bold. Las secciones 2 (fondo), 3, 4, 8 y 10 y sus imágenes
+describen la versión anterior. Las esferas (5) y el selector (6) no cambian.
+
 Referencias: `design/referencias/*.png` (pantallas) y `design/faces/*.png` (esferas), escaladas a 410x502. Las
 comparaciones de este documento ponen la referencia a la izquierda y la vista previa a la derecha
 (`tools/sim/compare.py`). Que se parezcan en la vista previa **no** demuestra la fidelidad en el panel físico (gama
@@ -17,7 +23,7 @@ del AMOLED, esquinas reales): eso lo dicen T167-T184.
 
 | Pantalla | Archivos | Estado |
 |---|---|---|
-| Cajón en panal infinito con lente | `ui_grid_logic.c` (lógica pura), `ui_apps.c`, `flex_blur.c` | vista previa y pruebas de PC |
+| Cajón en panal infinito con lente | `ui_grid_logic.c` (lógica pura), `ui_apps.c` (`flex_blur.c` retirado: `LIQUID-GLASS.md` §10) | vista previa y pruebas de PC |
 | Reloj: Hora, Cronómetro, Alarmas, Temporizador | `ui_reloj.c`, `ui_stopwatch.c`, `ui_alarms.c`, `ui_timer.c` | ídem |
 | Almacenamiento | `ui_storage.c`, `watch_storage/stg_usage.c` | ídem |
 | Seis esferas nuevas | `ui_face.c`, `assets/faces/`, `tools/faces/gen_faces.py` | ídem |

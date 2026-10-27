@@ -21,6 +21,18 @@ Detalles, archivos generados y avisos: [`Flex OS Ultra Watch/README.md`](Flex%20
 
 **Progreso global: 51,7 %** (48,3 % pendiente), del que un 7,3 % está verificado en el reloj. El alcance se amplió el 2026-10-16 (iconos y fondos originales, todas las apps del inventario, BLE), el 2026-10-20 (integración con Flex Phone y experiencia Watch Ultra, F10) y el 2026-10-23 (Galería compartida, FG): ver el historial de [docs/ROADMAP.md](docs/ROADMAP.md).
 
+**Flex Liquid Glass Engine** ([docs/LIQUID-GLASS.md](docs/LIQUID-GLASS.md)), compilado y probado en el PC, pendiente de
+probar en el reloj (T205-T218):
+
+- Un solo motor de vidrio para todo el sistema (roles, estados, tintes y componentes compartidos) y tres perfiles,
+  Premium, Estándar y Ligero, que cambian al momento sin reconstruir nada; Automático baja a Estándar si el reloj no
+  llega, y el ahorro de energía pone Ligero.
+- Panel rápido translúcido sobre la esfera, notificaciones con tarjetas translúcidas, cajón que ya no arrastra un fondo
+  desenfocado (−440 KB de PSRAM con una esfera de fondo) y Reloj y Almacenamiento sin brillos ni bordes
+  gruesos.
+- Tipografía Outfit Regular/Medium en toda la interfaz. Las esferas no cambian.
+- Pruebas de rastros cuadro a cuadro con el dibujo por franjas del reloj.
+
 **Galería** ([docs/GALERIA.md](docs/GALERIA.md)), compilada y probada en el PC y contra los servidores reales del P4
 y de Flex Cloud, pendiente de probar en el reloj (T151-T166):
 
@@ -100,6 +112,7 @@ simulados**: sirven para probar la interfaz, no el hardware.
 
 - [docs/ROADMAP.md](docs/ROADMAP.md): hoja de ruta y progreso global
 - [docs/BIENESTAR.md](docs/BIENESTAR.md): app Bienestar (pasos con el IMU, entrenamientos con pausa, reanudación y fin automáticos, historial y gesto desde el borde derecho), con lo medido, lo estimado y sus límites
+- [docs/LIQUID-GLASS.md](docs/LIQUID-GLASS.md): Flex Liquid Glass Engine (vidrio único del sistema, perfiles, panel rápido, notificaciones, cajón, rastros), con sus límites
 - [docs/REDISENO-2026-10.md](docs/REDISENO-2026-10.md): rediseño 2026-10 (cajón en panal, Reloj, Almacenamiento, 6 esferas, selector, Flex Compass y panel rápido), con las comparaciones con las referencias
 - [docs/F10-EXPERIENCIA.md](docs/F10-EXPERIENCIA.md): gestos, cajón en panal, esferas, AOD, ahorro de energía, rumbo relativo y estabilidad del Wi-Fi
 - [docs/FLEX-PHONE-INTEGRACION.md](docs/FLEX-PHONE-INTEGRACION.md): Flex Phone ↔ reloj: dispositivos, BLE v2 y navegador por el teléfono

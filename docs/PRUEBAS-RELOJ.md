@@ -19,7 +19,9 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | **T124-T141** | [F10-EXPERIENCIA.md](F10-EXPERIENCIA.md) §9 (Wi-Fi, splash, gestos, cajón, esferas, AOD, ahorro, Device Care, rumbo relativo). **Empieza por T124-T125 (Wi-Fi)** |
 | **T142-T150** | [F11-ESTABILIDAD.md](F11-ESTABILIDAD.md) §9 (editor de esferas, Wi-Fi, navegador y memoria, gesto del cajón, redibujado, volcado de fallos). **Empieza por T142 (el fallo del vídeo) y T149 si algo reinicia** |
 | **T151-T166** | [GALERIA.md](GALERIA.md) §10 (Galería: fotos del reloj, Flex OS Ultra, Flex Cloud y el teléfono por el P4). **Empieza por T151-T152 (memoria y JPEG grandes)** |
+| T167-T184 | [REDISENO-2026-10.md](REDISENO-2026-10.md) (cajón en panal, Reloj, Almacenamiento, esferas, selector, brújula y panel rápido) |
 | T185-T204 | [BIENESTAR.md](BIENESTAR.md) (app Bienestar: pasos, entrenamientos, funciones automáticas, gesto, memoria y batería). **Empieza por T185-T186 (arranque y sensor)** |
+| **T205-T218** | [LIQUID-GLASS.md](LIQUID-GLASS.md) (vidrio en todo el sistema, perfiles, panel rápido, cajón, notificaciones, rastros). **Empieza por T205-T207 (rastros)** |
 | Flash de 32 MB | [FLASH-32MB.md](FLASH-32MB.md) |
 
 **Verificado en el reloj hasta ahora** (fotos y vídeo del 2026-10-15): pantalla, táctil, LVGL y la sonda de 32 MB (T10). Lo demás no. Compilar y pasar las pruebas de PC no prueba el reloj: cada resultado que me envíes es lo que convierte una tarea del 50 % al 100 %.
@@ -182,7 +184,7 @@ OK, FALLO o NO REALIZADA.
 
 | # | Prueba | Resultado esperado |
 |---|---|---|
-| T167 | En la esfera, deslizar hacia abajo desde el centro | El cajón en panal baja siguiendo al dedo, con el fondo desenfocado. Deslizar hacia arriba vuelve a la esfera |
+| T167 | En la esfera, deslizar hacia abajo desde el centro | El cajón en panal baja siguiendo al dedo; la esfera se queda quieta debajo de un velo que se oscurece (ya no hay fondo desenfocado: `LIQUID-GLASS.md` §10). Deslizar hacia arriba vuelve a la esfera |
 | T168 | En el cajón, arrastrar en diagonal y en círculos 30 s; soltar con impulso | Sin tirones ni saltos; la lente sigue al dedo; nunca dos iconos iguales a la vista; al parar, la celda se centra sin rebotes. Anotar si se nota lento |
 | T169 | Tocar un icono; tocar entre dos iconos; arrastrar y soltar sobre un icono | Abre solo con el toque; entre iconos no abre nada; un arrastre no abre |
 | T170 | Reloj: las cuatro pestañas | Como las referencias. Formato cambia 12/24 h y se mantiene tras reiniciar |
@@ -197,7 +199,7 @@ OK, FALLO o NO REALIZADA.
 | T179 | Abrir y cerrar el selector 15 veces, alternando con el cajón | Sin reinicios. PSRAM libre en Device Care igual al principio y al final (anotar los dos valores) |
 | T180 | Flex Compass: girar el reloj 90° sobre la mesa y volver | "90° REL" aprox. y vuelta a ~0°; la cuña crece al moverse; mantener pulsada la esfera fija la referencia |
 | T181 | Flex Compass: inclinar el reloj | "INCLINACIÓN" y "ALABEO" cambian; los detalles dicen magnetómetro, barómetro y GPS "No presente" |
-| T182 | Panel rápido: cada mosaico | Wi-Fi y Bluetooth se encienden y apagan (cian = encendido); AOD no se puede con el ahorro; Reloj abre la app; la batería abre Ajustes > Batería |
+| T182 | Panel rápido: cada mosaico | Wi-Fi y Bluetooth se encienden y apagan (azul = encendido; el panel es translúcido desde `LIQUID-GLASS.md`); AOD no se puede con el ahorro; Reloj abre la app; la batería abre Ajustes > Batería |
 | T183 | Panel rápido: brillo de un extremo a otro | El brillo cambia en vivo, mínimo 10 %, y se mantiene tras reiniciar |
 | T184 | 10 min de uso normal por todas las pantallas nuevas | Sin reinicios ni pantallas en blanco. Copiar el registro serie completo |
 
@@ -229,6 +231,28 @@ REALIZADA. Las cifras de T187-T192 sirven para ajustar los umbrales del detector
 | T202 | Ajustes > Calibrar distancia en una pista de 400 m (o un recorrido medido), caminando; luego repetir los 400 m | Anotar el error antes de calibrar y la zancada nueva; en la repetición la distancia (est.) da 400 m ± 5 % |
 | T203 | Terminar un entrenamiento corto, mirar el resumen y reiniciar como en T197 | El resumen se ve igual tras reiniciar y el entrenamiento está **una sola vez** en el historial. (Sin LittleFS solo se probó en el PC: en el reloj no se puede provocar sin formatear, y no se debe formatear)
 | T204 | Batería: 2 h con "Contar pasos" encendido y 2 h apagado, pantalla apagada, uso parecido | Anotar el % gastado en cada caso (cuesta energía tener el sensor siempre encendido) |
+
+## 17. Flex Liquid Glass Engine (`LIQUID-GLASS.md`)
+
+Con el monitor abierto. Graba un vídeo corto (a cámara lenta si el móvil puede) de T205-T207: los rastros se ven
+mejor en vídeo que en foto. Marca OK, FALLO o NO REALIZADA.
+
+| # | Prueba | Resultado esperado |
+|---|---|---|
+| T205 | Esfera con fondo fotográfico (Montaña) y después la negra: abrir y cerrar el panel rápido siguiendo al dedo 20 veces, despacio y deprisa, y soltarlo a medias | Ningún resto de los mosaicos, del brillo ni de la cabecera en la esfera al cerrar ni durante el gesto. Si se ve un corte horizontal de un solo cuadro (desgarro), anotarlo aparte: no es un rastro |
+| T206 | Abrir y cerrar el cajón siguiendo al dedo 20 veces (desde el centro de la esfera y desde el borde inferior), con la esfera Montaña | La esfera no se mueve; el velo se oscurece con el recorrido; la rejilla sigue al dedo; ningún resto de iconos ni de la esfera al terminar |
+| T207 | Recibir 5 notificaciones seguidas con la esfera y con una app abierta; abrir la lista y desplazarla deprisa; cambiar de pestaña en el Reloj 20 veces | El aviso entra y sale sin restos; las tarjetas no dejan copias al desplazarse; la lente de las pestañas se desliza sin dejar marcas |
+| T208 | Panel rápido con la esfera Montaña: mirar los mosaicos y tocar Wi-Fi, Bluetooth, AOD y ahorro | Translúcido: se ven los colores de la esfera detrás, no sus cifras. Activo = azul (Wi-Fi, Bluetooth), índigo (AOD), ámbar (ahorro); Ajustes y Reloj sin color. El cambio es suave, sin parpadeo. Foto |
+| T209 | Notificaciones: lista y detalle de una notificación larga | Una sola superficie de fondo (azul oscuro a negro), tarjetas separadas con borde fino, título en Medium y texto en Regular. Foto |
+| T210 | Reloj (las cuatro pestañas) y Almacenamiento: tocar "Optimizar" | Sin brillos ni bordes gruesos; "Optimizar" dice cuánto liberó. Foto de cada pantalla |
+| T211 | Ajustes > Pantalla > Efectos > Vidrio: pasar por Automático, Premium, Estándar y Ligero, con el panel rápido y una app abiertos entre medias. Reiniciar | El aspecto cambia al momento, sin parpadeo ni pantalla en negro; Ligero: panel con fondo negro opaco. Tras reiniciar sigue el último. Foto del panel en cada perfil |
+| T212 | Con Vidrio en Automático, encender y apagar Flex Ultra Power Saving | Con el ahorro, el panel rápido tiene el fondo negro opaco y la fila dice "Ligero (ahorro)"; al apagarlo vuelve "Auto (…)" |
+| T213 | Botones de todas las apps (Reloj, Calculadora, Clima, Galería, Bienestar, Notas, Wi-Fi) | Ningún texto cortado ni con puntos suspensivos inesperados; pulsar ilumina el botón |
+| T214 | Vidrio en Automático: arrastrar el panel rápido arriba y abajo sin parar 30 s; luego abrir y cerrar páginas 30 s | Copiar del monitor si aparece `vidrio: cuadros de pantalla completa lentos; techo automático Estándar` y anotar lo que dice la fila de Ajustes ("Auto (Premium)" o "Auto (Estándar)"). Anotar si el panel se nota lento en Premium |
+| T215 | Brillo al 100 % y al 10 %: mirar de cerca los mosaicos del panel rápido, la barra del Reloj y una tarjeta de notificación | Anotar si se ven franjas horizontales en el vidrio (límite del panel RGB565, `LIQUID-GLASS.md` §4.2). Foto con el brillo alto |
+| T216 | Las seis esferas, la AOD y el selector | Iguales que antes de este cambio (formas, cifras, tipografía). Foto de cada una |
+| T217 | Abrir el selector de esferas, el navegador y Ajustes > Wi-Fi (con una red guardada) 10 veces cada uno, usándolos un poco | Sin reinicios. Si algo reinicia, copiar el registro completo (T149) |
+| T218 | Device Care al arrancar y tras 10 min usando el panel rápido, el cajón y las apps, con una esfera fotográfica | Anotar RAM interna y PSRAM libres al principio y al final (deben quedar parecidas) |
 
 ## Qué enviarme
 
