@@ -335,7 +335,7 @@ En marcha:
 |---|---|---|
 | Pruebas de lógica con ASan y UBSan (incluye `test_glass.c`: fórmula de contraste, recetas de cada perfil, legibilidad sobre página, lámina, velo, ambiente y tintes, medidor automático, ajuste) | `cd tests/host && IDF_PATH=… LVGL_DIR=… make` | 134 406 comprobaciones, 0 fallos; Galería 344, 0 fallos |
 | Vista previa LVGL, todas las baterías (nuevas: `rastros` y `vidrio`) | `make -C tools/sim LVGL_DIR=… IDF_PATH=…` y `tools/sim/build/sim DIR` | TODO OK (0 fallos) |
-| La misma con ASan y UBSan | `make -C tools/sim … SAN=1` y `tools/sim/build-san/sim DIR` | Con una carpeta de salida de ruta larga, 9 fallos, todos de la batería `galeria` (las rutas de su sistema de archivos simulado tienen límite; pasa igual sin este cambio); `galeria` con ruta corta: OK, sin errores de memoria. Pasada completa con ruta corta: en curso |
+| La misma con ASan y UBSan | `make -C tools/sim … SAN=1` y `tools/sim/build-san/sim DIR` | Con una carpeta de salida de ruta larga, 9 fallos, todos de la batería `galeria` (las rutas de su sistema de archivos simulado tienen límite; pasa igual sin este cambio); `galeria` con ruta corta: OK, sin errores de memoria. Pasada completa con ruta corta: **TODO OK (0 fallos)**, sin errores de memoria |
 | Toques aleatorios ("mono") con ASan | `SIM_ONLY=mono SIM_SEED=n` con n = 1, 7, 42, 1234, 98765 | OK las cinco, sin errores de memoria |
 | Esferas antes y después | comparación píxel a píxel de las 41 capturas de esferas, AOD y selector | esferas idénticas; solo cambia el nombre bajo la vista previa del selector (§3.5) |
 | Compilación del firmware (ESP-IDF 5.5.5, esp32s3) | `FLEX_DEPS_DIR=… tools/offline/build_offline.sh build` | OK, 0 avisos del compilador |
