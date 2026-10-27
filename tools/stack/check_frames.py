@@ -13,6 +13,15 @@ grande en la pila de una tarea pequeña reinicia el reloj (la Galería, con
 import os
 import sys
 
+# Funciones que SOLO se ejecutan en una tarea con una pila grande y conocida.
+# Se admiten si su marco no pasa de un tercio de esa pila (el resto es para
+# lo que llaman). Cada entrada dice en qué tarea corre y con qué pila.
+KNOWN_BIG = {
+    # Flex Web Server portado del P4 (Req con las cabeceras en la pila):
+    # solo en la tarea "wm_web" (16 KB en PSRAM), components/watch_ui/ui_xfer.c.
+    "flexWebServeConn": ("wm_web", 16384),
+}
+
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
@@ -45,7 +54,14 @@ def main():
     print("Marcos de pila más grandes del proyecto (Xtensa):")
     for size, where, kind in rows[:15]:
         print(f"  {size:6d} B  {where.split('Flex OS Ultra Watch/')[-1]}  {kind}")
-    bad = [r for r in rows if r[0] > limit]
+    def allowed(r):
+        for name, (task, stack) in KNOWN_BIG.items():
+            if f":{name}" in r[1] or f" {name}(" in r[1] or f":int {name}(" in r[1]:
+                if r[0] <= stack // 3:
+                    print(f"  admitido: {name} ({r[0]} B) solo corre en la tarea {task} ({stack} B de pila)")
+                    return True
+        return False
+    bad = [r for r in rows if r[0] > limit and not allowed(r)]
     if bad:
         print(f"FALLO: {len(bad)} funciones con un marco de más de {limit} B")
         return 1

@@ -30,6 +30,7 @@
 #include "watch_display.h"
 #include "watch_imu.h"
 #include "watch_media.h"
+#include "wm_store.h"
 #include "watch_net.h"
 #include "watch_phone.h"
 #include "watch_weather.h"
@@ -233,6 +234,12 @@ void app_main(void)
     err = watch_media_start();
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "microSD no disponible: %s", esp_err_to_name(err));
+    }
+    /* Biblioteca de medios (un catálogo por volumen; la tarea abre el de la
+     * microSD cuando se monta y lo cierra al expulsarla). */
+    err = wm_lib_start();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "biblioteca de medios no disponible: %s", esp_err_to_name(err));
     }
 
     /* Bienestar: después del IMU, la hora y el almacenamiento (restaura el día
