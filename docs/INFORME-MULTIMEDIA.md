@@ -9,7 +9,7 @@ Rama `ccr-9b959676-ggdz3t`, 16 commits sobre `587442a` (desde `52a296b`). Detall
 |---|---|
 | **Implementado y probado en hardware** | Funcionando en el Waveshare ESP32-S3-Touch-AMOLED-2.06. **Nada de este trabajo lo está todavía**: se hizo sin el reloj. |
 | **Probado únicamente en host** | Pruebas de PC (ASan/UBSan; la Galería también TSan) y vista previa de LVGL. Mismo código que el firmware; además, el firmware **compila** para el S3 con ESP-IDF 5.5.5 sin avisos y sin marcos de pila de más de 3072 B. |
-| **Pendiente de validación** | Necesita el reloj: lo que depende del hardware real (códecs, micrófonos, tarjeta, Wi-Fi, rendimiento). Las pruebas están en `MULTIMEDIA.md` §13 (T219-T252). |
+| **Pendiente de validación** | Necesita el reloj: lo que depende del hardware real (códecs, micrófonos, tarjeta, Wi-Fi, rendimiento). Las pruebas están en `MULTIMEDIA.md` §13 (T219-T260). |
 | **No implementado** | No está hecho; se dice por qué. |
 
 No se ha tocado el firmware del ESP32-P4/C6, sus repositorios, ramas ni su servidor. No se ha usado Arduino. No se
@@ -184,5 +184,40 @@ libres. Detalle en `MULTIMEDIA.md` §11.
 4. T230-T233: altavoz y Reproduciendo.
 5. T234-T244: Galería con la microSD y vídeo.
 6. T245-T252: recibir desde el móvil (QR, caducidad, cambio de IP, dos aparatos Flex, desconectar, apagado solo).
+7. T253-T260: memoria de las apps multimedia y Liberar espacio (§14).
 
 Si algo reinicia: copiar el registro completo del monitor (T149) y el volcado de memoria.
+
+## 14. Actualización: "Sin memoria" con la PSRAM casi vacía y Liberar espacio
+
+**Causa** (deducida del código y del `sdkconfig`; T253-T256 la confirman en el reloj): no era la PSRAM. La Galería,
+el navegador, el reproductor y la grabadora creaban su tarea con la pila en **RAM interna** (8-12 KB), la memoria
+pequeña que comparten el Wi-Fi, el BLE, lwIP y la pantalla; cuando no quedaba un bloque así, la app no abría
+aunque la PSRAM estuviera al 24 %. Además, la tarea de escritura de la grabadora **perdía ~0,35 KB de RAM interna
+y 6 KB de PSRAM en cada grabación** (creada con `...WithCaps`, borrada con `vTaskDelete`), y la Galería pedía al
+abrir 735 KB de miniaturas en un bloque más 160 KB de JSON con 1 MB de margen, y si su lista no cabía se rendía.
+
+**Arreglo** (detalle en `MULTIMEDIA.md` §11.1):
+
+| Qué | Cambio |
+|---|---|
+| `watch_diag`: `watch_task_spawn` / `watch_task_exit`, `mem_logic` | Pila en PSRAM, o en RAM interna solo si quedan 40 KB; si una falla, la otra. Textos con cifras |
+| Galería | Tarea en PSRAM; miniaturas de una en una (24,5 KB) que se ceden; JSON opcional y reintentado; lista reintentada cada 3 s; el visor suelta miniaturas; margen 1 MB → 384 KB; "Esperando memoria…" con cifras |
+| Navegador | Tareas de sesión y de prueba en PSRAM; ya no exige 8 KB contiguos de RAM interna; motivo con cifras |
+| Reproductor | Pila y tramas en RAM interna si hay; si no, en PSRAM (suena igual); motivo con cifras |
+| Grabadora | Fuga corregida; captura con respaldo en PSRAM; motivo con cifras |
+| Vídeo y servidor web | Mismo creador de tareas; motivo con cifras |
+| Mensajes | Fuera "cerrar otra app libera memoria" |
+
+**Liberar espacio** (Almacenamiento › Liberar espacio y microSD › Uso): los 20 archivos multimedia más grandes de
+cada volumen, de mayor a menor; dos toques borran del todo (`wm_lib_delete`, el espacio vuelve en el momento).
+Nunca automático; lo protegido no se ofrece; lo que suena no se borra.
+
+| Comprobación | Resultado |
+|---|---|
+| Firmware ESP32-S3, ESP-IDF 5.5.5 | Compila, **0 avisos**; imagen 3 931 255 B (37 % libre); DIRAM 52,9 % |
+| Marcos de pila | Ninguno pasa de 3072 B (2628 medidas) |
+| Pruebas de host | 1 000 046 comprobaciones, 0 fallos (+ `mem_logic`, "Liberar espacio") + Galería 422 (abre sin memoria, miniaturas cedidas, lista y JSON reintentados) + flexmedia + Galería con dos hilos (TSan) |
+| Vista previa (LVGL, ASan) | Ver el resumen de la entrega: Galería sin memoria (con cifras y reapertura sola), Liberar espacio (orden, dos toques, caducidad, protegido, lo que suena, sin microSD), navegador con 16 KB de RAM interna |
+
+**Pendiente de validación**: todo esto en el reloj (T253-T260). La causa está deducida, no medida en el aparato.

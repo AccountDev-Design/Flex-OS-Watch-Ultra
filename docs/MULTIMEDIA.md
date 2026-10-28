@@ -214,9 +214,10 @@ reales **pendientes de validación** (T245-T252).
 |---|---:|---|
 | Catálogo de la biblioteca | 384 x 336 B = 126 KB por volumen | con el volumen montado |
 | Lista local de la Galería | 126 KB | solo mientras se rehace la lista |
-| Motor de la Galería + miniaturas + JSON | ~180 KB + 735 KB + 160 KB | con la Galería abierta (ya existía) |
+| Motor de la Galería + miniaturas + JSON | ~180 KB + hasta 30 x 24,5 KB (una a una) + 160 KB si cabe | con la Galería abierta |
+| Pila de la tarea de la Galería / del navegador | 12 KB / 8 KB (+ 7 KB al probar el servidor) | con la app abierta |
 | Grabadora: anillo + bloque | 128 KB + 16 KB | grabando |
-| Reproductor | 16 KB de entrada MP3 + trama + pila de 8 KB en RAM interna | sonando |
+| Reproductor | 16 KB de entrada MP3 + trama + pila de 8 KB (RAM interna si sobra; si no, PSRAM) | sonando |
 | Portada en Reproduciendo | 200 x 200 x 2 = 80 KB | con la pantalla abierta |
 | Fondo desenfocado | 26 KB (+ ~40 KB solo durante el cálculo) | con la pantalla abierta |
 | QR | hasta 176 x 176 = 31 KB (L8) | con la pantalla abierta |
@@ -225,8 +226,50 @@ reales **pendientes de validación** (T245-T252).
 
 `wm_alloc` nunca deja menos de 768 KB de PSRAM libres: si no cabe, la operación lo dice en vez de reservar.
 
-**Firmware** (ESP-IDF 5.5.5, `idf.py size`): imagen de 3 926 720 B en una ranura OTA de 6 MB (37 % libre); DIRAM
-180 699 de 341 760 B (52,9 %). La web del móvil va dentro (276 KB).
+**Firmware** (ESP-IDF 5.5.5, `idf.py size`): imagen de 3 931 255 B en una ranura OTA de 6 MB (37 % libre); DIRAM
+180 939 de 341 760 B (52,9 %). La web del móvil va dentro (276 KB).
+
+### 11.1 "Sin memoria" con la PSRAM casi vacía: causa y arreglo
+
+El ESP32-S3 tiene **dos memorias**: la RAM interna (~300 KB, la del Wi-Fi, el BLE, lwIP, la pantalla y las pilas
+de las tareas del sistema) y la PSRAM (8 MB). La barra "PSRAM" de Almacenamiento solo mide la segunda. Lo que
+fallaba no era la PSRAM:
+
+1. **Pilas de las apps en RAM interna.** La Galería (12 KB), el navegador (8 KB + 7 KB al probar el servidor), el
+   reproductor (8 KB) y la captura de la grabadora (3 KB) creaban su tarea con `xTaskCreate`, que reserva la
+   pila en RAM interna. Con el Wi-Fi activo, cuando no quedaba un bloque de 12 KB ahí, la Galería decía "Sin
+   memoria" aunque la PSRAM estuviera al 24 %. Ahora todas pasan por `watch_task_spawn()` (`watch_diag`):
+   la pila va a PSRAM (posible porque el código se ejecuta desde la PSRAM, `CONFIG_SPIRAM_XIP_FROM_PSRAM`) o a
+   la RAM interna solo si después de ponerla quedan 40 KB (`MEM_INTERNAL_KEEP`); si la primera falla, prueba la
+   otra. El TCB (~350 B) sigue en RAM interna, como exige FreeRTOS.
+2. **Fuga en la grabadora.** La tarea de escritura se creaba con `...WithCaps` y terminaba con
+   `vTaskDelete(NULL)`: ESP-IDF no suelta así ni su TCB (RAM interna) ni su pila, y **cada grabación perdía
+   ~0,35 KB de RAM interna y 6 KB de PSRAM** hasta reiniciar. Ahora toda tarea creada así termina con
+   `watch_task_exit()` (`vTaskDeleteWithCaps`).
+3. **Reservas grandes de una pieza en la Galería.** Abrir pedía 30 miniaturas en un bloque de 735 KB y 160 KB de
+   JSON, con 1 MB de margen; si no cabía, no abría. Ahora abrir no reserva nada grande: cada miniatura pide sus
+   24,5 KB al hacerse (si no hay, toma el lienzo de la más vieja que no se esté pintando, y si tampoco, la celda
+   se queda sin imagen y se reintenta a los 5 s), el JSON se pide si cabe y se reintenta en cada vuelta (sin él
+   se ve lo del reloj y la microSD; Flex OS Ultra/Cloud esperan), la lista local se reintenta cada 3 s si su
+   copia no cabe (antes se rendía y quedaba vacía) y el visor suelta las miniaturas si la foto no cabe.
+   El margen de PSRAM de la Galería pasa de 1 MB a 384 KB.
+4. **Mensajes honestos.** Nada de "cerrar otra app libera memoria" (no hay otras abiertas a la vista): la
+   Galería, el navegador, el reproductor, la grabadora y el vídeo dicen qué memoria falta y cuánta hay
+   (`mem_why_text`, p. ej. "Faltan 12 KB de RAM interna (hay 9 KB). PSRAM libre: 6,0 MB.") y se reintentan
+   solos donde tiene sentido.
+
+Cómo comprobarlo en el reloj (T253-T256): el monitor escribe `watch_diag: tarea watch_gal: pila de 12288 B en
+PSRAM` al abrir cada app, y `[mem]` con la RAM interna libre al abrir y cerrar.
+
+### 11.2 Liberar espacio (borrar multimedia)
+
+Almacenamiento › **Liberar espacio** (y microSD › Uso › Liberar espacio) enseña, por volumen y con su espacio
+libre, los 20 archivos multimedia más grandes (música, grabaciones, vídeos, fotos y dibujos) de mayor a menor.
+Un toque marca la fila ("Toca para borrar", 5 s); el segundo toque la borra **del todo** con `wm_lib_delete`
+(el espacio vuelve en el momento; no pasa por la Papelera) y un aviso dice cuánto se liberó. Nunca se borra
+nada solo ni por falta de espacio; lo protegido y lo que aún está entrando no se ofrece; la canción que suena
+no se borra ("Párala para borrarla"); un archivo abierto en la microSD no se puede borrar (FatFs lo bloquea) y
+se dice. La copia del catálogo para elegir los más grandes (~126 KB de PSRAM) solo vive mientras se recorre.
 
 ## 12. Limitaciones conocidas
 
@@ -239,8 +282,13 @@ reales **pendientes de validación** (T245-T252).
 - Las descargas de la Galería pasan primero por el LittleFS (hace falta ese sitio aunque el destino sea la microSD).
 - Sin contenido protegido desde la web del reloj: no hay PIN de sistema con el que comprobar al propietario.
 - Lo que llega del móvil se limita a 6 MB por foto y 8 MB por vídeo o audio también en la microSD.
+- Los catálogos de la biblioteca (126 KB por volumen) siguen cargados mientras el volumen está montado; con la
+  PSRAM es asumible y no se han pasado a carga bajo demanda.
+- "Liberar espacio" enseña los 20 más grandes de cada volumen; lo demás se borra desde cada app o Archivos.
+- La causa de "Sin memoria" en §11.1 está deducida del código y de la configuración (no hay un registro del
+  reloj que lo confirme): T253-T256 lo comprueban.
 
-## 13. Pruebas físicas pendientes (T219-T252)
+## 13. Pruebas físicas pendientes (T219-T260)
 
 | Prueba | Qué hacer | Qué anotar / esperado |
 |---|---|---|
@@ -278,6 +326,14 @@ reales **pendientes de validación** (T245-T252).
 | T250 | "Desconectar móviles" | La página del móvil pide el código otra vez |
 | T251 | Salir de la pantalla del QR con una subida en marcha | La subida termina; luego el servidor se apaga (monitor: `servidor apagado`) |
 | T252 | Pantalla del QR abierta 20 min sin usar | El servidor se apaga a los 15 min sin peticiones |
+| T253 | Con Wi-Fi, abrir Galería, Navegador, Música y Grabadora, una tras otra; mirar el monitor | Abren todas. Copiar las líneas `watch_diag: tarea … pila de … en PSRAM/RAM interna` y las `[mem]` |
+| T254 | Repetir T253 10 veces seguidas (abrir y cerrar cada app) | Nunca "Sin memoria"; la RAM interna libre (`[mem]`) vuelve al mismo valor ±2 KB |
+| T255 | Grabar 10 grabaciones cortas seguidas | Device Care / `[mem]`: la RAM interna y la PSRAM no bajan con cada grabación (antes, fuga) |
+| T256 | Galería con 60 fotos: bajar y subir rápido por la cuadrícula; abrir una foto grande | Miniaturas aparecen; el visor abre; ninguna tarjeta "Sin memoria" |
+| T257 | Almacenamiento › Liberar espacio | Los archivos más grandes del reloj y de la microSD, con su tamaño, de mayor a menor |
+| T258 | Tocar uno una vez y esperar 6 s; luego tocarlo dos veces | El primer toque no borra y caduca; el doble borra; el espacio libre sube lo que pesaba |
+| T259 | Con una canción sonando, intentar borrarla desde Liberar espacio | "Está sonando · Párala para borrarla"; no se borra |
+| T260 | Borrar un vídeo de la microSD y comprobar en el PC | El archivo ya no está; nada más ha cambiado en la tarjeta |
 
 ## 14. Procedencia de la pila de medios (`components/flexmedia`)
 

@@ -227,6 +227,7 @@ El peso se decidirá redistribuyendo, y quedará anotado en el historial.
 | FM.3 Audio: ES8311 + ES7210 con un solo dueño del I2S; grabadora WAV; reproductor WAV/MP3 con etiquetas y portada | 🟡 faltan T226-T233 |
 | FM.4 Galería: Fotos / Vídeos / +, la microSD en la biblioteca, descargas al destino; vídeo AVI MJPEG | 🟡 faltan T234-T244 |
 | FM.5 Recibir desde el móvil: el Flex Web Server del P4 en el reloj, QR, identidad, caducidad | 🟡 faltan T245-T252 |
+| FM.6 Memoria de las apps multimedia (pilas en PSRAM, Galería sin reservas grandes, fuga de la grabadora, mensajes con cifras) y Liberar espacio | 🟡 faltan T253-T260 |
 
 ### Acordado sin peso asignado
 
