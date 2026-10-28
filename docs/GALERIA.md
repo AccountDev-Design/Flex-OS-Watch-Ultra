@@ -318,8 +318,9 @@ make -C tools/sim LVGL_DIR=... && SIM_ONLY=galeria tools/sim/build/sim tools/sim
   miniatura la hace el propio P4.
 - **Integridad de las descargas del P4:** se comprueba por tamaño y marca JPEG. El P4 no publica una huella de sus
   archivos; las de Flex Cloud sí se comprueban por SHA-256.
-- **Lo que no se ve:** vídeos (no se reproducen), PNG, GIF, WebP, HEIC y JPEG progresivo (TJpgDec solo hace
-  baseline). Se dice por qué y se pueden descargar o subir igual.
+- **Lo que no se ve:** PNG, GIF, WebP, HEIC y JPEG progresivo (TJpgDec solo hace baseline). Se dice por qué y se
+  pueden descargar o subir igual. Vídeos: solo los AVI MJPEG del reloj o de la microSD se reproducen (§14); los
+  remotos y los de otros formatos dicen cómo verlos.
 - **Sin probar en el reloj:**
   - el TJpgDec de la ROM con escala, que el PC no puede ejecutar (el PC usa el de LVGL, sin escala);
   - TLS con certificados reales;
@@ -339,3 +340,66 @@ make -C tools/sim LVGL_DIR=... && SIM_ONLY=galeria tools/sim/build/sim tools/sim
    filtra por modelo, añadirlo.
 4. **Flex Phone** (`CloudServer.kt`): solo si se quisiera el teléfono sin el P4, admitir varios dispositivos
    emparejados. Hoy no hace falta.
+
+## 13. Fallo corregido: reinicio al abrir la Galería
+
+- **Síntoma:** el reloj se reiniciaba "en ocasiones" al abrir la Galería.
+- **Causa raíz** (medida con `-fstack-usage` del compilador Xtensa, `52a296b`): `gal__origin_load` (8224 B) y
+  `gal__origin_add` (8256 B) declaraban en la pila una tabla de 64 `gal_origin_t`. `gal__origin_load` corre en cada
+  apertura, dentro de la tarea `watch_gal` de 12 KB, debajo de `gal_engine_step` (1600 B) y encima de una lectura de
+  LittleFS: la pila se desbordaba. Según la profundidad de LittleFS y las interrupciones, el canario lo detectaba
+  (pánico) o se corrompía el montón contiguo (fallo diferido). Las pruebas de PC no lo veían: un hilo de PC tiene
+  8 MB de pila.
+- **Corrección:** las dos tablas van al montón del motor (PSRAM); sin memoria se omiten las marcas de origen, sin
+  fallar.
+- **Para que no vuelva:** `tools/stack/check_frames.py` revisa los marcos de todo el firmware (ninguna función pasa
+  de 3072 B salvo `flexWebServeConn`, admitida porque solo corre en `wm_web` con 16 KB) y `make race` ejecuta la
+  Galería con dos hilos bajo ThreadSanitizer (encontró tres carreras benignas, corregidas: progreso del visor en
+  32 bits atómicos, `abort_job` atómico y estado de las miniaturas leído con el cerrojo).
+- Estado: **probado en el PC** y **compilado**; en el reloj, T151 (abrir y cerrar la Galería 20 veces).
+
+## 14. Rediseño: Fotos / Vídeos / + y la microSD
+
+### 14.1 Barra y "+"
+
+- Se quita "Todas / Reloj / (fuente) / Más opciones" y queda **Fotos** (fotos y dibujos), **Vídeos** y **+**. La
+  pestaña elegida va tintada. Cada pestaña junta lo del reloj, lo de la microSD y lo de la fuente remota elegida;
+  lo remoto ya descargado sale una sola vez (la copia).
+- Marcas en las celdas: nada en lo del reloj, **"SD"** en lo de la microSD y la fuente en lo remoto.
+- **"+" ("Añadir y fuentes")**: Recibir con QR y Desde el navegador (el Flex Web Server del reloj, `MULTIMEDIA.md`
+  §9), Flex OS Ultra, Flex Cloud, Flex Phone (piden emparejar o vincular si falta, o eligen la fuente), Origen,
+  Guardar en, Transferencias y Música. **No se ha quitado nada**: lo que estaba en la barra y en "Más opciones"
+  está aquí.
+- La fila de origen (estado de la fuente remota) sigue encima de la rejilla.
+
+### 14.2 Lo local: la biblioteca del reloj y de la microSD
+
+- El motor tiene una E/S local opcional (`gal_local_io_t` en `gal_engine.h`). Sin ella, recorre `/Imagenes` y
+  `/Paint` como antes (todas las pruebas de siempre lo siguen comprobando). En el reloj, `gal_wm.c` la implementa
+  sobre la biblioteca única de `watch_media`:
+  - **lista**: fotos, vídeos y dibujos de los dos volúmenes (instantánea, sin E/S), del más reciente al más antiguo,
+    hasta 200; se rehace sola cuando cambia la biblioteca o entra/sale la tarjeta;
+  - **miniaturas**: las persistentes de la biblioteca (JPEG de 132 px, también de vídeos y dibujos), reducidas a
+    112 px; un JPEG del reloj sin ella se decodifica como siempre, uno de la microSD espera a la de la biblioteca (no
+    se llena el LittleFS con miniaturas de la tarjeta);
+  - **leer** (visor, subidas): con el arrendamiento de la microSD, que se suelta siempre; si la tarjeta no está, la
+    operación no empieza;
+  - **borrar**: en el reloj a la papelera de Archivos; en la microSD, borrado (no hay papelera) con el doble toque;
+  - **descargar**: al **destino elegido**; si no está listo, se dice el motivo y no se guarda nada en otro sitio; en
+    la microSD, copia verificada (tamaño) antes de borrar el temporal del LittleFS.
+- Información dice dónde está ("En la microSD (/DCIM/x.jpg)") y "Descargar a la microSD" si ese es el destino.
+
+### 14.3 Vídeos
+
+Un AVI MJPEG del reloj o de la microSD se reproduce al tocarlo (`MULTIMEDIA.md` §8); en Información, "Reproducir".
+Lo que no es MJPEG, y los vídeos remotos, explican cómo verlos (enviarlos desde el móvil, que los convierte).
+
+### 14.4 Pruebas
+
+- Host: 409 comprobaciones (47 nuevas de la E/S local: dos volúmenes, arrendamientos siempre equilibrados, microSD
+  retirada a mitad, borrar, subir desde la microSD, descargar con y sin destino listo; 18 de la traducción registro →
+  elemento) y la batería de dos hilos con TSan.
+- Simulador: la barra nueva, "+" con todas sus filas, Vídeos vacío y con un vídeo de Flex OS Ultra, el visor sobre
+  una foto remota, la descarga y que después ya no se ofrezca otra vez.
+- En el reloj: `MULTIMEDIA.md` §13, T234-T244.
+

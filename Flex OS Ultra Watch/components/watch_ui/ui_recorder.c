@@ -24,6 +24,7 @@
 #include "wa_player.h"
 #include "wa_rec.h"
 #include "watch_media.h"
+#include "watch_settings.h"
 #include "watch_theme.h"
 #include "wm_store.h"
 
@@ -370,10 +371,34 @@ static void play_cb(lv_event_t *e)
     wm_free(list);
 }
 
+/* Estéreo solo en la microSD: en el LittleFS la grabadora es siempre mono
+ * (la mitad de espacio y de escrituras en la flash interna). */
+static void stereo_cb(lv_event_t *e)
+{
+    lv_obj_t *sw = lv_event_get_current_target(e);
+    watch_settings_t ws;
+    watch_settings_get(&ws);
+    const uint8_t q = lv_obj_has_state(sw, LV_STATE_CHECKED) ? WS_REC_STEREO : WS_REC_MONO;
+    if (ws.rec_quality != q) {
+        ws.rec_quality = q;
+        watch_settings_update(&ws);
+    }
+}
+
 static void recs_build(recs_page_t *p)
 {
     lv_obj_clean(p->list);
     p->n = 0;
+    lv_obj_t *qr = watch_theme_list_row(p->list, FLEX_ICON_SDCARD, FLEX_C_CAT_SUN, "Estéreo (microSD)", NULL, false);
+    lv_obj_t *sw = flex_glass_switch(qr, 64, 36);
+    lv_obj_align(sw, LV_ALIGN_RIGHT_MID, -12, 0);
+    watch_settings_t ws;
+    watch_settings_get(&ws);
+    if (ws.rec_quality == WS_REC_STEREO) {
+        lv_obj_add_state(sw, LV_STATE_CHECKED);
+    }
+    lv_obj_add_event_cb(sw, stereo_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_remove_flag(qr, LV_OBJ_FLAG_CLICKABLE);
     FlexMlRec *tmp = wm_alloc(sizeof(FlexMlRec) * REC_LIST_MAX);
     if (!tmp) {
         watch_theme_label(p->list, FLEX_FONT_SMALL, FLEX_C_WARN, "No hay memoria para listar las grabaciones.");

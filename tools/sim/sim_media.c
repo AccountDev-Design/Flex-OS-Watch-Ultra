@@ -30,6 +30,7 @@
 #include "wa_rec.h"
 #include "watch_audio.h"
 #include "watch_media.h"
+#include "watch_settings.h"
 #include "wm_store.h"
 #include "wm_video.h"
 #include "wm_web.h"
@@ -812,6 +813,29 @@ void sim_suite_media(const char *out)
     sim_run(400);
     EXPECT(has("Grabaciones"), "grabaciones: no se abre la lista");
     page(out, "m_grabaciones");
+    {
+        /* Estéreo en la microSD: el interruptor cambia el ajuste de la grabadora */
+        lv_obj_t *l = sim_find_label(ui_nav_top(), "Estéreo (microSD)");
+        lv_obj_t *r = l ? lv_obj_get_parent(l) : NULL, *sw = NULL;
+        for (uint32_t i = 0; r && i < lv_obj_get_child_count(r); i++) {
+            lv_obj_t *c = lv_obj_get_child(r, (int32_t)i);
+            if (lv_obj_check_type(c, &lv_switch_class)) {
+                sw = c;
+            }
+        }
+        EXPECT(sw != NULL, "grabaciones: falta el interruptor de estéreo");
+        if (sw) {
+            lv_obj_add_state(sw, LV_STATE_CHECKED);
+            lv_obj_send_event(sw, LV_EVENT_VALUE_CHANGED, NULL);
+            watch_settings_t ws;
+            watch_settings_get(&ws);
+            EXPECT(ws.rec_quality == WS_REC_STEREO, "grabaciones: el interruptor no cambia la grabadora");
+            lv_obj_remove_state(sw, LV_STATE_CHECKED);
+            lv_obj_send_event(sw, LV_EVENT_VALUE_CHANGED, NULL);
+            watch_settings_get(&ws);
+            EXPECT(ws.rec_quality == WS_REC_MONO, "grabaciones: no vuelve a mono");
+        }
+    }
     click(tap_of("Grabación 26-10 09.12"));
     sim_run(400);
     EXPECT(s_ps.index >= 0 && s_ps.state == WAP_PLAYING, "grabaciones: tocar una no la reproduce");

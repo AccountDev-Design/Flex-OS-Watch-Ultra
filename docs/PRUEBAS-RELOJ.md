@@ -22,6 +22,7 @@ Esta guía ordena todas las pruebas físicas pendientes (T1-T66) en **una sola s
 | T167-T184 | [REDISENO-2026-10.md](REDISENO-2026-10.md) (cajón en panal, Reloj, Almacenamiento, esferas, selector, brújula y panel rápido) |
 | T185-T204 | [BIENESTAR.md](BIENESTAR.md) (app Bienestar: pasos, entrenamientos, funciones automáticas, gesto, memoria y batería). **Empieza por T185-T186 (arranque y sensor)** |
 | **T205-T218** | [LIQUID-GLASS.md](LIQUID-GLASS.md) (vidrio en todo el sistema, perfiles, panel rápido, cajón, notificaciones, rastros). **Empieza por T205-T207 (rastros)** |
+| **T219-T252** | [MULTIMEDIA.md](MULTIMEDIA.md) §13 (microSD, grabadora, altavoz y música, Galería con la microSD, vídeo, recibir desde el móvil con QR). **Empieza por T219-T221 (microSD) y T226 (micrófonos)** |
 | Flash de 32 MB | [FLASH-32MB.md](FLASH-32MB.md) |
 
 **Verificado en el reloj hasta ahora** (fotos y vídeo del 2026-10-15): pantalla, táctil, LVGL y la sonda de 32 MB (T10). Lo demás no. Compilar y pasar las pruebas de PC no prueba el reloj: cada resultado que me envíes es lo que convierte una tarea del 50 % al 100 %.

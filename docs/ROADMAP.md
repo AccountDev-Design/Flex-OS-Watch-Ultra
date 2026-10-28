@@ -215,21 +215,31 @@ retirado.
 | FG.3 Transferencias: descargas y subidas reanudables con integridad (SHA-256, CRC32), papeleras, cola con reintentos limitados | 1,5 | 🟡 faltan T156-T158, T161, T164 |
 | FG.4 App Galería: rejilla virtual, pestañas, origen, visor con gestos, información, emparejamiento, cuenta, transferencias e icono original | 1 | 🟡 faltan T151, T153, T155 |
 
+### FM · Multimedia, microSD y transferencia (`docs/MULTIMEDIA.md`) — sin peso asignado
+
+Pedido en el prompt de multimedia (2026-10-27). Todo está **compilado y probado en el PC**; **nada en el reloj**.
+El peso se decidirá redistribuyendo, y quedará anotado en el historial.
+
+| Tarea | Estado |
+|---|---|
+| FM.1 Servicio de almacenamiento: dos volúmenes, destino elegido, biblioteca única, escrituras transaccionales | 🟡 faltan T219-T225 |
+| FM.2 microSD: máquina de estados, arrendamientos, FAT32 hasta 2 TB, exFAT detectada, formatear con doble confirmación | 🟡 faltan T219-T225 |
+| FM.3 Audio: ES8311 + ES7210 con un solo dueño del I2S; grabadora WAV; reproductor WAV/MP3 con etiquetas y portada | 🟡 faltan T226-T233 |
+| FM.4 Galería: Fotos / Vídeos / +, la microSD en la biblioteca, descargas al destino; vídeo AVI MJPEG | 🟡 faltan T234-T244 |
+| FM.5 Recibir desde el móvil: el Flex Web Server del P4 en el reloj, QR, identidad, caducidad | 🟡 faltan T245-T252 |
+
 ### Acordado sin peso asignado
 
-Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y quedará anotado en el historial.
-
-- Audio: altavoz ES8311 y micrófonos ES7210 (❓ D13).
-- Motor de vibración, con su GPIO pendiente de verificar (❓ D13).
-- microSD (❓ D13).
+- Motor de vibración, con su GPIO pendiente de verificar (❓ D13). Fuera de las funciones multimedia por indicación
+  expresa (sin vibraciones en ellas).
 
 ### Excluido
 
 - Samsung DeX / Flex DeX y modo PC.
 - Cámara.
 - Edición de imágenes o vídeo (la Galería entra sin edición: FG).
-- Multimedia de escritorio.
-- Servidor web de subida.
+- Multimedia de escritorio (el vídeo AVI MJPEG va en la Galería y el audio en Música: FM).
+- ~~Servidor web de subida~~: entra en FM.5 como el **mismo** Flex Web Server del P4 (no uno propio).
 - Kiosco.
 - Jumper (recrea Geometry Dash).
 - Drivers del P4/C6 (BNO085, esp-hosted).
@@ -251,7 +261,7 @@ Si se decide incluirlas, se les dará peso redistribuyendo dentro de F4 u F8, y 
 | D10 | ~~Funciones de Flex Phone en el reloj más allá de las notificaciones~~ Resuelta por el prompt maestro (2026-10-16): todo lo que el protocolo y la app ofrecen (estado, capacidades, multimedia, hacer sonar, respuestas) | F5.4 |
 | D11 | ✅ Resuelta (2026-10-23, Galería): la misma Flex Account (vinculación por código como el P4, `model` ESP32-S3) y la API de Flex Cloud de Flex Developer Studio, sin cuenta ni nube propias | — |
 | D12 | Cifrado de flash y NVS desde el principio | F8.3 |
-| D13 | Uso de audio, motor y microSD | sin peso |
+| D13 | ✅ Audio y microSD resueltos (prompt de multimedia, 2026-10-27: FM). Queda el motor de vibración | sin peso |
 | D14 | Nombre "Liquid Glass" (denominación de terceros) en el producto | F3 |
 | D15 | ✅ Resuelta (F4.3): cronómetro, temporizador y alarmas | — |
 | D16 | ¿Bloqueo con código? (no acordado) | — |

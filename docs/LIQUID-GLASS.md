@@ -353,3 +353,32 @@ el recorrido, la esfera se ve quieta debajo) y a "Optimizar" (suelta la vista pr
 - Los cierres conocidos del editor de esferas, del navegador y de la configuración del Wi-Fi no se han reproducido en
   el PC (la vista previa con sanitizadores y los toques aleatorios no los encuentran); T217 los vuelve a buscar con el
   monitor abierto.
+
+## 15. Desenfoque desde la fuente (fondos de vidrio de verdad)
+
+`flex_glass_backdrop()` (en `flex_glass.c`) da a una pantalla un fondo desenfocado **de una imagen conocida** (hoy, la
+portada en Reproduciendo), sin leer nunca la pantalla:
+
+1. La imagen se reduce a un búfer propio de 1/4 (104 x 127 píxeles) con la media de cada celda, **en RGB888**.
+2. Desenfoque de caja separable, radio 3, tres pasadas (casi gaussiano), en RGB888.
+3. Tono: se oscurece y se acerca al gris para que el texto blanco se lea encima.
+4. A RGB565 con **tramado ordenado Bayer 4x4**: conserva la media de cada tono; los escalones de 1 LSB, que en un
+   degradado oscuro se veían como bloques al ampliar, quedan como grano fino.
+5. Se dibuja como una imagen a escala **exacta x4** con el pivote en 0,0, sobresaliendo 2 píxeles por cada lado.
+
+Por qué así:
+
+- **Sin costuras, parches ni rastros.** El desenfoque de LVGL lee lo ya dibujado (§4.1); este no lee nada de la
+  pantalla, así que un redibujado parcial no puede dejar la imagen vieja.
+- **Escala exacta.** Con una escala no entera, LVGL calcula el paso del muestreo con el ancho de cada trozo que
+  redibuja y el mismo píxel salía distinto según el trozo (840 píxeles distintos entre un redibujado completo y uno
+  por partes). A x4 el paso es exacto; y como LVGL acota el muestreo al último píxel de la fuente, la imagen
+  sobresale para que lo visible no llegue a ese límite.
+- **Memoria acotada**: 26 KB por fondo mientras la pantalla está abierta y ~40 KB solo durante el cálculo (una vez
+  por portada). En el perfil Ligero no se dibuja.
+
+Pruebas: `tests/host/test_glass.c` (energía y simetría del desenfoque, recorte "cover", tono y que el empaquetado con
+tramado conserve la media de cada nivel con grano de 1 LSB); simulador `medios` (un redibujado completo da los mismos
+píxeles que el dibujado por partes) y `rastros` (Reproduciendo con el volumen arrastrado y la página yéndose tras el
+dedo, en franjas de 54, 40 y 16 líneas: 0 rastros). En el reloj: `MULTIMEDIA.md` T233.
+
