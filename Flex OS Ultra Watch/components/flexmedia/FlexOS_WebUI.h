@@ -869,7 +869,7 @@ body.selecting .bnav,body.cselecting .bnav{display:none}
 }
 )FXW";
 
-// app.js: 217035 bytes
+// app.js: 218625 bytes
 static const char FLEXWEB_APP_JS[] = R"FXW(/* Flex OS · Biblioteca web (Flex Web Server)
  *
  * La sirve el propio P4 desde su memoria (FlexOS_WebUI.h, que genera
@@ -5493,6 +5493,32 @@ $('mPhone').addEventListener('click', () => { closeMenu(); openPhoneSheet(); });
 // ===========================================================================
 //  Arranque
 // ===========================================================================
+// RELOJ: el perfil de medios del aparato (a que tamano convertir) sustituye
+// los valores de FX.PROFILES que trae; solo numeros, y dentro de margenes
+// razonables (un JSON raro no puede pedir fotos de 50 000 px).
+function applyMedia(m) {
+  if (!m || typeof m !== 'object') return;
+  const lim = { max: [256, 4096], long: [160, 1920], fps: [5, 30], rate: [8000, 48000] };
+  for (const kind of ['photo', 'video', 'audio']) {
+    const k = m[kind];
+    if (!k || typeof k !== 'object') continue;
+    for (const prof of ['light', 'rec', 'high']) {
+      const src = k[prof], dst = FX.PROFILES[kind][prof];
+      if (!src || typeof src !== 'object') continue;
+      for (const key of Object.keys(lim)) {
+        const v = src[key];
+        if (typeof v === 'number' && key in dst && v >= lim[key][0] && v <= lim[key][1]) dst[key] = Math.round(v);
+      }
+    }
+  }
+  const P = FX.PROFILES, kHz = (r) => Math.round(r / 1000);
+  FX.PROFILE_HINT.light = 'Ocupa lo mínimo: fotos de ' + P.photo.light.max + ' px, vídeo de ' + P.video.light.long +
+    ' px a ' + P.video.light.fps + ' fps y audio a ' + kHz(P.audio.light.rate) + ' kHz.';
+  FX.PROFILE_HINT.rec = 'El equilibrio para ' + DEV.name + ': fotos de ' + P.photo.rec.max + ' px, vídeo de ' +
+    P.video.rec.long + ' px a ' + P.video.rec.fps + ' fps y audio a ' + kHz(P.audio.rec.rate) + ' kHz.';
+  FX.PROFILE_HINT.high = 'Más calidad y más espacio: fotos de ' + P.photo.high.max + ' px, vídeo de ' + P.video.high.long +
+    ' px a ' + P.video.high.fps + ' fps y audio a ' + kHz(P.audio.high.rate) + ' kHz.';
+}
 // RELOJ: nombre, identidad, tipo y destino del aparato que sirve la pagina.
 function applyDevice(h) {
   DEV.name = h.dev || 'Flex OS';
@@ -5506,6 +5532,7 @@ function applyDevice(h) {
       'Galería › + › Recibir desde el móvil.';
   }
   $('pairTitle').textContent = 'Conecta con ' + DEV.name;
+  applyMedia(h.media);
   const d = $('destLine');
   if (DEV.dest) {
     d.textContent = 'Lo que subas se guarda en: ' + DEV.dest.name + (DEV.dest.ready === 0 ? ' (no disponible ahora)' : '');
@@ -5529,4 +5556,4 @@ function applyDevice(h) {
 })();
 )FXW";
 
-#define FLEXWEB_UI_BYTES 273882
+#define FLEXWEB_UI_BYTES 275472

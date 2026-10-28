@@ -63,5 +63,9 @@ FM_TESTS := test_mp3 test_id3 test_qr test_httpshare test_media test_medialib te
 .PHONY: flexmedia flexmedia-skip
 flexmedia: $(addprefix $(FM_BUILD)/,$(FM_TESTS))
 	@set -e; for t in $(FM_TESTS); do echo "=== $$t"; ./$(FM_BUILD)/$$t; done
+	@if command -v node >/dev/null 2>&1; then \
+	  node flexmedia/webui_media_check.js "$(FW)/components/flexmedia/webui/app.js" \
+	    "$(FW)/components/watch_media/wm_web_logic.c"; \
+	else echo "=== webui_media_check: OMITIDA (sin Node)"; fi
 flexmedia-skip:
 	@echo "=== Pila de medios (flexmedia): pruebas OMITIDAS (define LVGL_DIR e IDF_PATH) ==="
