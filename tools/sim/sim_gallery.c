@@ -209,8 +209,19 @@ static void step_cb(lv_timer_t *t)
     }
 }
 
+/* Prueba de "sin memoria al abrir": watch_gallery_open falla con este motivo. */
+const char *sim_gal_open_fail;
+
+const char *watch_gallery_open_why(void)
+{
+    return sim_gal_open_fail ? sim_gal_open_fail : "";
+}
+
 gal_engine_t *watch_gallery_open(void)
 {
+    if (sim_gal_open_fail) {
+        return NULL;
+    }
     if (!s_eco_ready) {
         eco_setup();
     }
@@ -741,6 +752,24 @@ void sim_suite_gallery(const char *out)
     EXPECT(sim_mem_blocks() == blocks0, "fuga en la Galería: %u -> %u bloques de LVGL", (unsigned)blocks0,
            (unsigned)sim_mem_blocks());
     EXPECT(sim_timer_count() == timers0, "temporizadores %d -> %d", timers0, sim_timer_count());
+
+    /* ---- 13. Sin memoria al abrir: qué falta, con cifras, y se abre sola ---- */
+    sim_gal_open_fail = "Faltan 180 KB de PSRAM (hay 120 KB). RAM interna libre: 40 KB.";
+    EXPECT(ui_nav_open_app(ui_gallery_create), "sin memoria: la app no abre su pantalla");
+    sim_run(800);
+    lv_obj_t *why = label_prefix(ui_nav_top(), "Faltan 180 KB de PSRAM");
+    EXPECT(has("Sin memoria para la Galería") && why, "sin memoria: no dice qué falta");
+    EXPECT(why && !strstr(lv_label_get_text(why), "otra app"), "sin memoria: vuelve a pedir cerrar otra app");
+    lint("galeria: sin memoria", out, "gal_sin_memoria");
+    sim_gal_open_fail = NULL;
+    sim_run(3500);
+    EXPECT(watch_gallery_engine() != NULL && !has("Sin memoria para la Galería"),
+           "sin memoria: no se abrió sola al volver la memoria");
+    ui_nav_home();
+    sim_run(3500);
+    EXPECT(s_e == NULL && s_live == 0, "tras el reintento: quedan %zu B del motor", s_live);
+    EXPECT(sim_mem_blocks() == blocks0, "fuga tras el reintento: %u -> %u bloques", (unsigned)blocks0,
+           (unsigned)sim_mem_blocks());
     eco_free(&s_eco);
     s_eco_ready = false;
     sim_stg = saved;

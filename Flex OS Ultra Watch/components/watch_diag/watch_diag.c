@@ -2,7 +2,9 @@
  * watch_diag — ver include/watch_diag.h
  */
 #include "watch_diag.h"
+#include "watch_task.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "esp_flash.h"
@@ -159,4 +161,50 @@ void watch_diag_log_mem(const char *when)
              when, (unsigned long)m.internal_free, (unsigned long)m.internal_largest,
              (unsigned long)m.dma_free, (unsigned long)m.internal_min, (unsigned long)m.psram_free,
              (unsigned long)m.psram_total, (unsigned long)m.psram_largest);
+}
+
+bool watch_task_spawn(TaskFunction_t fn, const char *name, uint32_t stack, void *arg, UBaseType_t prio,
+                      BaseType_t core, bool psram_first, TaskHandle_t *out, char *why, size_t why_n)
+{
+    const UBaseType_t in = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, ps = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
+    const bool int_first = mem_stack_internal_first(psram_first, stack, heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                                                    heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+    const UBaseType_t order[2] = {int_first ? in : ps, int_first ? ps : in};
+    for (int i = 0; i < 2; i++) {
+        TaskHandle_t h = NULL;
+        if (xTaskCreatePinnedToCoreWithCaps(fn, name, stack, arg, prio, &h, core, order[i]) == pdPASS) {
+            if (out) {
+                *out = h;
+            }
+            ESP_LOGI(TAG, "tarea %s: pila de %lu B en %s", name, (unsigned long)stack,
+                     order[i] == ps ? "PSRAM" : "RAM interna");
+            return true;
+        }
+    }
+    /* Lo que falta casi siempre es el TCB (RAM interna) o la pila en PSRAM. */
+    const size_t int_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    const size_t ps_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    char t[112];
+    mem_why_text(t, sizeof(t), stack, ps_free < stack + 64u * 1024u, int_free, ps_free);
+    ESP_LOGW(TAG, "tarea %s no creada: %s", name, t);
+    if (why && why_n) {
+        snprintf(why, why_n, "%s", t);
+    }
+    return false;
+}
+
+void watch_task_exit(void)
+{
+    vTaskDeleteWithCaps(NULL);
+    for (;;) {
+        /* no se llega: vTaskDeleteWithCaps(NULL) no vuelve */
+    }
+}
+
+void watch_mem_text(char *out, size_t n)
+{
+    char a[16], b[16];
+    mem_fmt_size(heap_caps_get_free_size(MALLOC_CAP_INTERNAL), a, sizeof(a));
+    mem_fmt_size(heap_caps_get_free_size(MALLOC_CAP_SPIRAM), b, sizeof(b));
+    snprintf(out, n, "RAM interna %s · PSRAM %s libres", a, b);
 }

@@ -9,6 +9,7 @@
 #include "gal_engine.h"
 
 #define THUMB_PX ((size_t)GAL_THUMB_SIDE * GAL_THUMB_SIDE)
+#define GAL_SCAN_NOMEM_MS 3000u /* lista local sin memoria: siguiente intento */
 
 typedef struct {
     char key[GAL_ID_MAX + GAL_PATH_MAX + 24]; /* "src|id|tver" o "0|ruta|tamaño|mtime" */
@@ -17,7 +18,7 @@ typedef struct {
     uint32_t lru;     /* última vez que se pidió o se pintó */
     uint32_t fail_ms;
     gal_item_t item;  /* copia de lo que se pidió */
-    uint16_t *px;     /* GAL_THUMB_SIDE^2 */
+    uint16_t *px;     /* GAL_THUMB_SIDE^2: cada hueco el suyo (25 KB), al pedirse */
 } gal_thumb_t;
 
 typedef struct {
@@ -66,6 +67,7 @@ struct gal_engine {
     bool scan_req, scanning;
     uint32_t local_rev;     /* la de gal_local_io_t.rev en el último recorrido */
     uint32_t scan_ms;       /* último recorrido (gal_refresh no lo repite enseguida) */
+    uint32_t scan_wait;     /* sin memoria para la lista: no se reintenta antes (0 = ya) */
     gal_item_t remote[GAL_LIST_MAX];
     int nr;
     uint32_t remote_gen;
@@ -79,7 +81,7 @@ struct gal_engine {
     int norigins;
     /* miniaturas */
     gal_thumb_t thumbs[GAL_THUMBS];
-    uint16_t *thumb_mem;
+    bool thumbs_on;         /* abierta: hay miniaturas (cada una reserva lo suyo al hacerse) */
     uint32_t thumbs_done, thumbs_failed;
     /* visor */
     gal_item_t view_item;

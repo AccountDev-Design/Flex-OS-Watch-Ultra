@@ -21,6 +21,7 @@
 #include "freertos/task.h"
 #include "lwip/sockets.h"
 #include "watch_net.h"
+#include "watch_task.h"
 #include "watch_time.h"
 #include "wm_store.h"
 
@@ -615,7 +616,7 @@ static void web_task(void *arg)
             break;
         }
     }
-    vTaskDeleteWithCaps(NULL);
+    watch_task_exit();
 }
 
 /* ======================= API ======================= */
@@ -633,8 +634,7 @@ void wm_web_keep(void)
         s_st.gen++;
     }
     portEXIT_CRITICAL(&s_mux);
-    if (start && xTaskCreatePinnedToCoreWithCaps(web_task, "wm_web", WWEB_STACK, NULL, TASK_PRIO, NULL,
-                                                 tskNO_AFFINITY, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
+    if (start && !watch_task_spawn(web_task, "wm_web", WWEB_STACK, NULL, TASK_PRIO, tskNO_AFFINITY, true, NULL, NULL, 0)) {
         static const char nomem[] = "Sin memoria para el servidor";
         portENTER_CRITICAL(&s_mux);
         s_running = false;

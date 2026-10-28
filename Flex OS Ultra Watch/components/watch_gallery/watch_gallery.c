@@ -23,14 +23,16 @@
 #include "gal_wm.h"
 #include "watch_net.h"
 #include "watch_storage.h"
+#include "mem_logic.h"
+#include "watch_task.h"
 
 static const char *TAG = "watch_gallery";
 
-#define TASK_STACK    (12 * 1024) /* TLS (mbedTLS) en la pila de la tarea; se mide al cerrar */
+#define TASK_STACK    (12 * 1024) /* TLS (mbedTLS) en la pila de la tarea, en PSRAM; se mide al cerrar */
 #define TASK_PRIO     3
 #define CONNECT_MS    10000
 #define MIN_INTERNAL  (30 * 1024) /* para un saludo TLS (MBEDTLS_EXTERNAL_MEM_ALLOC deja lo grande en PSRAM) */
-#define PSRAM_MARGIN  (1024 * 1024) /* lo que la Galería nunca se come: el resto del sistema */
+#define PSRAM_MARGIN  (384 * 1024) /* lo que la Galería nunca se come: el resto del sistema */
 #define NS_ACCT       "flexacct"
 #define NS_GAL        "flexgal"
 
@@ -49,6 +51,7 @@ static SemaphoreHandle_t s_life; /* abrir, cerrar y el final de la tarea, de uno
 static volatile bool s_open;
 static char s_mac[16];
 static char s_ver[32]; /* esp_app_desc_t.version */
+static char s_why[112]; /* por qué no abrió (watch_gallery_open_why) */
 
 /* ======================= transporte ======================= */
 
@@ -247,7 +250,9 @@ static uint64_t env_fs_free(void *ctx)
 static bool env_mem_ok(void *ctx, size_t n)
 {
     (void)ctx;
-    return heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) >= n + 64 * 1024 &&
+    /* Un bloque donde quepa y PSRAM_MARGIN para el resto: las reservas de la
+     * Galería son pequeñas (25 KB por miniatura) salvo el JSON y la foto abierta. */
+    return heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) >= n &&
            heap_caps_get_free_size(MALLOC_CAP_SPIRAM) >= n + PSRAM_MARGIN;
 }
 
@@ -294,8 +299,7 @@ static void task(void *arg)
                     s_task = NULL;
                     xSemaphoreGive(s_life);
                     log_mem("Galería cerrada");
-                    vTaskDelete(NULL);
-                    return;
+                    watch_task_exit();
                 }
                 xSemaphoreGive(s_life);
             }
@@ -333,9 +337,17 @@ gal_engine_t *watch_gallery_open(void)
     if (!s_e) {
         s_e = gal_engine_new(&s_env);
     }
+    s_why[0] = 0;
     bool ok = s_e != NULL;
+    if (!ok) {
+        mem_why_text(s_why, sizeof(s_why), 0, true, /* el motor (~180 KB) no cupo en PSRAM */
+                     heap_caps_get_free_size(MALLOC_CAP_INTERNAL), heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    }
     if (ok && !s_task) {
-        if (xTaskCreate(task, "watch_gal", TASK_STACK, NULL, TASK_PRIO, &s_task) != pdPASS) {
+        /* La pila (12 KB) en PSRAM: la RAM interna es la que el Wi-Fi y el BLE
+         * necesitan, y era la que faltaba con la PSRAM casi vacía. */
+        if (!watch_task_spawn(task, "watch_gal", TASK_STACK, NULL, TASK_PRIO, tskNO_AFFINITY, true, &s_task, s_why,
+                              sizeof(s_why))) {
             s_task = NULL;
             ok = false;
         }
@@ -344,7 +356,7 @@ gal_engine_t *watch_gallery_open(void)
         s_open = true;
         ok = gal_engine_open(s_e);
         if (!ok) {
-            s_open = false; /* sin memoria: la tarea termina sola y suelta el motor */
+            s_open = false; /* la tarea termina sola y suelta el motor */
         }
     }
     gal_engine_t *e = ok ? s_e : NULL;
@@ -356,9 +368,14 @@ gal_engine_t *watch_gallery_open(void)
                  (unsigned)m.json_bytes, (unsigned)m.thumb_bytes);
         log_mem("Galería abierta");
     } else {
-        ESP_LOGW(TAG, "no se pudo abrir: sin memoria");
+        ESP_LOGW(TAG, "no se pudo abrir: %s", s_why);
     }
     return e;
+}
+
+const char *watch_gallery_open_why(void)
+{
+    return s_why;
 }
 
 void watch_gallery_close(void)

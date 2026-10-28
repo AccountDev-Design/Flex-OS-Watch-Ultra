@@ -35,6 +35,8 @@ esp_err_t watch_browser_open(void);
 /** ¿Hay memoria para abrir la sesión con margen para el resto del sistema?
  * Si no, why (opcional) dice qué falta y cuánto hay. No reserva nada. */
 bool watch_browser_mem_check(char *why, size_t n);
+/** Tras un ESP_ERR_NO_MEM de watch_browser_open: qué faltó, con cifras. */
+const char *watch_browser_mem_why(void);
 /** Cierra la sesión y libera el búfer (los ajustes y las listas quedan). */
 void watch_browser_close(void);
 /** La sesión abierta, o NULL. Leer con br_net_lock/unlock. */

@@ -183,8 +183,8 @@ static void set_hidden(lv_obj_t *o, bool h)
  * imagen de LVGL (lo único prescindible que es del propio navegador o del
  * sistema; nada de otras apps) y se mide lo que la sesión necesita de verdad
  * (watch_browser_mem_check). Si no cabe, el motivo con las cifras y un
- * reintento solo cada SESSION_RETRY_MS: en cuanto se libera memoria (p. ej.
- * al cerrar otra app), la sesión se abre sin que el usuario haga nada. Nunca
+ * reintento solo cada SESSION_RETRY_MS: en cuanto se libera memoria, la
+ * sesión se abre sin que el usuario haga nada. Nunca
  * se fuerza ni se reinicia el reloj. */
 #define SESSION_RETRY_MS 3000
 
@@ -194,8 +194,8 @@ static void ensure_session(void)
      * es la tarea de la sesión la que se lo pide y se conecta cuando aparece. */
     if (((U->caps & FLEXBR_CAP_REMOTE) || U->src.phone_possible) && !watch_browser_net()) {
         lv_image_cache_drop(NULL); /* caché de imágenes de LVGL (si la hay) */
-        char why[96];
-        char m[160];
+        char why[112];
+        char m[176];
         bool ok = watch_browser_mem_check(why, sizeof(why));
         if (!ok) {
             snprintf(m, sizeof(m), "Memoria insuficiente. %s. Reintento automático.", why);
@@ -205,7 +205,8 @@ static void ensure_session(void)
             if (r == ESP_ERR_INVALID_STATE) {
                 snprintf(m, sizeof(m), "Cerrando la sesión anterior…");
             } else if (!ok) {
-                snprintf(m, sizeof(m), "Memoria insuficiente para la sesión. Reintento automático.");
+                snprintf(m, sizeof(m), "Memoria insuficiente para la sesión. %s Reintento automático.",
+                         watch_browser_mem_why());
             }
         }
         if (!ok) {

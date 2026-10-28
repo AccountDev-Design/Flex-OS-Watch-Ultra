@@ -164,13 +164,13 @@ void sim_suite_mem(const char *out)
     snprintf(st.server, sizeof(st.server), "wss://nav.example.com/v1/session");
     snprintf(st.token, sizeof(st.token), "credencial-de-prueba-1234567890");
     watch_browser_set_settings(&st);
-    sim_mem_internal_free = 20 * 1024;
+    sim_mem_internal_free = 16 * 1024;
     ui_nav_push(ui_browser_create);
     sim_run(800);
     EXPECT(watch_browser_net() == NULL, "navegador: abrio la sesion sin memoria");
     EXPECT(has_prefix(ui_nav_top(), "Memoria insuficiente. Falta RAM interna"),
            "navegador: no explica que falta RAM interna");
-    sim_mem_internal_free = 120 * 1024; /* p. ej. se cerró otra app */
+    sim_mem_internal_free = 120 * 1024; /* se liberó memoria */
     sim_run(3500);
     EXPECT(watch_browser_net() != NULL, "navegador: no reintento al volver la memoria");
     ui_nav_home();

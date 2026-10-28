@@ -3,8 +3,9 @@
  *
  * Memoria: la sesión (br_net_t, 11,6 KB), las listas (br_lists_t, 72 KB) y
  * el búfer de recepción (135 KB, solo con la app abierta) en PSRAM; mbedTLS
- * reserva en PSRAM (CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC). En RAM interna, la
- * pila de la tarea (8 KB, FLEXBR_NET_STACK del perfil S3).
+ * reserva en PSRAM (CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC). La pila de la tarea
+ * (8 KB, FLEXBR_NET_STACK del perfil S3) también va a PSRAM (watch_task_spawn):
+ * la RAM interna queda para lwIP, el Wi-Fi y el BLE.
  */
 #include "watch_browser.h"
 
@@ -28,8 +29,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "mem_logic.h"
 #include "nvs.h"
 #include "watch_net.h"
+#include "watch_task.h"
 
 static const char *TAG = "watch_browser";
 
@@ -444,16 +447,16 @@ static void task(void *arg)
     heap_caps_free(s_rx);
     s_rx = NULL;
     __atomic_store_n(&s_task, (TaskHandle_t)NULL, __ATOMIC_RELEASE);
-    vTaskDelete(NULL);
+    watch_task_exit();
 }
 
 /* Lo que la sesión necesita de verdad (F11) antes de reservar nada:
- *  - RAM interna: la pila de la tarea en UN bloque y, además, MIN_INTERNAL
- *    libres para lwIP, el Wi-Fi, el BLE y la interfaz (no se le da todo);
- *  - PSRAM: el búfer de recepción en un bloque contiguo y MIN_PSRAM de margen
- *    (TLS de mbedTLS, lienzo de la página, el resto del sistema).
+ *  - RAM interna: MIN_INTERNAL libres para lwIP, el Wi-Fi, el BLE y la
+ *    interfaz (la pila de la tarea ya no: va a PSRAM);
+ *  - PSRAM: el búfer de recepción en un bloque contiguo, la pila y
+ *    MIN_PSRAM de margen (TLS de mbedTLS, lienzo de la página, el sistema).
  * Se mide con las API de ESP-IDF; why dice qué falta y cuánto. */
-static char s_mem_why[96];
+static char s_mem_why[112];
 
 bool watch_browser_mem_check(char *why, size_t n)
 {
@@ -461,9 +464,9 @@ bool watch_browser_mem_check(char *why, size_t n)
     const size_t in_block = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
     const size_t ps_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
     const size_t ps_block = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
-    const size_t need_ps = (s_rx ? 0 : RX_CAP) + (s_net ? 0 : sizeof(*s_net));
+    const size_t need_ps = (s_rx ? 0 : RX_CAP) + (s_net ? 0 : sizeof(*s_net)) + (s_task ? 0 : FLEXBR_NET_STACK);
     const char *msg = NULL;
-    if (in_block < FLEXBR_NET_STACK + 512 || in_free < FLEXBR_NET_STACK + MIN_INTERNAL) {
+    if (in_free < MIN_INTERNAL) {
         snprintf(s_mem_why, sizeof(s_mem_why), "Falta RAM interna: %u KB libres (bloque %u KB)",
                  (unsigned)(in_free / 1024), (unsigned)(in_block / 1024));
         msg = s_mem_why;
@@ -480,6 +483,11 @@ bool watch_browser_mem_check(char *why, size_t n)
         return false;
     }
     return true;
+}
+
+const char *watch_browser_mem_why(void)
+{
+    return s_mem_why;
 }
 
 esp_err_t watch_browser_open(void)
@@ -506,7 +514,9 @@ esp_err_t watch_browser_open(void)
         s_rx = heap_caps_malloc(RX_CAP, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     }
     if (!s_net || !s_rx || !s_io_ctx.mx) {
-        ESP_LOGE(TAG, "sin memoria para el navegador");
+        mem_why_text(s_mem_why, sizeof(s_mem_why), s_rx ? sizeof(*s_net) : RX_CAP, true,
+                     heap_caps_get_free_size(MALLOC_CAP_INTERNAL), heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+        ESP_LOGE(TAG, "sin memoria para el navegador: %s", s_mem_why);
         return ESP_ERR_NO_MEM;
     }
     s_io = (br_io_t){.ctx = &s_io_ctx, .connect = io_connect, .write = io_write, .read = io_read,
@@ -516,7 +526,8 @@ esp_err_t watch_browser_open(void)
     s_relay_ask_ms = 0; /* al abrir, si hace falta, se pide el relay enseguida */
     reconfigure();
     s_stop = false;
-    if (xTaskCreate(task, "watch_br", FLEXBR_NET_STACK, NULL, TASK_PRIO, &s_task) != pdPASS) {
+    if (!watch_task_spawn(task, "watch_br", FLEXBR_NET_STACK, NULL, TASK_PRIO, tskNO_AFFINITY, true, &s_task,
+                          s_mem_why, sizeof(s_mem_why))) {
         s_task = NULL;
         heap_caps_free(s_rx); /* lo reservado se devuelve: nada queda a medias */
         s_rx = NULL;
@@ -606,7 +617,7 @@ static void probe_task(void *arg)
         }
     }
     s_probe_state = 2;
-    vTaskDelete(NULL);
+    watch_task_exit();
 }
 
 void watch_browser_probe_start(void)
@@ -621,7 +632,7 @@ void watch_browser_probe_start(void)
         refresh_backend(false, false); /* sin la app abierta, la fuente se calcula ahora */
     }
     s_probe_state = 1;
-    if (xTaskCreate(probe_task, "watch_br_probe", 7168, NULL, 2, NULL) != pdPASS) {
+    if (!watch_task_spawn(probe_task, "watch_br_probe", 7168, NULL, 2, tskNO_AFFINITY, true, NULL, NULL, 0)) {
         snprintf(s_probe_msg, sizeof(s_probe_msg), "No se pudo abrir la conexión");
         s_probe_state = 2;
     }

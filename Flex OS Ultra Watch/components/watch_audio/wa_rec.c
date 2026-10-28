@@ -22,6 +22,7 @@
 #include "watch_audio.h"
 #include "watch_settings.h"
 #include "watch_time.h"
+#include "watch_task.h"
 #include "wm_store.h"
 
 static const char *TAG = "wa_rec";
@@ -120,11 +121,18 @@ void wr_plan(wr_plan_t *out)
 
 /* ---------------- captura ---------------- */
 
+static void *buf_alloc(size_t n)
+{
+    void *p = heap_caps_malloc(n, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    return p ? p : heap_caps_malloc(n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+}
+
 static void cap_task(void *arg)
 {
     (void)arg;
-    int16_t *tdm = heap_caps_malloc(CAP_FRAMES * WA_TDM_SLOTS * sizeof(int16_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    int16_t *pcm = heap_caps_malloc(CAP_FRAMES * 2 * sizeof(int16_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    /* En RAM interna (lectura del I2S cada 10,7 ms); si no hay, en PSRAM. */
+    int16_t *tdm = buf_alloc(CAP_FRAMES * WA_TDM_SLOTS * sizeof(int16_t));
+    int16_t *pcm = buf_alloc(CAP_FRAMES * 2 * sizeof(int16_t));
     lock();
     const bool stereo = s_st.channels == 2;
     unlock();
@@ -165,7 +173,7 @@ static void cap_task(void *arg)
         xTaskNotifyGive(s_wr);
     }
     s_cap = NULL;
-    vTaskDelete(NULL);
+    watch_task_exit();
 }
 
 /* ---------------- escritura ---------------- */
@@ -338,7 +346,9 @@ static void wr_task(void *arg)
     vStreamBufferDeleteWithCaps(s_ring);
     s_ring = NULL;
     s_wr = NULL;
-    vTaskDelete(NULL);
+    /* Creada con ...WithCaps: vTaskDelete(NULL) dejaría sin soltar su TCB
+     * (RAM interna) y su pila en cada grabación. */
+    watch_task_exit();
 }
 
 /* ---------------- API ---------------- */
@@ -456,17 +466,17 @@ esp_err_t wr_start(void)
         finish_audio();
         return fail_start("No hay memoria para grabar.");
     }
-    if (xTaskCreatePinnedToCoreWithCaps(wr_task, "wa_recw", WR_STACK, NULL, WR_PRIO, &s_wr, tskNO_AFFINITY,
-                                        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
+    char why[112];
+    if (!watch_task_spawn(wr_task, "wa_recw", WR_STACK, NULL, WR_PRIO, tskNO_AFFINITY, true, &s_wr, why, sizeof(why))) {
         s_wr = NULL;
         finish_audio();
-        return fail_start("No hay memoria para grabar.");
+        return fail_start(why);
     }
     lock();
     s_st.state = WR_RECORDING;
     s_st.gen++;
     unlock();
-    if (xTaskCreatePinnedToCore(cap_task, "wa_cap", CAP_STACK, NULL, CAP_PRIO, &s_cap, 0) != pdPASS) {
+    if (!watch_task_spawn(cap_task, "wa_cap", CAP_STACK, NULL, CAP_PRIO, 0, false, &s_cap, NULL, 0)) {
         s_cap = NULL;
         s_cap_failed = true;
         s_stop = STOP_CANCEL;

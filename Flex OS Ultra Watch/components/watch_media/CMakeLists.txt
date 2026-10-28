@@ -4,5 +4,5 @@ idf_component_register(
     INCLUDE_DIRS "include"
     REQUIRES fatfs flexmedia
     PRIV_REQUIRES sdmmc esp_driver_sdmmc esp_driver_gpio esp_timer lwip watch_net watch_settings watch_storage watch_files
-                  watch_time
+                  watch_time watch_diag
 )

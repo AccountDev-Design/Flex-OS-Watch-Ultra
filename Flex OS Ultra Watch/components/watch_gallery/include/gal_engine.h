@@ -12,13 +12,15 @@
  *
  * MEMORIA (PSRAM, solo con la Galería abierta; gal_engine_shed la suelta):
  *  - el motor con las dos listas: sizeof(gal_engine_t) (180 400 B en el S3);
- *  - respuestas JSON: GAL_JSON_MAX (la biblioteca del P4 cabe entera);
- *  - miniaturas: GAL_THUMBS x GAL_THUMB_SIDE^2 x 2 B;
+ *  - respuestas JSON: GAL_JSON_MAX (la biblioteca del P4 cabe entera), si
+ *    cabe; sin él se ve lo local y se vuelve a pedir en cada vuelta;
+ *  - miniaturas: hasta GAL_THUMBS de GAL_THUMB_SIDE^2 x 2 B, cada una en su
+ *    bloque y solo al hacerse (sin sitio, toma el de la más vieja sin fijar);
  *  - visor: el 2x (<= GAL_VIEW_MAX_W x GAL_VIEW_MAX_H x 2 B) y su mitad, y la
  *    banda de gal_jpeg mientras decodifica;
  *  - huellas de las partes de una subida: 32 B por parte (<= 16 KB).
- * Antes de reservar lo grande se pregunta a mem_ok(): con poca memoria se
- * dice y no se intenta.
+ * Antes de reservar se pregunta a mem_ok(): con poca memoria la Galería va a
+ * menos (sin miniaturas, sin fuentes remotas) y lo reintenta, nunca se cierra.
  */
 #pragma once
 
@@ -171,7 +173,7 @@ typedef struct {
 /* ---- vida ---- */
 gal_engine_t *gal_engine_new(const gal_env_t *env);
 void gal_engine_free(gal_engine_t *e);
-/** La app se abre: reserva lo grande, recorre el reloj y comprueba las fuentes. false sin memoria. */
+/** La app se abre: recorre el reloj y comprueba las fuentes. No reserva nada grande; siempre true. */
 bool gal_engine_open(gal_engine_t *e);
 /** La app se cierra o se suspende: suelta miniaturas, visor y JSON (las transferencias siguen). */
 void gal_engine_close(gal_engine_t *e);

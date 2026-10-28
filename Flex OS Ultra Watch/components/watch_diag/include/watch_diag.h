@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "flash_probe_logic.h"
+#include "mem_logic.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -62,6 +63,9 @@ void watch_diag_mem_event(const char *what);
 bool watch_mem_psram_fits(size_t n);
 /** ¿Cabe una reserva de n bytes en RAM interna, dejando min_left libres? */
 bool watch_mem_internal_fits(size_t n, size_t min_left);
+
+/** "RAM interna 41 KB · PSRAM 6,1 MB libres": para mensajes y registros. */
+void watch_mem_text(char *out, size_t n);
 
 #ifdef __cplusplus
 }

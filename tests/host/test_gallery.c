@@ -940,10 +940,12 @@ static uint64_t r_fs_free(void *ctx)
 
 static bool r_abort_lan(void *ctx);
 
+static size_t s_deny_n; /* mem_ok dice que no a reservas de este tamaño (fragmentación) */
+
 static bool r_mem_ok(void *ctx, size_t n)
 {
     (void)ctx;
-    return !s_limit || s_cur + n <= s_limit;
+    return (!s_limit || s_cur + n <= s_limit) && n != s_deny_n;
 }
 
 static void copy_fixture(const char *root, const char *name, const char *as)
@@ -1430,6 +1432,18 @@ static void test_engine_auto_phone(void)
     free(r);
 }
 
+/* Estado de la miniatura sin dejarla fijada (acquire fija si está lista). */
+static int th_state(rig_t *r, const gal_item_t *it)
+{
+    const uint16_t *px;
+    int ts = GAL_TH_EMPTY;
+    const int sl = gal_thumb_acquire(r->e, it, &px, &ts);
+    if (sl >= 0) {
+        gal_thumb_release(r->e, sl);
+    }
+    return ts;
+}
+
 static void test_engine_memory(void)
 {
     rig_t *r = calloc(1, sizeof(*r));
@@ -1438,18 +1452,63 @@ static void test_engine_memory(void)
     copy_fixture(r->root, "gal_prog_200x150.jpg", "prog.jpg");
     const size_t base = s_cur;
     gal_set_wifi(r->e, true);
-    /* sin memoria para abrir: lo dice */
+    /* Sin memoria al abrir: abre igual, sin JSON ni miniaturas, y la lista
+     * se reintenta sola (antes no abría o se quedaba vacía). */
     s_limit = s_cur + 1000;
-    CHECK(!gal_engine_open(r->e));
-    s_limit = 0;
     CHECK(gal_engine_open(r->e));
-    SPIN(r, S(r).nl == 2);
-    gal_item_t a = *find_item(r, 0, "a.jpg"), p = *find_item(r, 0, "prog.jpg");
+    SPIN(r, false);
     gal_mem_t m;
-    /* miniatura del reloj: se decodifica una vez y se guarda */
+    gal_engine_mem(r->e, &m);
+    CHECK(m.json_bytes == 0 && m.thumb_bytes == 0);
+    CHECK_EQ(S(r).nl, 0);
+    CHECK(S(r).scanning); /* sigue pendiente, no rendida */
+    s_limit = s_cur + 80u * 1024u; /* la lista (66 KB) cabe; el JSON (160 KB), no */
+    r->eco.clock += 3000; /* GAL_SCAN_NOMEM_MS */
+    SPIN(r, S(r).nl == 2);
+    CHECK_EQ(S(r).nl, 2);
+    gal_item_t a = *find_item(r, 0, "a.jpg"), p = *find_item(r, 0, "prog.jpg");
+    /* sin 25 KB para una miniatura: la celda se queda sin imagen, sin bucle... */
+    s_limit = s_cur + 1000;
     gal_thumb_request(r->e, &a);
     const uint16_t *px;
-    int ts, sl = -1;
+    int ts = GAL_TH_EMPTY, sl = -1;
+    SPIN(r, (ts = th_state(r, &a)) == GAL_TH_FAILED);
+    CHECK_EQ(ts, GAL_TH_FAILED);
+    gal_engine_mem(r->e, &m);
+    CHECK(m.thumb_bytes == 0 && m.json_bytes == 0);
+    /* ...y vuelve la memoria: el JSON se pide solo y la miniatura, a los 5 s */
+    s_limit = 0;
+    r->eco.clock += 5001;
+    gal_thumb_request(r->e, &a);
+    SPIN(r, (sl = gal_thumb_acquire(r->e, &a, &px, &ts)) >= 0);
+    CHECK(sl >= 0);
+    gal_thumb_release(r->e, sl);
+    gal_engine_mem(r->e, &m);
+    CHECK_EQ(m.json_bytes, GAL_JSON_MAX);
+    CHECK_EQ(m.thumb_bytes, (size_t)GAL_THUMB_SIDE * GAL_THUMB_SIDE * 2); /* una a una, no 30 de golpe */
+    /* Sin un bloque para otra miniatura: la nueva toma el lienzo de la más
+     * vieja que no se pinta (no reserva más)... */
+    s_deny_n = (size_t)GAL_THUMB_SIDE * GAL_THUMB_SIDE * 2;
+    gal_item_t b1 = a, b2 = a;
+    b1.tver = 7001;
+    b2.tver = 7002;
+    gal_thumb_request(r->e, &b1);
+    SPIN(r, (ts = th_state(r, &b1)) == GAL_TH_READY || ts == GAL_TH_FAILED);
+    CHECK_EQ(ts, GAL_TH_READY);
+    gal_engine_mem(r->e, &m);
+    CHECK_EQ(m.thumb_bytes, (size_t)GAL_THUMB_SIDE * GAL_THUMB_SIDE * 2);
+    CHECK_EQ(th_state(r, &a), GAL_TH_EMPTY); /* "a" cedió su lienzo */
+    /* ...pero nunca la que se está pintando: entonces la nueva se queda sin imagen */
+    sl = gal_thumb_acquire(r->e, &b1, &px, &ts);
+    CHECK(sl >= 0);
+    gal_thumb_request(r->e, &b2);
+    SPIN(r, (ts = th_state(r, &b2)) == GAL_TH_READY || ts == GAL_TH_FAILED);
+    CHECK_EQ(ts, GAL_TH_FAILED);
+    gal_thumb_release(r->e, sl);
+    s_deny_n = 0;
+    s_limit = 0;
+    /* miniatura del reloj: se decodifica una vez y se guarda */
+    gal_thumb_request(r->e, &a);
     SPIN(r, (sl = gal_thumb_acquire(r->e, &a, &px, &ts)) >= 0);
     CHECK(sl >= 0 && near(px[10 * GAL_THUMB_SIDE + 10], 255, 0, 0));
     /* fijada: no se reutiliza mientras se pinta, aunque se pidan muchas */
@@ -1471,7 +1530,8 @@ static void test_engine_memory(void)
     if (d) {
         closedir(d);
     }
-    CHECK_EQ(files, 1);
+    CHECK_EQ(files, 2); /* la de "a" y la de b1 (otra versión): cada una, una vez */
+    SPIN(r, false); /* las pedidas arriba se hacen (o fallan) */
     /* el progresivo: la celda lo dirá; el visor lo rechaza con motivo */
     CHECK(gal_view_open(r->e, &p));
     gal_view_t v;
@@ -1495,7 +1555,7 @@ static void test_engine_memory(void)
     CHECK(v.state == GAL_V_READY && v.zoom == NULL && v.fit_w == 410 && v.fit_h == 308);
     gal_engine_mem(r->e, &m);
     CHECK(m.view_bytes <= (size_t)GAL_VIEW_MAX_W * GAL_VIEW_MAX_H * 2 + (size_t)GAL_VIEW_W * GAL_VIEW_H * 2);
-    CHECK_EQ(m.thumb_bytes, (size_t)GAL_THUMBS * GAL_THUMB_SIDE * GAL_THUMB_SIDE * 2);
+    CHECK(m.thumb_bytes > 0 && m.thumb_bytes <= (size_t)GAL_THUMBS * GAL_THUMB_SIDE * GAL_THUMB_SIDE * 2);
     printf("   galería: motor %zu B, JSON %zu B, miniaturas %zu B, visor %zu B\n", m.engine_bytes, m.json_bytes,
            m.thumb_bytes, m.view_bytes);
     gal_view_close(r->e);

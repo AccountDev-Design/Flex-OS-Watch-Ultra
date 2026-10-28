@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "FlexOS_JPEG.h"
@@ -17,6 +18,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "mem_logic.h"
+#include "watch_task.h"
 #include "wm_store.h"
 
 static const char *TAG = "wm_video";
@@ -49,6 +52,13 @@ static volatile bool s_stop;
 static bool s_toggle_req;
 static bool s_seek_req;
 static uint32_t s_seek_ms;
+
+/* "Sin memoria" con las cifras de lo que falta (mem_logic.h). */
+static void nomem(char *why, size_t n, size_t need)
+{
+    mem_why_text(why, n, need, true, heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                 heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+}
 
 static void lock(void)
 {
@@ -374,7 +384,9 @@ static void video_task(void *arg)
             }
             v->arena = wm_alloc(ARENA_BYTES);
             if (!v->w || !v->buf[0] || !v->buf[1] || !v->arena) {
-                set_state(WV_ERROR, "Sin memoria para el vídeo");
+                char why[96];
+                nomem(why, sizeof(why), (size_t)v->w * v->h * 4 + ARENA_BYTES);
+                set_state(WV_ERROR, why);
                 rc = 1;
             } else {
                 lock();
@@ -409,7 +421,7 @@ static void video_task(void *arg)
     lock();
     s_task = NULL;
     unlock();
-    vTaskDeleteWithCaps(NULL);
+    watch_task_exit();
 }
 
 /* ---------------- API ---------------- */
@@ -432,7 +444,7 @@ bool wv_open(wm_vol_t vol, const char *rel, char *why, size_t n)
     }
     vid_t *v = wm_alloc(sizeof(*v));
     if (!v) {
-        snprintf(why, n, "Sin memoria para el vídeo");
+        nomem(why, n, sizeof(*v));
         return false;
     }
     memset(v, 0, sizeof(*v));
@@ -449,7 +461,11 @@ bool wv_open(wm_vol_t vol, const char *rel, char *why, size_t n)
     v->jpg = wm_alloc(FRAME_CAP0);
     v->jpg_cap = v->jpg ? FRAME_CAP0 : 0;
     if (!wm_vol_path(vol, rel, v->path, sizeof(v->path)) || !v->jpg || (v->fd = open(v->path, O_RDONLY)) < 0) {
-        snprintf(why, n, "%s", v->jpg ? "No se encuentra el vídeo" : "Sin memoria para el vídeo");
+        if (v->jpg) {
+            snprintf(why, n, "No se encuentra el vídeo");
+        } else {
+            nomem(why, n, FRAME_CAP0);
+        }
         free_vid(v);
         return false;
     }
@@ -461,9 +477,7 @@ bool wv_open(wm_vol_t vol, const char *rel, char *why, size_t n)
     s_stop = false;
     unlock();
     TaskHandle_t t = NULL;
-    if (xTaskCreatePinnedToCoreWithCaps(video_task, "wm_video", WV_STACK, v, TASK_PRIO, &t, tskNO_AFFINITY,
-                                        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
-        snprintf(why, n, "Sin memoria para el vídeo");
+    if (!watch_task_spawn(video_task, "wm_video", WV_STACK, v, TASK_PRIO, tskNO_AFFINITY, true, &t, why, n)) {
         free_vid(v);
         lock();
         s_st.state = WV_IDLE;

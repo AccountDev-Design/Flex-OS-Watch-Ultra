@@ -25,6 +25,8 @@ extern "C" {
 
 /** La app se abre: crea el motor y la tarea si hace falta. NULL si no hay memoria. */
 gal_engine_t *watch_gallery_open(void);
+/** Tras un NULL de watch_gallery_open: qué faltó, con cifras ("" si nada). */
+const char *watch_gallery_open_why(void);
 /** La app se cierra o se suspende: la tarea sigue solo mientras haya transferencias. */
 void watch_gallery_close(void);
 /** El motor, mientras exista (con la app abierta, siempre). */

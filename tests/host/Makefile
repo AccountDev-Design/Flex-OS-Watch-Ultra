@@ -26,6 +26,7 @@ INC := -I$(FW)/components/watch_power/include \
        -I$(FW)/components/watch_activity/include \
        -I$(FW)/components/watch_media/include \
        -I$(FW)/components/watch_audio/include \
+       -I$(FW)/components/flexmedia/include \
        -Istubs
 ACT_DIR := $(FW)/components/watch_activity
 SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test_power_sched.c test_safe.c \
@@ -58,6 +59,7 @@ SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test
        $(FW)/components/watch_power/battery_alerts.c \
        $(FW)/components/watch_power/power_sched.c \
        $(FW)/components/watch_diag/flash_probe_logic.c \
+       $(FW)/components/watch_diag/mem_logic.c \
        $(FW)/components/watch_theme/flex_glass_math.c \
        $(FW)/components/watch_theme/flex_wallpaper.c \
        $(FW)/components/watch_theme/flex_batt_style.c \

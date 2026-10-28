@@ -22,13 +22,15 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "mem_logic.h"
 #include "minimp3.h"
 #include "watch_audio.h"
+#include "watch_task.h"
 #include "wm_store.h"
 
 static const char *TAG = "wa_play";
 
-#define TASK_STACK   8192     /* en RAM interna: la decodificación no pasa por la caché de la PSRAM */
+#define TASK_STACK   8192     /* en RAM interna si sobra (la decodificación no pasa por la caché de la PSRAM); si no, PSRAM */
 #define TASK_PRIO    6        /* por encima de LVGL (4): el sonido no se corta al animar */
 #define TASK_CORE    0        /* LVGL vive en el núcleo 1 */
 #define IDLE_EXIT_MS 10000u
@@ -279,6 +281,15 @@ static void dec_close(dec_t *d)
     d->fmt = FMT_NONE;
 }
 
+/* "No hay memoria" con las cifras (solo la tarea del reproductor la usa). */
+static const char *nomem(size_t need)
+{
+    static char why[112];
+    mem_why_text(why, sizeof(why), need, true, heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                 heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    return why;
+}
+
 static const char *dec_open(dec_t *d, const wap_track_t *t)
 {
     dec_close(d);
@@ -318,7 +329,7 @@ static const char *dec_open(dec_t *d, const wap_track_t *t)
         const size_t need = flexAsWorkBytes(&d->wi);
         d->as_work = need ? wm_alloc(need) : NULL;
         if (!d->as_work) {
-            return need ? "No hay memoria para reproducir." : "Formato WAV no admitido.";
+            return need ? nomem(need) : "Formato WAV no admitido.";
         }
         if (!flexAsOpen(&d->as, &io, &d->wi, d->as_work, need)) {
             return "El archivo WAV está dañado.";
@@ -343,7 +354,7 @@ static const char *dec_open(dec_t *d, const wap_track_t *t)
     }
     d->in = wm_alloc(IN_CAP);
     if (!d->mp3 || !d->scratch || !d->in) {
-        return "No hay memoria para reproducir.";
+        return nomem(sizeof(mp3dec_t) + sb_n + IN_CAP);
     }
     mp3dec_init(d->mp3);
     d->mp3->flex_scratch = d->scratch;
@@ -573,19 +584,26 @@ static void stop_song(dec_t *d, bool *have, bool *loaded)
     *loaded = false;
 }
 
+/* Interna si hay (más rápida); si no, PSRAM: suena igual, no se queda mudo. */
+static void *buf_alloc(size_t n)
+{
+    void *p = heap_caps_malloc(n, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    return p ? p : heap_caps_malloc(n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+}
+
 static void player_task(void *arg)
 {
     (void)arg;
     dec_t d;
     memset(&d, 0, sizeof(d));
     d.fd = -1;
-    d.pcm = heap_caps_malloc(OUT_FRAMES * 2 * sizeof(int16_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    d.st = heap_caps_malloc(OUT_FRAMES * 2 * sizeof(int16_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    d.pcm = buf_alloc(OUT_FRAMES * 2 * sizeof(int16_t));
+    d.st = buf_alloc(OUT_FRAMES * 2 * sizeof(int16_t));
     bool have_audio = false, loaded = false;
     wap_state_t st = WAP_IDLE;
     uint32_t idle_since = now_ms(), last_pos_pub = 0;
     if (!d.pcm || !d.st) {
-        set_state(WAP_ERROR, "No hay memoria para el reproductor.");
+        set_state(WAP_ERROR, nomem(OUT_FRAMES * 4 * sizeof(int16_t)));
     }
     for (bool run = d.pcm && d.st; run;) {
         /* Una orden por vuelta: sin esperar si suena (una vuelta = una trama,
@@ -751,7 +769,7 @@ static void player_task(void *arg)
         s_task = NULL; /* salida por falta de memoria */
     }
     unlock();
-    vTaskDelete(NULL);
+    watch_task_exit();
 }
 
 /* ---------------- API ---------------- */
@@ -782,12 +800,13 @@ static void ensure_task(void)
         return;
     }
     TaskHandle_t h = NULL;
-    if (xTaskCreatePinnedToCore(player_task, "wa_play", TASK_STACK, NULL, TASK_PRIO, &h, TASK_CORE) == pdPASS) {
+    char why[112];
+    if (watch_task_spawn(player_task, "wa_play", TASK_STACK, NULL, TASK_PRIO, TASK_CORE, false, &h, why, sizeof(why))) {
         lock();
         s_task = h;
         unlock();
     } else {
-        set_state(WAP_ERROR, "No hay memoria para el reproductor.");
+        set_state(WAP_ERROR, why);
     }
 }
 

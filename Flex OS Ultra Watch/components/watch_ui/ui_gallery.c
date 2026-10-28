@@ -29,6 +29,7 @@
 #include <string.h>
 #include "esp_heap_caps.h"
 #include "flex_safe.h"
+#include "mem_logic.h"
 #include "misc/cache/instance/lv_image_cache.h"
 #include "FlexOS_MediaLib.h"
 #include "watch_gallery.h"
@@ -89,6 +90,7 @@ typedef struct {
     int card_act; /* qué hace el botón de la tarjeta */
     char chip_in[200];
     bool suspended, dirty, nomem;
+    char nomem_why[112]; /* qué faltó y cuánto (mem_why_text) */
     gal_item_t sel; /* el de la página de información o el visor */
 } gal_ui_t;
 
@@ -477,7 +479,11 @@ static void rebuild(void)
     }
     gal_engine_unlock(e);
     lv_free(refs);
-    G->nomem = need > 0 && !G->items;
+    G->nomem = need > 0 && (!G->items || !refs);
+    if (G->nomem) {
+        mem_why_text(G->nomem_why, sizeof(G->nomem_why), (size_t)need * (sizeof(gal_item_t) + sizeof(gal_ref_t)), true,
+                     heap_caps_get_free_size(MALLOC_CAP_INTERNAL), heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    }
     G->n = n;
     layout();
 }
@@ -629,7 +635,7 @@ static void update_card(void)
     const bool videos = G->ktab == KT_VIDEOS;
     const char *fs_why = NULL;
     if (G->nomem) {
-        card_set("Sin memoria para la lista", "Cierra otra app y vuelve a abrir la Galería.", NULL, CARD_NONE);
+        card_set("Sin memoria para la lista", G->nomem_why, NULL, CARD_NONE); /* se reintenta sola (tick_cb) */
     } else if (s->remote_state == GAL_L_ERROR && s->remote_err[0] && remote_src() >= 0 && s->nl == 0) {
         card_set("No se pudo cargar la lista", s->remote_err, "Reintentar", CARD_RETRY);
     } else if (!ui_fs_ready(&fs_why) && s->nl == 0) {
@@ -2169,13 +2175,23 @@ static void tick_cb(lv_timer_t *t)
             }
         }
         if (!G->e) {
-            card_set("Sin memoria para la Galería", "Se vuelve a intentar sola; cerrar otra app libera memoria.", NULL,
-                     CARD_NONE);
+            /* Con cifras: nada de "cierra otra app" (no hay otras abiertas a la vista). */
+            char t[160];
+            const char *why = watch_gallery_open_why();
+            snprintf(t, sizeof(t), "%s Se vuelve a intentar sola cada 3 s.", why && why[0] ? why : "Memoria justa ahora.");
+            card_set("Sin memoria para la Galería", t, NULL, CARD_NONE);
             watch_theme_set_visible(G->card, true);
+            set_text(G->chip_l, "Esperando memoria…"); /* la píldora de origen no se queda vacía */
+            G->chip_in[0] = 0;                          /* update_chip la rehace al abrir */
+            watch_theme_set_bg_color(G->chip_dot, FLEX_C_WARN);
             return;
         }
     }
     gal_status(G->e, &G->st);
+    if (G->nomem && lv_tick_elaps(G->retry_ms) >= RETRY_MS) {
+        G->retry_ms = lv_tick_get();
+        G->dirty = true; /* la lista no cupo: se vuelve a probar, sin bucle */
+    }
     if (G->dirty || G->st.local_gen != G->lgen || G->st.remote_gen != G->rgen) {
         rebuild();
     }

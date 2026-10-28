@@ -217,8 +217,12 @@ void gal__local_scan(gal_engine_t *e)
     gal__origin_load(e);
     gal_item_t *tmp = gal__alloc(e, sizeof(gal_item_t) * GAL_LIST_MAX);
     if (!tmp) {
+        /* Sin sitio para la copia: se vuelve a intentar en unos segundos (antes
+         * se rendía y la lista se quedaba vacía hasta volver a abrir). */
         gal__lock(e);
         e->scanning = false;
+        e->scan_req = true;
+        e->scan_wait = (gal__now(e) + GAL_SCAN_NOMEM_MS) | 1u;
         gal__unlock(e);
         return;
     }
@@ -253,6 +257,7 @@ void gal__local_scan(gal_engine_t *e)
     e->local_gen++;
     e->remote_gen++; /* las marcas "ya en el reloj" de la remota cambian */
     e->scanning = false;
+    e->scan_wait = 0;
     e->scan_ms = gal__now(e);
     gal__unlock(e);
     gal__free(e, tmp);

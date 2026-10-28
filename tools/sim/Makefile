@@ -79,6 +79,7 @@ APP_SRC := $(wildcard sim_*.c) \
            ../../tests/host/gal_fake.c \
            ../../tests/host/gal_fake_eco.c \
            $(FW)/components/watch_diag/flash_probe_logic.c \
+           $(FW)/components/watch_diag/mem_logic.c \
            $(FW)/components/watch_media/wm_sd_logic.c \
            $(FW)/components/watch_media/wm_fsclass.c \
            $(FW)/components/watch_media/wm_path.c \

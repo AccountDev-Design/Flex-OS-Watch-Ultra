@@ -14,6 +14,9 @@
 #define K_UHOST "g.uhost"
 #define K_UPORT "g.uport"
 
+#define THUMB_RETRY_MS 60000u /* una miniatura que falló se reintenta, pero no en bucle */
+#define THUMB_NOMEM_MS 5000u  /* ...y antes si lo que faltó fue memoria */
+
 void gal__lock(gal_engine_t *e)
 {
     if (e->env.lock) {
@@ -171,9 +174,22 @@ static void free_view(gal_engine_t *e)
 
 static void free_thumbs(gal_engine_t *e)
 {
-    gal__free(e, e->thumb_mem);
-    e->thumb_mem = NULL;
+    for (int i = 0; i < GAL_THUMBS; i++) {
+        gal__free(e, e->thumbs[i].px);
+    }
+    e->thumbs_on = false;
     memset(e->thumbs, 0, sizeof(e->thumbs));
+}
+
+/* JSON: un bloque de GAL_JSON_MAX solo para hablar con el Ultra o Flex Cloud.
+ * Sin él la Galería abre igual (reloj y microSD) y se vuelve a intentar en
+ * cada vuelta de la tarea: las peticiones de red sin búfer fallan con
+ * GAL_HTTP_E_ARG, nunca escriben fuera. */
+static void want_json(gal_engine_t *e)
+{
+    if (!e->json && gal__mem_ok(e, GAL_JSON_MAX)) {
+        e->json = gal__alloc(e, GAL_JSON_MAX);
+    }
 }
 
 void gal_engine_free(gal_engine_t *e)
@@ -199,39 +215,26 @@ void gal_engine_free(gal_engine_t *e)
 
 bool gal_engine_open(gal_engine_t *e)
 {
-    const size_t tb = (size_t)GAL_THUMBS * THUMB_PX * sizeof(uint16_t);
+    /* Abrir no exige memoria grande: lo local se lista con lo que ya hay, las
+     * miniaturas reservan una a una (25 KB) al hacerse y el JSON se pide si
+     * cabe (want_json). Bajo presión la Galería va a menos, no deja de abrir. */
     gal__lock(e);
-    bool ok = true;
-    if (!e->json) {
-        e->json = gal__mem_ok(e, GAL_JSON_MAX) ? gal__alloc(e, GAL_JSON_MAX) : NULL;
-        ok = e->json != NULL;
-    }
-    if (ok && !e->thumb_mem) {
-        e->thumb_mem = gal__mem_ok(e, tb) ? gal__alloc(e, tb) : NULL;
-        if (e->thumb_mem) {
-            memset(e->thumbs, 0, sizeof(e->thumbs));
-            for (int i = 0; i < GAL_THUMBS; i++) {
-                e->thumbs[i].px = e->thumb_mem + (size_t)i * THUMB_PX;
-            }
+    want_json(e);
+    e->thumbs_on = true;
+    const uint32_t now = gal__now(e);
+    e->open = true;
+    e->scan_req = true;
+    e->list_req = true;
+    e->abort_job = false;
+    for (int s = GAL_SRC_ULTRA; s < GAL_SRC_N; s++) {
+        if (e->health[s].state != GAL_ST_UNSET) {
+            e->health[s].next_ms = now; /* se comprueba al abrir, sin esperar a la espera */
         }
-        ok = e->thumb_mem != NULL;
     }
-    if (ok) {
-        const uint32_t now = gal__now(e);
-        e->open = true;
-        e->scan_req = true;
-        e->list_req = true;
-        e->abort_job = false;
-        for (int s = GAL_SRC_ULTRA; s < GAL_SRC_N; s++) {
-            if (e->health[s].state != GAL_ST_UNSET) {
-                e->health[s].next_ms = now; /* se comprueba al abrir, sin esperar a la espera */
-            }
-        }
-        health_from_config(e, now);
-    }
+    health_from_config(e, now);
     gal__unlock(e);
     kick(e);
-    return ok;
+    return true;
 }
 
 void gal_engine_close(gal_engine_t *e)
@@ -553,7 +556,7 @@ void gal_thumb_request(gal_engine_t *e, const gal_item_t *it)
     char key[sizeof(e->thumbs[0].key)];
     thumb_key(it, key, sizeof(key));
     gal__lock(e);
-    if (!e->thumb_mem) {
+    if (!e->thumbs_on) {
         gal__unlock(e);
         return;
     }
@@ -562,7 +565,7 @@ void gal_thumb_request(gal_engine_t *e, const gal_item_t *it)
     if (i >= 0) {
         gal_thumb_t *t = &e->thumbs[i];
         t->lru = now;
-        if (t->state == GAL_TH_FAILED && now - t->fail_ms > 60000u) {
+        if (t->state == GAL_TH_FAILED && now - t->fail_ms > THUMB_RETRY_MS) {
             t->state = GAL_TH_WANTED; /* se reintenta, pero no en bucle */
         }
         const bool wanted = t->state == GAL_TH_WANTED; /* leído con el cerrojo: la tarea lo cambia */
@@ -611,7 +614,7 @@ int gal_thumb_acquire(gal_engine_t *e, const gal_item_t *it, const uint16_t **px
     char key[sizeof(e->thumbs[0].key)];
     thumb_key(it, key, sizeof(key));
     gal__lock(e);
-    const int i = e->thumb_mem ? thumb_find(e, key) : -1;
+    const int i = e->thumbs_on ? thumb_find(e, key) : -1;
     int ret = -1;
     if (state) {
         *state = i >= 0 ? e->thumbs[i].state : GAL_TH_EMPTY;
@@ -952,7 +955,9 @@ void gal_engine_mem(gal_engine_t *e, gal_mem_t *o)
     gal__lock(e);
     o->engine_bytes = sizeof(*e);
     o->json_bytes = e->json ? GAL_JSON_MAX : 0;
-    o->thumb_bytes = e->thumb_mem ? (size_t)GAL_THUMBS * THUMB_PX * 2 : 0;
+    for (int i = 0; i < GAL_THUMBS; i++) {
+        o->thumb_bytes += e->thumbs[i].px ? THUMB_PX * 2 : 0;
+    }
     o->view_bytes = e->view_zoom_sz + e->view_fit_sz;
     o->parts_bytes = e->parts_bytes;
     o->http_reqs = e->lan.reqs + e->cloud.reqs;
@@ -973,6 +978,26 @@ typedef struct {
     size_t sz;
 } view_dst_t;
 
+/* La foto abierta va antes que las miniaturas: si no cabe, se sueltan las
+ * que no se están pintando (se rehacen al volver a la cuadrícula). */
+static bool shed_thumbs(gal_engine_t *e)
+{
+    bool any = false;
+    gal__lock(e);
+    for (int i = 0; i < GAL_THUMBS; i++) {
+        gal_thumb_t *t = &e->thumbs[i];
+        if (t->px && !t->pins && t->state != GAL_TH_LOADING) {
+            gal__free(e, t->px);
+            t->px = NULL;
+            t->state = GAL_TH_EMPTY;
+            t->key[0] = 0;
+            any = true;
+        }
+    }
+    gal__unlock(e);
+    return any;
+}
+
 static uint16_t *view_dst(void *ud, int sw, int sh, int *dw, int *dh)
 {
     view_dst_t *d = ud;
@@ -991,7 +1016,8 @@ static uint16_t *view_dst(void *ud, int sw, int sh, int *dw, int *dh)
     d->h = d->want_zoom ? zh : fh;
     const size_t need = (size_t)d->w * (size_t)d->h * 2u;
     if (!d->buf) {
-        if (!gal__mem_ok(e, need + (size_t)GAL_JPEG_BAND * (size_t)fw * 16u + GAL_JPEG_WORK)) {
+        const size_t all = need + (size_t)GAL_JPEG_BAND * (size_t)fw * 16u + GAL_JPEG_WORK;
+        if (!gal__mem_ok(e, all) && (!shed_thumbs(e) || !gal__mem_ok(e, all))) {
             return NULL;
         }
         d->buf = gal__alloc(e, need);
@@ -1083,11 +1109,42 @@ static void do_view(gal_engine_t *e)
     gal__unlock(e);
 }
 
+/* El lienzo de una miniatura (con el cerrojo): uno nuevo si cabe; si no, el
+ * de la miniatura lista más vieja que no se esté pintando (pasa a vacía). */
+static bool thumb_mem(gal_engine_t *e, int slot)
+{
+    const size_t n = THUMB_PX * sizeof(uint16_t);
+    gal_thumb_t *t = &e->thumbs[slot];
+    t->px = gal__mem_ok(e, n) ? gal__alloc(e, n) : NULL;
+    if (t->px) {
+        return true;
+    }
+    const uint32_t now = gal__now(e);
+    int victim = -1;
+    uint32_t best = 0;
+    for (int j = 0; j < GAL_THUMBS; j++) {
+        const gal_thumb_t *c = &e->thumbs[j];
+        if (j != slot && c->px && !c->pins && c->state != GAL_TH_LOADING && (victim < 0 || now - c->lru > best)) {
+            best = now - c->lru;
+            victim = j;
+        }
+    }
+    if (victim < 0) {
+        return false;
+    }
+    gal_thumb_t *v = &e->thumbs[victim];
+    t->px = v->px;
+    v->px = NULL;
+    v->state = GAL_TH_EMPTY;
+    v->key[0] = 0;
+    return true;
+}
+
 static bool do_thumb(gal_engine_t *e)
 {
     gal__lock(e);
     int best = -1;
-    for (int i = 0; e->thumb_mem && i < GAL_THUMBS; i++) {
+    for (int i = 0; e->thumbs_on && i < GAL_THUMBS; i++) {
         const gal_thumb_t *c = &e->thumbs[i];
         /* la de una fuente que no está lista espera a que vuelva */
         const bool reachable = c->item.src == GAL_SRC_LOCAL || e->health[c->item.src].state == GAL_ST_READY;
@@ -1100,6 +1157,15 @@ static bool do_thumb(gal_engine_t *e)
         return false;
     }
     gal_thumb_t *t = &e->thumbs[best];
+    if (!t->px && !thumb_mem(e, best)) {
+        /* Sin 25 KB libres ni miniatura vieja que ceder: esta celda se queda
+         * sin imagen y se reintenta en unos segundos (no en bucle). */
+        t->state = GAL_TH_FAILED;
+        t->fail_ms = gal__now(e) - THUMB_RETRY_MS + THUMB_NOMEM_MS;
+        e->thumbs_failed++;
+        gal__unlock(e);
+        return true;
+    }
     t->state = GAL_TH_LOADING;
     e->abort_job = false;
     uint16_t *px = t->px;
@@ -1168,6 +1234,9 @@ uint32_t gal_engine_step(gal_engine_t *e)
     }
 
     gal__lock(e);
+    if (e->open) {
+        want_json(e); /* abierta sin JSON (memoria justa al abrir): se reintenta */
+    }
     if (!e->view_req && e->view_state == GAL_V_IDLE && (e->view_fit || e->view_zoom)) {
         free_view(e); /* el visor se cerró: sus lienzos (hasta 2 MB) no esperan a otra foto */
     }
@@ -1182,7 +1251,8 @@ uint32_t gal_engine_step(gal_engine_t *e)
         gal__unlock(e);
     }
     gal__lock(e);
-    const bool pair = e->pair_req, view = e->view_req, scan = e->scan_req && open;
+    const bool pair = e->pair_req, view = e->view_req;
+    const bool scan = e->scan_req && open && (!e->scan_wait || (int32_t)(now - e->scan_wait) >= 0);
     e->pair_req = false;
     if (scan) {
         e->scan_req = false;

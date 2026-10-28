@@ -167,10 +167,12 @@ void sim_br_progressive(bool on)
 
 /* ---- API de watch_browser ---- */
 
-/* Misma regla que el reloj (watch_browser.c), sobre la memoria simulada. */
+/* Misma regla que el reloj (watch_browser.c), sobre la memoria simulada: la
+ * pila de la tarea va a PSRAM, así que de la RAM interna solo hacen falta
+ * los 20 KB de lwIP, el Wi-Fi y el BLE. */
 bool watch_browser_mem_check(char *why, size_t n)
 {
-    if (sim_mem_internal_free < 10240 + 20 * 1024) {
+    if (sim_mem_internal_free < 20 * 1024) {
         if (why && n) {
             snprintf(why, n, "Falta RAM interna: %u KB libres", (unsigned)(sim_mem_internal_free / 1024));
         }
@@ -183,6 +185,11 @@ bool watch_browser_mem_check(char *why, size_t n)
         return false;
     }
     return true;
+}
+
+const char *watch_browser_mem_why(void)
+{
+    return "";
 }
 
 esp_err_t watch_browser_open(void)
