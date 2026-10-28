@@ -43,7 +43,7 @@
   <div class="brand">
     <span class="logo" aria-hidden="true"></span>
     <div>
-      <strong>Flex OS</strong>
+      <strong id="devName">Flex OS</strong>
       <span class="sub" id="devSub">Biblioteca</span>
     </div>
   </div>
@@ -68,8 +68,8 @@
   <section id="pairView" class="pair" hidden>
     <div class="pair-card glass">
       <div class="pair-ico" aria-hidden="true"></div>
-      <h1>Conecta con Flex OS</h1>
-      <p>Escribe el código de 6 cifras que aparece en la pantalla de tu Flex OS, en <b>Galería › Conectar con el móvil</b>.</p>
+      <h1 id="pairTitle">Conecta con Flex OS</h1>
+      <p id="pairHow">Escribe el código de 6 cifras que aparece en la pantalla de tu Flex OS, en <b>Galería › Conectar con el móvil</b>.</p>
       <form id="pairForm" autocomplete="off">
         <input id="pairCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••••" aria-label="Código de acceso" autocomplete="one-time-code">
         <button class="btn primary" type="submit" id="pairBtn">Conectar</button>
@@ -79,6 +79,7 @@
   </section>
 
   <section id="libView" hidden>
+    <p class="dest-line" id="destLine" hidden></p>
     <nav class="tabs glass" id="tabs" role="tablist">
       <button role="tab" data-tab="all" class="on">Todo</button>
       <button role="tab" data-tab="photo">Fotos</button>

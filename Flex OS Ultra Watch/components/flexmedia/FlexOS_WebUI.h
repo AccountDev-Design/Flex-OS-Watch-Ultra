@@ -5,7 +5,7 @@
 // #############################################################
 #pragma once
 
-// index.html: 22175 bytes
+// index.html: 22267 bytes
 static const char FLEXWEB_INDEX_HTML[] = R"FXW(<!doctype html>
 <html lang="es">
 <head>
@@ -51,7 +51,7 @@ static const char FLEXWEB_INDEX_HTML[] = R"FXW(<!doctype html>
   <div class="brand">
     <span class="logo" aria-hidden="true"></span>
     <div>
-      <strong>Flex OS</strong>
+      <strong id="devName">Flex OS</strong>
       <span class="sub" id="devSub">Biblioteca</span>
     </div>
   </div>
@@ -76,8 +76,8 @@ static const char FLEXWEB_INDEX_HTML[] = R"FXW(<!doctype html>
   <section id="pairView" class="pair" hidden>
     <div class="pair-card glass">
       <div class="pair-ico" aria-hidden="true"></div>
-      <h1>Conecta con Flex OS</h1>
-      <p>Escribe el código de 6 cifras que aparece en la pantalla de tu Flex OS, en <b>Galería › Conectar con el móvil</b>.</p>
+      <h1 id="pairTitle">Conecta con Flex OS</h1>
+      <p id="pairHow">Escribe el código de 6 cifras que aparece en la pantalla de tu Flex OS, en <b>Galería › Conectar con el móvil</b>.</p>
       <form id="pairForm" autocomplete="off">
         <input id="pairCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••••" aria-label="Código de acceso" autocomplete="one-time-code">
         <button class="btn primary" type="submit" id="pairBtn">Conectar</button>
@@ -87,6 +87,7 @@ static const char FLEXWEB_INDEX_HTML[] = R"FXW(<!doctype html>
   </section>
 
   <section id="libView" hidden>
+    <p class="dest-line" id="destLine" hidden></p>
     <nav class="tabs glass" id="tabs" role="tablist">
       <button role="tab" data-tab="all" class="on">Todo</button>
       <button role="tab" data-tab="photo">Fotos</button>
@@ -386,7 +387,7 @@ static const char FLEXWEB_INDEX_HTML[] = R"FXW(<!doctype html>
 </html>
 )FXW";
 
-// app.css: 34497 bytes
+// app.css: 34580 bytes
 static const char FLEXWEB_APP_CSS[] = R"FXW(/* Flex OS · Biblioteca web. El mismo lenguaje que el sistema: fondo profundo,
    superficies de vidrio (desenfoque + borde de luz), esquinas amplias y
    animaciones cortas que SOLO acompanan un cambio real. */
@@ -458,6 +459,7 @@ button{cursor:pointer;border:0;background:none}
   border:1px solid var(--edge);background:rgba(0,0,0,.25);outline:none;margin-bottom:12px}
 #pairCode:focus{border-color:var(--pri2)}
 .err{color:var(--err);min-height:1.2em;margin:10px 0 0;font-size:14px}
+.dest-line{color:var(--txt2);font-size:13px;margin:4px 6px 10px;text-align:center}
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 
 .btn{border-radius:14px;padding:12px 18px;background:var(--glass2);border:1px solid var(--edge);font-weight:600;
@@ -867,7 +869,7 @@ body.selecting .bnav,body.cselecting .bnav{display:none}
 }
 )FXW";
 
-// app.js: 214789 bytes
+// app.js: 217035 bytes
 static const char FLEXWEB_APP_JS[] = R"FXW(/* Flex OS · Biblioteca web (Flex Web Server)
  *
  * La sirve el propio P4 desde su memoria (FlexOS_WebUI.h, que genera
@@ -2457,16 +2459,30 @@ const S = {
 const KIND_LABEL = { photo: 'FOTO', video: 'VÍDEO', audio: 'AUDIO' };
 
 // ---------- red ----------
+// RELOJ: QUIEN sirve (de /api/hello). Todo lo que cambia algo lleva su
+// identidad en X-Flex-Dev: si la IP la tiene ahora otro aparato Flex (o la
+// pestana es de otro), el servidor no toca nada y contesta 409.
+const DEV = { name: 'Flex OS', id: '', type: '', dest: null };
+function flexHeaders(h) {
+  h['X-Flex'] = '1';
+  if (DEV.id) h['X-Flex-Dev'] = DEV.id;
+  return h;
+}
+function xhrFlex(x) {
+  x.setRequestHeader('X-Flex', '1');
+  if (DEV.id) x.setRequestHeader('X-Flex-Dev', DEV.id);
+}
 async function api(path, opt) {
   opt = opt || {};
   const init = { method: opt.method || 'GET', credentials: 'same-origin', cache: 'no-store', headers: {} };
-  if (init.method === 'POST') init.headers['X-Flex'] = '1';
+  if (init.method === 'POST') flexHeaders(init.headers);
   if (opt.form != null) { init.headers['Content-Type'] = 'application/x-www-form-urlencoded'; init.body = opt.form; }
   if (opt.body) { init.headers['Content-Type'] = opt.type || 'application/octet-stream'; init.body = opt.body; }
   let r;
   try { r = await fetch(path, init); } catch (e) { return { status: 0, json: null }; }
   let j = null;
   try { j = await r.json(); } catch (e) { j = null; }
+  if (r.status === 409 && j && j.wrongDevice) wrongDevice(j);
   return { status: r.status, json: j };
 }
 function errText(r, fallback) {
@@ -2520,6 +2536,7 @@ async function pair(code) {
   const j = r.json || {};
   let m;
   if (r.status === 429) m = 'Demasiados intentos. Espera ' + waitText(j.wait) + ' y vuelve a probar.';
+  else if (r.status === 410 || j.expired) m = 'El código ha caducado. Pide uno nuevo en ' + DEV.name + ' y vuelve a escanear el QR.';
   else if (r.status === 403 && j.left != null) m = 'Código incorrecto.' + (j.left > 0 ? ' Quedan ' + j.left + ' intento' + (j.left === 1 ? '' : 's') + '.' : '');
   else m = errText(r, 'No se pudo conectar');
   $('pairErr').textContent = m;
@@ -2560,6 +2577,22 @@ function startLibrary(fresh) {
   refresh(true);
   schedulePoll();
   fsStart();
+}
+// RELOJ: la pagina habla con OTRO aparato (la IP cambio de dueno o la pestana
+// es vieja): no se manda nada mas y se pide el QR nuevo.
+function wrongDevice(j) {
+  if (S.wrongDev) return;
+  S.wrongDev = true;
+  fsStop();
+  for (const q of S.queue) { q.cancelled = true; if (q.xhr) try { q.xhr.abort(); } catch (e) { /* ya cerrada */ } }
+  S.queue = [];
+  updateQueueCard();
+  S.rev = 0; S.items = []; S.byId.clear(); S.owner = false;
+  clearGrid();
+  exitSelect();
+  showPair('Esta dirección es ahora de ' + ((j && j.dev) || 'otro dispositivo Flex') +
+           ', no del que escaneaste. Vuelve a escanear el QR en tu dispositivo: no se ha cambiado nada.');
+  $('pairForm').hidden = true;
 }
 function lostSession() {
   fsStop();
@@ -3738,11 +3771,15 @@ function xhrUpload(url, blob, job) {
     const x = new XMLHttpRequest();
     job.xhr = x;
     x.open('POST', url);
-    x.setRequestHeader('X-Flex', '1');
+    xhrFlex(x);
     x.setRequestHeader('Content-Type', 'application/octet-stream');
     x.upload.onprogress = (e) => { if (e.lengthComputable) job.progress('send', e.loaded / e.total, e.loaded, e.total); };
     x.upload.onload = () => job.progress('check', 1);
-    x.onload = () => { let j = null; try { j = JSON.parse(x.responseText); } catch (e) { j = null; } res({ status: x.status, json: j }); };
+    x.onload = () => {
+      let j = null; try { j = JSON.parse(x.responseText); } catch (e) { j = null; }
+      if (x.status === 409 && j && j.wrongDevice) wrongDevice(j);
+      res({ status: x.status, json: j });
+    };
     x.onerror = () => res({ status: 0, json: null });
     x.onabort = () => res({ status: -1, json: null });
     x.send(blob);
@@ -4061,7 +4098,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function capi(method, path, body) {
   for (let tries = 0; ; tries++) {
     const init = { method, credentials: 'same-origin', cache: 'no-store', headers: {} };
-    if (method !== 'GET' && method !== 'HEAD') init.headers['X-Flex'] = '1';
+    if (method !== 'GET' && method !== 'HEAD') flexHeaders(init.headers);
     if (body !== undefined) { init.headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(body); }
     let r = null, j = null;
     try { r = await fetch(path, init); } catch (e) { r = null; }
@@ -4985,7 +5022,7 @@ function xhrPart(job, n, buf, sha) {
     const x = new XMLHttpRequest();
     job.xhr = x;
     x.open('PUT', '/api/cloud/uploads/' + job.uploadId + '/parts/' + n);
-    x.setRequestHeader('X-Flex', '1');
+    xhrFlex(x);
     x.setRequestHeader('X-Part-SHA256', sha);
     x.setRequestHeader('Content-Type', 'application/octet-stream');
     x.timeout = 120000;
@@ -5013,7 +5050,7 @@ async function cloudThumb(id, file) {
     const cv = canvas(w, h);
     cv.getContext('2d').drawImage(src, 0, 0, w, h);
     const b = await toJpeg(cv, 0.82);
-    await fetch('/api/cloud/files/' + id + '/thumbnail', { method: 'PUT', credentials: 'same-origin', headers: { 'X-Flex': '1', 'Content-Type': 'image/jpeg' }, body: b });
+    await fetch('/api/cloud/files/' + id + '/thumbnail', { method: 'PUT', credentials: 'same-origin', headers: flexHeaders({ 'Content-Type': 'image/jpeg' }), body: b });
     const it = FS.byId.get(id);
     if (it) { it.hasThumbnail = true; if (FS.view === 'cloud') renderCloud(); }
   } catch (e) {
@@ -5456,6 +5493,27 @@ $('mPhone').addEventListener('click', () => { closeMenu(); openPhoneSheet(); });
 // ===========================================================================
 //  Arranque
 // ===========================================================================
+// RELOJ: nombre, identidad, tipo y destino del aparato que sirve la pagina.
+function applyDevice(h) {
+  DEV.name = h.dev || 'Flex OS';
+  DEV.id = h.devId || '';
+  DEV.type = h.type || '';
+  DEV.dest = h.dest && h.dest.name ? h.dest : null;
+  $('devName').textContent = DEV.name;
+  document.title = DEV.name + ' · Biblioteca';
+  if (DEV.type === 'watch') {
+    $('pairHow').textContent = 'Escribe el código de 6 cifras que aparece en la pantalla del reloj, en ' +
+      'Galería › + › Recibir desde el móvil.';
+  }
+  $('pairTitle').textContent = 'Conecta con ' + DEV.name;
+  const d = $('destLine');
+  if (DEV.dest) {
+    d.textContent = 'Lo que subas se guarda en: ' + DEV.dest.name + (DEV.dest.ready === 0 ? ' (no disponible ahora)' : '');
+    d.hidden = false;
+  } else {
+    d.hidden = true;
+  }
+}
 (async function boot() {
   const k = new URLSearchParams(location.search).get('k');
   if (k) history.replaceState(null, '', location.pathname);
@@ -5463,6 +5521,7 @@ $('mPhone').addEventListener('click', () => { closeMenu(); openPhoneSheet(); });
   if (h.status !== 200 || !h.json) { showPair(errText(h, 'Flex OS no responde')); return; }
   S.lockType = h.json.lockType | 0;
   S.up = !!h.json.up;
+  applyDevice(h.json);
   if (h.json.paired) { startLibrary(false); return; }
   if (k && /^\d{6}$/.test(k) && await pair(k)) { startLibrary(true); return; }
   showPair(k ? 'El código del QR ya no es válido: escribe el que aparece ahora en Flex OS.' : '');
@@ -5470,4 +5529,4 @@ $('mPhone').addEventListener('click', () => { closeMenu(); openPhoneSheet(); });
 })();
 )FXW";
 
-#define FLEXWEB_UI_BYTES 271461
+#define FLEXWEB_UI_BYTES 273882

@@ -1124,6 +1124,67 @@ static void testFuzz(){
   g_ups.clear();
 }
 
+
+// =============================================================
+//  RELOJ: quien sirve, caducidad del codigo y paginas de otro aparato
+// =============================================================
+static std::string jstr(cJSON* j, const char* k){
+  cJSON* x = cJSON_GetObjectItemCaseSensitive(j, k);
+  return cJSON_IsString(x) ? std::string(x->valuestring) : std::string("<no>");
+}
+static void testWatchIdentity(){
+  std::printf("-- RELOJ: identidad del aparato, codigo que caduca y paginas de otro aparato --\n");
+  setup(); g_cookie.clear();
+  snprintf(g_w.devName, sizeof(g_w.devName), "Flex OS Watch Ultra");
+  snprintf(g_w.devId, sizeof(g_w.devId), "S3-A1B2C3D4E5F6");
+  snprintf(g_w.devType, sizeof(g_w.devType), "watch");
+  g_w.destJson = "\"vol\":\"sd\",\"name\":\"microSD\",\"ready\":1";
+  g_w.codeTtlMs = 10u * 60u * 1000u;
+  flexWebNewCode(&g_w);                                         // la vida del codigo empieza aqui
+  Resp r = run(req("GET", "/api/hello"));
+  cJSON* j = js(r);
+  cJSON* d = cJSON_GetObjectItemCaseSensitive(j, "dest");
+  CHECK(r.status == 200 && jstr(j, "dev") == "Flex OS Watch Ultra" && jstr(j, "devId") == "S3-A1B2C3D4E5F6" &&
+        jstr(j, "type") == "watch", "hello dice quien sirve: %s", r.body.c_str());
+  CHECK(jint(j, "codeTtl") == 600, "y los segundos que le quedan al codigo (%d)", jint(j, "codeTtl"));
+  CHECK(d && jstr(d, "name") == "microSD" && jint(d, "ready") == 1, "y el destino de las subidas");
+  CHECK(r.body.find(g_w.code) == std::string::npos, "hello no deja ver el codigo");
+  cJSON_Delete(j);
+
+  // Caducado: 410, no cuenta como intento fallido y no abre sesion.
+  g_ms += 10u * 60u * 1000u;
+  r = run(req("GET", "/api/hello")); j = js(r);
+  CHECK(jint(j, "codeTtl") == 0, "a los 10 min el codigo ya no vale");
+  cJSON_Delete(j);
+  r = run(req("POST", "/api/pair", std::string("code=") + g_w.code)); j = js(r);
+  CHECK(r.status == 410 && jint(j, "expired") == 1 && !r.h.count("set-cookie"), "codigo caducado: 410 sin sesion");
+  cJSON_Delete(j);
+  CHECK(flexWebSessionCount(&g_w) == 0, "ninguna sesion");
+  flexWebNewCode(&g_w);
+  r = run(req("POST", "/api/pair", "code=000000")); j = js(r);
+  CHECK(r.status == 403 && jint(j, "left") == 4, "el caducado no gasto intentos (quedan %d)", jint(j, "left"));
+  cJSON_Delete(j);
+  CHECK(pair(), "con el codigo nuevo se empareja (sin la identidad: aun no la sabe)");
+
+  // Subidas: otra identidad, o ninguna, no escriben nada.
+  auto jpg = makeJpeg(160, 120);
+  uint32_t crc = flexMlCrc32(0, jpg.data(), jpg.size());
+  const size_t files0 = g_fs.files.size();
+  r = run(req("POST", upPath("photo", "a.jpg", jpg, crc), S(jpg), "X-Flex-Dev: S3-000000000000\r\n")); j = js(r);
+  CHECK(r.status == 409 && jint(j, "wrongDevice") == 1 && jstr(j, "dev") == "Flex OS Watch Ultra",
+        "pagina de otro aparato: 409 y dice cual es este (%d)", r.status);
+  cJSON_Delete(j);
+  r = run(req("POST", upPath("photo", "a.jpg", jpg, crc), S(jpg)));
+  CHECK(r.status == 409, "subida sin identidad: 409");
+  CHECK(g_fs.files.size() == files0 && g_lib.n == 0 && g_fs.tmpCount() == 0, "y no se escribio nada");
+  CHECK(g_w.rejectedDev == 2, "se cuentan las rechazadas (%u)", (unsigned)g_w.rejectedDev);
+  r = run(req("POST", upPath("photo", "a.jpg", jpg, crc), S(jpg), "X-Flex-Dev: S3-A1B2C3D4E5F6\r\n"));
+  CHECK(r.status == 201 && g_lib.n == 1, "con la identidad de este aparato se publica (%d)", r.status);
+  CHECK(run(req("POST", "/api/logout", "", "X-Flex-Dev: S3-000000000000\r\n")).status == 409,
+        "cualquier cambio con otra identidad: 409");
+  CHECK(run(req("POST", "/api/logout", "")).status == 200, "lo que no escribe datos va sin identidad (paginas viejas)");
+}
+
 int main(){
   std::printf("=== FlexOS · Flex Web Server de extremo a extremo ===\n");
   testPublicAndPairing();
@@ -1134,6 +1195,7 @@ int main(){
   testStorageRoutes();
   testCloudProxy();
   testFuzz();
+  testWatchIdentity();
   std::printf("=== %d comprobaciones, %d fallos ===\n", g_run, g_fail);
   return g_fail ? 1 : 0;
 }
