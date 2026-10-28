@@ -31,6 +31,7 @@
 #include "flex_safe.h"
 #include "misc/cache/instance/lv_image_cache.h"
 #include "watch_gallery.h"
+#include "watch_media.h"
 #include "watch_theme.h"
 #include "watch_time.h"
 #include "wt_time.h"
@@ -59,6 +60,9 @@
 #define DTAP_MS      350
 #define ITEMS_STEP   64
 
+/* Pestañas: Fotos (fotos y dibujos) y Vídeos; "+" abre lo de añadir y las fuentes. */
+enum { KT_PHOTOS = 0, KT_VIDEOS, KT_N };
+
 typedef struct {
     lv_obj_t *box, *img, *cv, *name, *pill, *pill_l, *mark, *play;
     lv_image_dsc_t dsc;
@@ -72,23 +76,24 @@ typedef struct {
 
 typedef struct {
     gal_engine_t *e;
-    lv_obj_t *page, *tabs[GAL_TAB_N], *tab_l[GAL_TAB_N], *tab_dot, *scroll, *chip, *chip_dot, *chip_l;
+    lv_obj_t *page, *tabs[KT_N], *plus, *scroll, *chip, *chip_dot, *chip_l;
     lv_obj_t *card, *card_t, *card_s, *card_b, *card_bl, *spacer, *xp, *xp_ok, *xp_err, *xp_l;
     cell_t cell[POOL];
     gal_item_t *items; /* la pestaña, en PSRAM */
     int n, cap;
-    gal_tab_t tab;
+    gal_tab_t tab;      /* la vista del motor: siempre "Todas" (reloj, microSD y la fuente remota) */
+    int ktab;           /* KT_PHOTOS o KT_VIDEOS */
     gal_status_t st;
     uint32_t lgen, rgen, retry_ms, more_ms;
     int card_act; /* qué hace el botón de la tarjeta */
-    char chip_in[200], tab_in[48];
+    char chip_in[200];
     bool suspended, dirty, nomem;
     gal_item_t sel; /* el de la página de información o el visor */
 } gal_ui_t;
 
 static gal_ui_t *G;
 
-enum { CARD_NONE = 0, CARD_RETRY, CARD_ORIGIN };
+enum { CARD_NONE = 0, CARD_RETRY, CARD_ORIGIN, CARD_XFER };
 
 static void back_cb(lv_event_t *e)
 {
@@ -199,15 +204,20 @@ static lv_obj_t *dot(lv_obj_t *parent, int32_t d)
 
 static bool same_item(const gal_item_t *a, const gal_item_t *b)
 {
-    return a->src == b->src && a->tver == b->tver && !strcmp(a->id, b->id) && !strcmp(a->path, b->path);
+    return a->src == b->src && a->vol == b->vol && a->tver == b->tver && !strcmp(a->id, b->id) &&
+           !strcmp(a->path, b->path);
 }
 
 static bool thumbable(const gal_item_t *it)
 {
-    if ((it->flags & GAL_I_LOCKED) || it->kind == GAL_K_DRAW) {
+    if (it->flags & GAL_I_LOCKED) {
         return false;
     }
-    return it->src == GAL_SRC_LOCAL ? it->fmt == GAL_F_JPEG : (it->flags & GAL_I_THUMB) != 0;
+    if (it->src == GAL_SRC_LOCAL) {
+        /* la miniatura de la biblioteca (también de vídeos y dibujos) o un JPEG del reloj */
+        return (it->flags & GAL_I_THUMB) || (it->kind == GAL_K_PHOTO && it->fmt == GAL_F_JPEG);
+    }
+    return it->kind != GAL_K_DRAW && (it->flags & GAL_I_THUMB) != 0;
 }
 
 static bool viewable(const gal_item_t *it)
@@ -295,10 +305,13 @@ static void cell_clear(cell_t *c)
 static void cell_deco(cell_t *c)
 {
     const gal_item_t *it = &c->key;
-    const bool pill = G->tab == GAL_TAB_ALL;
+    /* De dónde es: nada si está en el reloj, "SD" si está en la microSD y la
+     * fuente si es remota. */
+    const bool sd = it->src == GAL_SRC_LOCAL && it->vol;
+    const bool pill = it->src != GAL_SRC_LOCAL || sd;
     if (pill) {
-        set_text(c->pill_l, src_short(it->src));
-        watch_theme_set_bg_color(c->pill, src_rgb(it->src));
+        set_text(c->pill_l, sd ? "SD" : src_short(it->src));
+        watch_theme_set_bg_color(c->pill, sd ? 0xC8862A : src_rgb(it->src));
     }
     watch_theme_set_visible(c->pill, pill);
     watch_theme_set_visible(c->mark, it->src != GAL_SRC_LOCAL && (it->flags & GAL_I_ONWATCH));
@@ -370,8 +383,8 @@ static void cell_bind(cell_t *c, int idx, int row, int col)
     cell_clear(c);
     c->key = *it;
     cell_deco(c);
-    if (it->kind == GAL_K_DRAW) {
-        cell_draw(c);
+    if (it->kind == GAL_K_DRAW && !(it->flags & GAL_I_THUMB) && it->src == GAL_SRC_LOCAL && !it->vol) {
+        cell_draw(c); /* sin miniatura de la biblioteca aún: se pinta desde el archivo */
     } else if (thumbable(it)) {
         c->want = true;
         gal_thumb_request(G->e, it);
@@ -442,13 +455,16 @@ static void rebuild(void)
         }
     }
     gal_ref_t *refs = need && G->items ? lv_malloc(sizeof(gal_ref_t) * (size_t)need) : NULL;
-    int n = refs ? gal_build_view(e, G->tab, refs, need) : 0;
-    for (int i = 0; i < n; i++) {
+    const int nv = refs ? gal_build_view(e, G->tab, refs, need) : 0;
+    int n = 0;
+    for (int i = 0; i < nv; i++) {
         const gal_item_t *it = gal_ref_item(e, refs[i]);
-        if (it) {
-            G->items[i] = *it;
-        } else {
-            n = i;
+        if (!it) {
+            break;
+        }
+        const bool video = it->kind == GAL_K_VIDEO;
+        if (video == (G->ktab == KT_VIDEOS)) {
+            G->items[n++] = *it;
         }
     }
     gal_engine_unlock(e);
@@ -533,32 +549,21 @@ static void cell_create(cell_t *c)
 
 static void tab_cb(lv_event_t *e)
 {
-    const gal_tab_t t = (gal_tab_t)(uintptr_t)lv_event_get_user_data(e);
-    if (!G || t == G->tab) {
+    const int t = (int)(uintptr_t)lv_event_get_user_data(e);
+    if (!G || t == G->ktab) {
         return;
     }
-    G->tab = t;
-    for (int i = 0; i < GAL_TAB_N; i++) {
-        if (i == (int)t) {
+    G->ktab = t;
+    for (int i = 0; i < KT_N; i++) {
+        if (i == t) {
             lv_obj_add_state(G->tabs[i], LV_STATE_CHECKED);
         } else {
             lv_obj_remove_state(G->tabs[i], LV_STATE_CHECKED);
         }
     }
     lv_obj_scroll_to_y(G->scroll, 0, LV_ANIM_OFF);
-    unbind_all(); /* las marcas de origen cambian con la pestaña */
+    unbind_all();
     G->dirty = true;
-}
-
-static void update_tabs(void)
-{
-    const int rs = remote_src();
-    const char *nm = rs >= 0 ? gal_src_name(rs) : "Remoto";
-    if (strcmp(nm, G->tab_in) != 0) {
-        gal_copyz(G->tab_in, sizeof(G->tab_in), nm);
-        set_text(G->tab_l[GAL_TAB_REMOTE], nm);
-    }
-    watch_theme_set_bg_color(G->tab_dot, rs >= 0 ? state_rgb(G->st.health[rs].state) : FLEX_C_MUTE);
 }
 
 static void update_chip(void)
@@ -613,37 +618,24 @@ static void update_card(void)
         return;
     }
     const gal_status_t *s = &G->st;
-    const int rs = remote_src();
-    const bool remote_tab = G->tab == GAL_TAB_REMOTE;
+    const bool videos = G->ktab == KT_VIDEOS;
     const char *fs_why = NULL;
     if (G->nomem) {
         card_set("Sin memoria para la lista", "Cierra otra app y vuelve a abrir la Galería.", NULL, CARD_NONE);
-    } else if (!remote_tab && !ui_fs_ready(&fs_why) && (G->tab == GAL_TAB_WATCH || rs < 0)) {
-        card_set("Galería sin almacenamiento", fs_why, NULL, CARD_NONE);
-    } else if (!remote_tab && s->scanning) {
-        card_set("Buscando fotos en el reloj…", NULL, NULL, CARD_NONE);
-    } else if (G->tab == GAL_TAB_WATCH) {
-        card_set("No hay fotos en el reloj", "Descárgalas de Flex OS Ultra o de Flex Cloud, o haz un dibujo en Paint.",
-                 NULL, CARD_NONE);
-    } else if (!s->wifi) {
-        card_set("Sin Wi-Fi", remote_tab ? "Las fotos del reloj siguen en la pestaña Reloj." : NULL, NULL, CARD_NONE);
-    } else if (rs < 0) {
-        card_set(remote_tab ? "Sin fuente remota" : "No hay fotos", s->choice.why, "Elegir el origen", CARD_ORIGIN);
-    } else if (s->health[rs].state != GAL_ST_READY) {
-        char t[64];
-        snprintf(t, sizeof(t), "%s: %s", gal_src_name(rs), gal_state_name(s->health[rs].state));
-        card_set(t, s->choice.why[0] ? s->choice.why : s->health[rs].detail,
-                 s->health[rs].state == GAL_ST_CHECKING ? NULL : "Origen", CARD_ORIGIN);
-    } else if (s->remote_state == GAL_L_ERROR) {
+    } else if (s->remote_state == GAL_L_ERROR && s->remote_err[0] && remote_src() >= 0 && s->nl == 0) {
         card_set("No se pudo cargar la lista", s->remote_err, "Reintentar", CARD_RETRY);
-    } else if (s->remote_state != GAL_L_READY || s->remote_src != rs) {
-        char t[64];
-        snprintf(t, sizeof(t), "Cargando %s…", gal_src_name(rs));
-        card_set(t, NULL, NULL, CARD_NONE);
+    } else if (!ui_fs_ready(&fs_why) && s->nl == 0) {
+        card_set("Galería sin almacenamiento", fs_why, NULL, CARD_NONE);
+    } else if (s->scanning && s->nl == 0) {
+        card_set(videos ? "Buscando vídeos…" : "Buscando fotos…", NULL, NULL, CARD_NONE);
+    } else if (videos) {
+        card_set("No hay vídeos",
+                 "Recíbelos desde el móvil: la página los convierte a AVI MJPEG, el vídeo que el reloj reproduce.",
+                 "Recibir desde el móvil", CARD_XFER);
     } else {
-        char t[64];
-        snprintf(t, sizeof(t), "No hay fotos en %s", gal_src_name(rs));
-        card_set(t, remote_tab ? NULL : "Ni en el reloj.", NULL, CARD_NONE);
+        card_set("No hay fotos",
+                 "Recíbelas desde el móvil, descárgalas de Flex OS Ultra o Flex Cloud, o haz un dibujo en Paint.",
+                 "Recibir desde el móvil", CARD_XFER);
     }
 }
 
@@ -660,6 +652,8 @@ static void card_btn_cb(lv_event_t *e)
         gal_refresh(G->e);
     } else if (G->card_act == CARD_ORIGIN) {
         ui_nav_push(src_page_create);
+    } else if (G->card_act == CARD_XFER) {
+        ui_nav_push(ui_xfer_create);
     }
 }
 
@@ -706,7 +700,7 @@ static void update_xp(void)
 static void maybe_more(void)
 {
     const gal_status_t *s = &G->st;
-    if (!s->remote_more || G->tab == GAL_TAB_WATCH || s->remote_state != GAL_L_READY) {
+    if (!s->remote_more || s->remote_state != GAL_L_READY) {
         return;
     }
     const int32_t left = lv_obj_get_scroll_bottom(G->scroll);
@@ -1079,7 +1073,25 @@ static bool find_item(const gal_item_t *key, gal_item_t *out)
             return true;
         }
     }
-    return false;
+    /* No está en la pestaña (p. ej. un remoto ya descargado: la pestaña enseña
+     * la copia): en las listas del motor, con sus marcas al día. */
+    if (!G || !G->e) {
+        return false;
+    }
+    bool found = false;
+    gal_engine_lock(G->e);
+    for (int which = 0; which < 2 && !found; which++) {
+        int n = 0;
+        const gal_item_t *l = gal_list(G->e, which, &n);
+        for (int i = 0; i < n && !found; i++) {
+            if (same_item(&l[i], key)) {
+                *out = l[i];
+                found = true;
+            }
+        }
+    }
+    gal_engine_unlock(G->e);
+    return found;
 }
 
 static void if_act_cb(lv_event_t *e)
@@ -1112,7 +1124,10 @@ static void if_act_cb(lv_event_t *e)
         const uint32_t now = lv_tick_get();
         if (!p->trash_at || now - p->trash_at >= CONFIRM_MS) {
             p->trash_at = now;
-            flex_glass_button_set(p->trash_b, "Toca otra vez para tirarla", FLEX_C_DANGER);
+            flex_glass_button_set(p->trash_b,
+                                  p->it.src == GAL_SRC_LOCAL && p->it.vol ? "Toca otra vez para borrarla"
+                                                                          : "Toca otra vez para tirarla",
+                                  FLEX_C_DANGER);
             return;
         }
         p->trash_at = 0;
@@ -1137,13 +1152,23 @@ static void if_button(if_t *p, const char *t, uint32_t rgb, int act)
     }
 }
 
+/* La microSD no tiene papelera: allí se borra (con el mismo doble toque). */
+static const char *trash_text(const gal_item_t *it)
+{
+    if (it->src != GAL_SRC_LOCAL) {
+        return "Mover a su papelera";
+    }
+    return it->vol ? "Borrar de la microSD" : "Mover a la papelera";
+}
+
 static void where_text(const gal_item_t *it, char *b, size_t n)
 {
     if (it->src == GAL_SRC_LOCAL) {
+        const char *vn = it->vol ? "la microSD" : "el reloj";
         if ((it->flags & GAL_I_REMOTE) && it->origin_src > 0) {
-            snprintf(b, n, "En el reloj · copia de %s", gal_src_name(it->origin_src));
+            snprintf(b, n, "En %s · copia de %s", vn, gal_src_name(it->origin_src));
         } else {
-            snprintf(b, n, "En el reloj (%s)", it->path);
+            snprintf(b, n, "En %s (%s)", vn, it->path);
         }
     } else if (it->src == GAL_SRC_PHONE) {
         snprintf(b, n, "En el Flex Cloud del teléfono, a través de Flex OS Ultra%s",
@@ -1203,7 +1228,11 @@ static void info_build(if_t *p)
     char why[96] = "";
     if (it->src != GAL_SRC_LOCAL) {
         if (gal_can(G->e, GAL_X_DOWNLOAD, it, it->src, why, sizeof(why))) {
-            if_button(p, "Descargar al reloj", FLEX_C_PRIMARY, IA_DOWNLOAD);
+            /* al destino elegido ("Guardar en"), y lo dice */
+            wm_vol_t dv = WM_VOL_WATCH;
+            wm_dest_get(&dv);
+            if_button(p, dv == WM_VOL_SD ? "Descargar a la microSD" : "Descargar al reloj", FLEX_C_PRIMARY,
+                      IA_DOWNLOAD);
         } else if (why[0]) {
             lv_obj_t *l = list_label(p->list, FLEX_FONT_SMALL, FLEX_C_TXT2);
             set_text(l, why);
@@ -1222,7 +1251,7 @@ static void info_build(if_t *p)
         }
     }
     if (gal_can(G->e, GAL_X_TRASH, it, it->src, NULL, 0)) {
-        if_button(p, it->src == GAL_SRC_LOCAL ? "Mover a la papelera" : "Mover a su papelera", FLEX_GLASS_TINT_NONE, IA_TRASH);
+        if_button(p, trash_text(it), FLEX_GLASS_TINT_NONE, IA_TRASH);
     }
     p->status = list_label(p->list, FLEX_FONT_SMALL, FLEX_C_WARN);
 }
@@ -1252,8 +1281,7 @@ static void if_tick_cb(lv_timer_t *t)
     }
     if (p->trash_at && lv_tick_get() - p->trash_at >= CONFIRM_MS) {
         p->trash_at = 0;
-        flex_glass_button_set(p->trash_b, p->it.src == GAL_SRC_LOCAL ? "Mover a la papelera" : "Mover a su papelera",
-                               FLEX_GLASS_TINT_NONE);
+        flex_glass_button_set(p->trash_b, trash_text(&p->it), FLEX_GLASS_TINT_NONE);
     }
     /* Lo que se puede hacer depende de las fuentes y de la cola: se rehace si cambian */
     const uint32_t sig = if_sig(there ? &cur : NULL);
@@ -1997,6 +2025,112 @@ static lv_obj_t *xf_page_create(lv_obj_t *parent)
     return page;
 }
 
+/* ======================= + : añadir, fuentes y lo demás ======================= */
+
+/* Lo que antes estaba en las pestañas y en "Más opciones": recibir desde el
+ * móvil (QR o navegador, el Flex Web Server del reloj), las fuentes remotas de
+ * siempre (Flex OS Ultra, Flex Cloud, Flex Phone y Origen), dónde se guarda,
+ * las transferencias y Música. Nada se quita: cambia de sitio. */
+typedef struct {
+    lv_obj_t *ultra, *cloud, *phone, *dest;
+    uint32_t sig;
+} pl_t;
+
+static void pl_open_cb(lv_event_t *e)
+{
+    ui_nav_push((ui_page_create_t)lv_event_get_user_data(e));
+}
+
+static void pl_src_cb(lv_event_t *e)
+{
+    const int src = (int)(intptr_t)lv_event_get_user_data(e);
+    if (!G || !G->e) {
+        return;
+    }
+    const gal_status_t *s = &G->st;
+    if (src == GAL_SRC_ULTRA && !s->ultra_paired) {
+        ui_nav_push(ultra_page_create); /* primero, su dirección y su código */
+        return;
+    }
+    if (src == GAL_SRC_CLOUD && s->health[GAL_SRC_CLOUD].state == GAL_ST_UNSET) {
+        ui_nav_push(acct_page_create); /* primero, vincular Flex Account */
+        return;
+    }
+    if (src == GAL_SRC_PHONE && s->health[GAL_SRC_PHONE].state == GAL_ST_UNSET) {
+        ui_nav_push(src_page_create); /* allí se explica qué le falta */
+        return;
+    }
+    gal_set_pick(G->e, src == GAL_SRC_ULTRA ? GAL_PICK_ULTRA : src == GAL_SRC_CLOUD ? GAL_PICK_CLOUD : GAL_PICK_PHONE);
+    ui_nav_back(); /* a la rejilla, que ya enseña esa fuente */
+}
+
+static void pl_values(pl_t *p)
+{
+    if (!G) {
+        return;
+    }
+    const gal_status_t *s = &G->st;
+    watch_theme_row_set_value(p->ultra, s->ultra_paired ? gal_state_name(s->health[GAL_SRC_ULTRA].state) : "Conectar");
+    watch_theme_row_set_value(p->cloud, s->health[GAL_SRC_CLOUD].state == GAL_ST_UNSET
+                                            ? "Vincular"
+                                            : gal_state_name(s->health[GAL_SRC_CLOUD].state));
+    watch_theme_row_set_value(p->phone, s->health[GAL_SRC_PHONE].state == GAL_ST_UNSET
+                                            ? "No disponible"
+                                            : gal_state_name(s->health[GAL_SRC_PHONE].state));
+    wm_vol_t v = WM_VOL_WATCH;
+    wm_dest_get(&v);
+    watch_theme_row_set_value(p->dest, wm_vol_name(v));
+}
+
+static void pl_tick_cb(lv_timer_t *t)
+{
+    pl_values(lv_timer_get_user_data(t));
+}
+
+static lv_obj_t *plus_page_create(lv_obj_t *parent)
+{
+    if (!G) {
+        return NULL;
+    }
+    pl_t *p = lv_malloc_zeroed(sizeof(*p));
+    LV_ASSERT_MALLOC(p);
+    lv_obj_t *page = ui_page_new(parent);
+    watch_theme_page(page);
+    watch_theme_header(page, "Añadir y fuentes", back_cb, NULL);
+    lv_obj_t *list = watch_theme_list(page);
+    watch_theme_section(list, "Desde el móvil");
+    lv_obj_t *r = watch_theme_list_row(list, FLEX_ICON_QR, FLEX_C_CAT_GREEN, "Recibir con QR", NULL, true);
+    lv_obj_add_event_cb(r, pl_open_cb, LV_EVENT_CLICKED, (void *)ui_xfer_create);
+    r = watch_theme_list_row(list, FLEX_ICON_GLOBE, FLEX_C_CAT_NET, "Desde el navegador", NULL, true);
+    lv_obj_add_event_cb(r, pl_open_cb, LV_EVENT_CLICKED, (void *)ui_xfer_create);
+    watch_theme_section(list, "Fuentes");
+    p->ultra = watch_theme_list_row(list, FLEX_ICON_WIFI, src_rgb(GAL_SRC_ULTRA), "Flex OS Ultra", "", true);
+    lv_obj_add_event_cb(p->ultra, pl_src_cb, LV_EVENT_CLICKED, (void *)(intptr_t)GAL_SRC_ULTRA);
+    p->cloud = watch_theme_list_row(list, FLEX_ICON_GLOBE, src_rgb(GAL_SRC_CLOUD), "Flex Cloud", "", true);
+    lv_obj_add_event_cb(p->cloud, pl_src_cb, LV_EVENT_CLICKED, (void *)(intptr_t)GAL_SRC_CLOUD);
+    p->phone = watch_theme_list_row(list, FLEX_ICON_PHONE, src_rgb(GAL_SRC_PHONE), "Flex Phone", "", true);
+    lv_obj_add_event_cb(p->phone, pl_src_cb, LV_EVENT_CLICKED, (void *)(intptr_t)GAL_SRC_PHONE);
+    r = watch_theme_list_row(list, FLEX_ICON_GEAR, FLEX_C_CAT_BLUE, "Origen", NULL, true);
+    lv_obj_add_event_cb(r, pl_open_cb, LV_EVENT_CLICKED, (void *)src_page_create);
+    watch_theme_section(list, "Más");
+    p->dest = watch_theme_list_row(list, FLEX_ICON_STORAGE, FLEX_C_CAT_SUN, "Guardar en", "", true);
+    lv_obj_add_event_cb(p->dest, pl_open_cb, LV_EVENT_CLICKED, (void *)ui_dest_create);
+    r = watch_theme_list_row(list, FLEX_ICON_UPDATE, FLEX_C_CAT_BLUE, "Transferencias", NULL, true);
+    lv_obj_add_event_cb(r, pl_open_cb, LV_EVENT_CLICKED, (void *)xf_page_create);
+    r = watch_theme_list_row(list, FLEX_ICON_NOTE, 0xEC4C6C, "Música", NULL, true);
+    lv_obj_add_event_cb(r, pl_open_cb, LV_EVENT_CLICKED, (void *)ui_music_create);
+    pl_values(p);
+    lv_obj_add_event_cb(page, free_cb, LV_EVENT_DELETE, p);
+    ui_page_timer(page, pl_tick_cb, TICK_MS * 4, p);
+    return page;
+}
+
+static void plus_cb(lv_event_t *e)
+{
+    (void)e;
+    ui_nav_push(plus_page_create);
+}
+
 /* ======================= la app ======================= */
 
 static void tick_cb(lv_timer_t *t)
@@ -2026,7 +2160,6 @@ static void tick_cb(lv_timer_t *t)
     if (G->dirty || G->st.local_gen != G->lgen || G->st.remote_gen != G->rgen) {
         rebuild();
     }
-    update_tabs();
     update_chip();
     update_card();
     update_xp();
@@ -2093,14 +2226,15 @@ static void del_cb(lv_event_t *e)
     G = NULL;
 }
 
-static lv_obj_t *tab_create(lv_obj_t *page, gal_tab_t t, int32_t x, int32_t w, const char *text)
+static lv_obj_t *tab_create(lv_obj_t *page, int t, int32_t x, int32_t w, const char *text)
 {
     lv_obj_t *b = flex_glass_tile(page, x, TABS_Y, w, TABS_H);
     lv_obj_set_style_pad_all(b, 0, 0);
+    flex_glass_set_tint(b, FLEX_C_PRIMARY, LV_STATE_CHECKED); /* la elegida, tintada */
     lv_obj_add_event_cb(b, tab_cb, LV_EVENT_CLICKED, (void *)(uintptr_t)t);
-    G->tab_l[t] = watch_theme_label(b, FLEX_FONT_SMALL, FLEX_C_TXT, text);
-    lv_obj_center(G->tab_l[t]);
-    if (t == G->tab) {
+    lv_obj_t *l = watch_theme_label(b, FLEX_TYPE_LABEL, FLEX_C_TXT, text);
+    lv_obj_center(l);
+    if (t == G->ktab) {
         lv_obj_add_state(b, LV_STATE_CHECKED);
     }
     return b;
@@ -2114,6 +2248,7 @@ lv_obj_t *ui_gallery_create(lv_obj_t *parent)
     G = lv_malloc_zeroed(sizeof(*G));
     LV_ASSERT_MALLOC(G);
     G->tab = GAL_TAB_ALL;
+    G->ktab = KT_PHOTOS;
     lv_obj_t *page = ui_page_new(parent);
     watch_theme_page(page);
     G->page = page;
@@ -2132,14 +2267,14 @@ lv_obj_t *ui_gallery_create(lv_obj_t *parent)
     lv_obj_align(G->xp_l, LV_ALIGN_LEFT_MID, 40, 0);
     lv_obj_add_flag(G->xp, LV_OBJ_FLAG_HIDDEN);
 
-    /* pestañas */
-    const int32_t w0 = 100, w2 = GRID_W + 2 * (GRID_X - FLEX_SAFE_X) - 2 * w0 - 2 * 4;
-    G->tabs[GAL_TAB_ALL] = tab_create(page, GAL_TAB_ALL, FLEX_SAFE_X, w0, "Todas");
-    G->tabs[GAL_TAB_WATCH] = tab_create(page, GAL_TAB_WATCH, FLEX_SAFE_X + w0 + 4, w0, "Reloj");
-    G->tabs[GAL_TAB_REMOTE] = tab_create(page, GAL_TAB_REMOTE, FLEX_SAFE_X + 2 * (w0 + 4), w2, "Remoto");
-    lv_obj_align(G->tab_l[GAL_TAB_REMOTE], LV_ALIGN_CENTER, 8, 0);
-    G->tab_dot = dot(G->tabs[GAL_TAB_REMOTE], 10);
-    lv_obj_align(G->tab_dot, LV_ALIGN_LEFT_MID, 12, 0);
+    /* Fotos · Vídeos · + (lo de añadir y las fuentes) */
+    const int32_t span = GRID_W + 2 * (GRID_X - FLEX_SAFE_X), gap = 6;
+    const int32_t w0 = (span - TABS_H - 2 * gap) / 2;
+    G->tabs[KT_PHOTOS] = tab_create(page, KT_PHOTOS, FLEX_SAFE_X, w0, "Fotos");
+    G->tabs[KT_VIDEOS] = tab_create(page, KT_VIDEOS, FLEX_SAFE_X + w0 + gap, w0, "Vídeos");
+    G->plus = flex_glass_icon_button(page, FLEX_ICON_PLUS, 22, TABS_H, FLEX_GLASS_TINT_NONE);
+    lv_obj_set_pos(G->plus, FLEX_SAFE_X + span - TABS_H, TABS_Y);
+    lv_obj_add_event_cb(G->plus, plus_cb, LV_EVENT_CLICKED, NULL);
 
     /* desplazamiento: origen, tarjeta de estado y rejilla */
     G->scroll = lv_obj_create(page);

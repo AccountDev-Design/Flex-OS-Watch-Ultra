@@ -401,6 +401,38 @@ static void put_file(const char *vpath, const uint8_t *d, size_t n)
     }
 }
 
+/* El botón "+" de la barra (redondo, sin texto: el único con ese tamaño junto a las pestañas). */
+static lv_obj_t *plus_button(void)
+{
+    lv_obj_t *top = ui_nav_top();
+    for (uint32_t i = 0; top && i < lv_obj_get_child_count(top); i++) {
+        lv_obj_t *c = lv_obj_get_child(top, (int32_t)i);
+        if (lv_obj_has_flag(c, LV_OBJ_FLAG_CLICKABLE) && lv_obj_get_width(c) == lv_obj_get_height(c) &&
+            lv_obj_get_width(c) >= 40 && lv_obj_get_width(c) <= 48 && lv_obj_get_y(c) > 40 && lv_obj_get_y(c) < 120) {
+            return c;
+        }
+    }
+    return NULL;
+}
+
+/* Una celda de la rejilla con miniatura y la marca de la fuente (p. ej. "Ultra"). */
+static lv_obj_t *remote_cell(const char *pill)
+{
+    for (int i = 0;; i++) {
+        lv_obj_t *img = nth_of(&lv_image_class, i);
+        if (!img) {
+            return NULL;
+        }
+        if (!lv_image_get_src(img) || !visible(img)) {
+            continue;
+        }
+        lv_obj_t *box = lv_obj_get_parent(img);
+        if (sim_find_label(box, pill) && visible(sim_find_label(box, pill))) {
+            return box;
+        }
+    }
+}
+
 static gal_status_t status(void)
 {
     gal_status_t s;
@@ -451,19 +483,29 @@ void sim_suite_gallery(const char *out)
     sim_run(1500);
     gal_status_t s = status();
     EXPECT(s.nl == 3, "galería: el reloj tiene 2 fotos y 1 dibujo y se ven %d", s.nl);
-    EXPECT(has("Todas") && has("Reloj") && has("Remoto"), "galería: faltan las pestañas");
+    EXPECT(has("Fotos") && has("Vídeos") && plus_button() != NULL, "galería: faltan Fotos, Vídeos y +");
+    EXPECT(!has("Todas") && !has("Remoto") && !has("Más opciones"), "galería: sigue la barra de antes");
     EXPECT(has_prefix("Conecta Flex OS Ultra o vincula Flex Account"), "galería: no dice qué configurar");
     EXPECT(count_images(ui_nav_top()) >= 2, "galería: sin miniaturas de las fotos del reloj (%d)",
            count_images(ui_nav_top()));
-    EXPECT(count_text(ui_nav_top(), "Reloj") >= 3, "galería: sin marca de origen Reloj en las celdas");
-    lint("galeria: solo el reloj", out, "gal_reloj");
-    click(tap_of("Remoto"));
+    EXPECT(count_text(ui_nav_top(), "Reloj") == 0 && count_text(ui_nav_top(), "SD") == 0,
+           "galería: lo del reloj no lleva marca (solo la microSD y lo remoto)");
+    lint("galeria: fotos del reloj", out, "gal_fotos");
+    click(tap_of("Vídeos"));
     sim_run(400);
-    EXPECT(has("Sin fuente remota") && has("Elegir el origen"), "galería: pestaña remota sin explicación");
-    lint("galeria: sin fuente remota", out, NULL);
+    EXPECT(has("No hay vídeos") && has("Recibir desde el móvil"), "galería: vídeos vacío sin explicación");
+    lint("galeria: sin vídeos", out, "gal_videos_vacio");
+    click(tap_of("Fotos"));
+    sim_run(400);
 
-    /* ---- 2. Origen: sin teléfono no se ofrece Flex Phone ---- */
-    click(tap_of("Elegir el origen"));
+    /* ---- 2. "+": añadir y fuentes; Origen sin teléfono no ofrece Flex Phone ---- */
+    click(plus_button());
+    sim_run(500);
+    EXPECT(has("Recibir con QR") && has("Desde el navegador") && has("Flex OS Ultra") && has("Flex Cloud") &&
+               has("Flex Phone") && has("Origen") && has("Guardar en") && has("Transferencias") && has("Música"),
+           "+: faltan opciones");
+    lint("galeria: +", out, "gal_mas");
+    click(tap_of("Origen"));
     sim_run(500);
     EXPECT(has("Automático") && has("Flex OS Ultra") && has("Flex Cloud"), "origen: faltan opciones");
     EXPECT(!has("Flex Phone"), "origen: ofrece Flex Phone sin teléfono");
@@ -505,35 +547,33 @@ void sim_suite_gallery(const char *out)
     lint("galeria: origen con flex os ultra", out, "gal_origen");
     ui_nav_back();
     sim_run(600);
+    EXPECT(has("Recibir con QR"), "origen: no vuelve a +");
+    ui_nav_back();
+    sim_run(600);
 
     /* ---- 4. Pestañas con Flex OS Ultra ---- */
     WAIT(status().nr == 5, 4000);
     s = status();
     EXPECT(s.choice.src == GAL_SRC_ULTRA && s.choice.automatic, "automático: no eligió Flex OS Ultra (%d)", s.choice.src);
-    EXPECT(has("Flex OS Ultra"), "pestaña remota sin el nombre de la fuente");
+    EXPECT(has_prefix("Automático: Flex OS Ultra"), "galería: el origen no dice la fuente");
     sim_run(1500);
-    EXPECT(count_images(ui_nav_top()) >= 3, "remota: sin miniaturas del P4 (%d)", count_images(ui_nav_top()));
-    EXPECT(has("Protegido") || has_prefix("Protegido"), "remota: lo protegido no se marca");
-    lint("galeria: flex os ultra", out, "gal_ultra_fotos");
-    click(tap_of("Todas"));
-    sim_run(1500);
-    EXPECT(has("Ultra") && has("Reloj"), "todas: sin marcas de origen");
-    lint("galeria: todas", out, "gal_todas");
-
-    /* ---- 5. Visor: la foto, 2x, deslizar, capa ---- */
-    click(tap_of("Flex OS Ultra"));
+    EXPECT(count_images(ui_nav_top()) >= 3, "fotos: sin miniaturas del P4 (%d)", count_images(ui_nav_top()));
+    EXPECT(has("Protegido") || has_prefix("Protegido"), "fotos: lo protegido no se marca");
+    EXPECT(count_text(ui_nav_top(), "Ultra") >= 2, "fotos: lo de Flex OS Ultra no lleva su marca");
+    lint("galeria: fotos con flex os ultra", out, "gal_ultra_fotos");
+    click(tap_of("Vídeos"));
     sim_run(800);
+    EXPECT(has("Clip.mp4") || has_prefix("Clip"), "vídeos: falta el vídeo de Flex OS Ultra");
+    lint("galeria: vídeos", out, "gal_videos");
+    click(tap_of("Fotos"));
+    sim_run(800);
+
+    /* ---- 5. Visor: una foto de Flex OS Ultra, 2x, deslizar, capa ---- */
     {
-        /* la primera celda de la rejilla */
-        lv_obj_t *img = NULL;
-        for (int i = 0; (img = nth_of(&lv_image_class, i)) != NULL; i++) {
-            if (lv_image_get_src(img) && visible(img)) {
-                break;
-            }
-        }
-        EXPECT(img != NULL, "visor: no hay celda con miniatura");
-        if (img) {
-            lv_obj_send_event(lv_obj_get_parent(img), LV_EVENT_SHORT_CLICKED, NULL);
+        lv_obj_t *box = remote_cell("Ultra");
+        EXPECT(box != NULL, "visor: no hay celda de Flex OS Ultra con miniatura");
+        if (box) {
+            lv_obj_send_event(box, LV_EVENT_SHORT_CLICKED, NULL);
         }
     }
     sim_run(600);
@@ -566,6 +606,11 @@ void sim_suite_gallery(const char *out)
     sim_run(300);
     EXPECT(status().view_state == GAL_V_READY, "visor: la siguiente no se abrió");
     lint("galeria: visor siguiente", out, NULL);
+    sim_drag(120, 260, 330, 262, 8, 16); /* y de vuelta a la de Flex OS Ultra */
+    sim_release();
+    sim_run(300);
+    WAIT(status().view_state == GAL_V_READY, 4000);
+    sim_run(300);
 
     /* ---- 6. Información y descarga al reloj ---- */
     click(lv_obj_get_child(ui_nav_top(), 2)); /* la capa de abajo del visor: información */
@@ -666,8 +711,6 @@ void sim_suite_gallery(const char *out)
     ui_nav_back();
     sim_run(400);
     ui_nav_back();
-    sim_run(600);
-    click(tap_of("Flex Cloud"));
     sim_run(1500);
     EXPECT(count_images(ui_nav_top()) >= 4, "flex cloud: sin miniaturas (%d)", count_images(ui_nav_top()));
     EXPECT(has_prefix("PNG"), "flex cloud: el PNG no dice por qué no se ve");
