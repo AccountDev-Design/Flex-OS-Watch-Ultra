@@ -316,6 +316,7 @@ enum {
      * la referencia (base de iconBase + glifo blanco con sus primitivas). */
     IC_W_SENSORES = 100,
     IC_W_BIENESTAR, /* Bienestar: tres anillos (mover, ejercicio, pasos) */
+    IC_W_GRABADORA, /* Grabadora: micrófono */
 };
 
 /* iconBase, estilo "Plano" (Icons.h:77-86) */
@@ -552,6 +553,18 @@ static void drawAppIcon(int id, int x, int y, int S)
             arcStroke((float)cx - 0.5f, (float)cy - 0.5f, (float)kR[k].r + 0.5f, -90.0f, kR[k].end, 5, kR[k].on);
         }
     } break;
+    case IC_W_GRABADORA: {
+        /* Grabadora: micrófono con la cápsula en el rojo de "grabando" y la
+         * horquilla, el pie y la base en blanco, sobre base oscura (como
+         * Bienestar: el rojo de Música es otro). */
+        iconBase(x, y, S, rgb565(28, 28, 34), 22);
+        const col_t rec = rgb565(255, 69, 58);
+        const int cw = (int)(S * 0.22f), chh = (int)(S * 0.36f);
+        fillRoundRect(cx - cw / 2, cy - (int)(S * 0.30f), cw, chh, cw / 2, rec);
+        arcStroke((float)cx - 0.5f, (float)cy - S * 0.06f, S * 0.19f, 0.0f, 180.0f, 3, WHITE);
+        strokeSegAA((float)cx - 0.5f, cy + S * 0.13f, (float)cx - 0.5f, cy + S * 0.24f, 1.6f, WHITE);
+        strokeSegAA((float)cx - S * 0.13f, cy + S * 0.25f, (float)cx + S * 0.12f, cy + S * 0.25f, 1.6f, WHITE);
+    } break;
     default:
         break; /* Modo PC, Juegos y Cámara: excluidos en el reloj (docs/INVENTARIO-APPS.md) */
     }
@@ -567,7 +580,7 @@ static const struct {
     {IC_AJUSTES, "app_ajustes"},     {IC_CALC, "app_calc"},           {IC_CALEND, "app_calend"},
     {IC_CLIMA, "app_clima"},         {IC_FLEXSTORE, "app_flexstore"}, {IC_FLEXPHONE, "app_flexphone"},
     {IC_DEVCARE, "app_devcare"},     {IC_MUSICA, "app_musica"},       {IC_W_SENSORES, "app_sensores"},
-    {IC_GALERIA, "app_galeria"},     {IC_W_BIENESTAR, "app_bienestar"},
+    {IC_GALERIA, "app_galeria"},     {IC_W_BIENESTAR, "app_bienestar"}, {IC_W_GRABADORA, "app_grabadora"},
 };
 
 static int write_file(const char *dir, const char *name, const char *ext, const void *data, size_t n)

@@ -38,6 +38,7 @@
 #include "files_logic.h"
 #include "ui_logic.h"
 #include "watch_diag.h"
+#include "watch_media.h"
 #include "watch_storage.h"
 #include "watch_theme.h"
 
@@ -210,24 +211,26 @@ lv_obj_t *ui_storage_details_create(lv_obj_t *parent)
 #define BAR_H        14          /* barra fina en píldora: dato, no bloque */
 #define SEC1_Y       74          /* "Memoria interna" */
 #define SEC2_Y       142         /* "PSRAM" */
+#define SEC3_Y       210         /* "microSD" (abre su página) */
 #define BAR_DY       36          /* de la etiqueta a su barra */
 #define CARD_X       30
-#define CARD_Y       212
+#define CARD_Y       282
 #define CARD_W       350
 #define CARD_H       84
 #define CARD_R       26
 #define OPT_W        128
 #define OPT_H        46
-#define LEG_Y0       330 /* centro de la primera fila de la leyenda */
+#define LEG_Y0       400 /* centro de la primera fila de la leyenda */
 #define LEG_DY       34
 #define LEG_DOT      12
 #define C_TRACK      0x2C2E34    /* pista de las barras */
 #define C_PSRAM      0x64D2FF    /* PSRAM: cian sereno (antes lima a toda saturación) */
+#define C_SD         0xF0AA32    /* microSD: el ámbar de "Pantalla" (FLEX_C_CAT_SUN) */
 
 enum { LEG_DOCS = 0, LEG_SYS, LEG_APPS, LEG_TRASH, LEG_N };
 
 typedef struct {
-    lv_obj_t *flash_val, *flash_bar, *psram_val, *psram_bar;
+    lv_obj_t *flash_val, *flash_bar, *psram_val, *psram_bar, *sd_val, *sd_bar;
     lv_obj_t *health_dot, *health;
     lv_obj_t *leg_val[LEG_N];
     lv_obj_t *leg_row[LEG_N];
@@ -293,6 +296,28 @@ static void main_refresh(stm_t *p)
     ui_fmt_usage(b, sizeof(b), pu, pt);
     set_text(p->psram_val, b);
     set_bar(p->psram_bar, ui_permille(pu, pt));
+    /* microSD (watch_media): uso real o por qué no se puede usar */
+    wm_sd_info_t sd;
+    wm_sd_info(&sd);
+    if (sd.state == WSD_READY && sd.space_valid && sd.total_bytes) {
+        char f[16], t[16];
+        const uint64_t used = sd.total_bytes > sd.free_bytes ? sd.total_bytes - sd.free_bytes : 0;
+        wm_fmt_bytes(used, f, sizeof(f));
+        wm_fmt_bytes(sd.total_bytes, t, sizeof(t));
+        char sb[48];
+        snprintf(sb, sizeof(sb), "%s/%s  (%d%%)", f, t, (int)(ui_permille(used, sd.total_bytes) / 10));
+        set_text(p->sd_val, sb);
+        set_bar(p->sd_bar, ui_permille(used, sd.total_bytes));
+    } else {
+        const char *t = sd.state == WSD_ABSENT ? (sd.ejected ? "Expulsada" : "Sin tarjeta")
+                        : sd.state == WSD_ERROR ? (sd.err == WSD_E_EXFAT || sd.err == WSD_E_NTFS || sd.err == WSD_E_GPT
+                                                       ? "Formato no compatible"
+                                                       : "No se puede usar")
+                        : sd.state == WSD_READY ? "Lista"
+                                                : "Comprobando…";
+        set_text(p->sd_val, t);
+        set_bar(p->sd_bar, 0);
+    }
     /* Estado de la memoria */
     const ui_mem_health_t h = ui_mem_health(m.internal_free, m.internal_largest, m.psram_largest, m.alloc_fails);
     set_text(p->health, ui_mem_health_text(h));
@@ -336,6 +361,18 @@ static void details_cb(lv_event_t *e)
 {
     (void)e;
     ui_nav_push(ui_storage_details_create);
+}
+
+static void sd_open_cb(lv_event_t *e)
+{
+    (void)e;
+    ui_nav_push(ui_sd_create);
+}
+
+static void sd_interest_off_cb(lv_event_t *e)
+{
+    (void)e;
+    wm_sd_interest(false);
 }
 
 static void optimize_cb(lv_event_t *e)
@@ -399,24 +436,47 @@ lv_obj_t *ui_storage_create(lv_obj_t *parent)
     const int32_t lh_body = lv_font_get_line_height(FLEX_TYPE_BODY);
     const int32_t lh_cap = lv_font_get_line_height(FLEX_TYPE_CAPTION);
 
-    lv_obj_t *title = watch_theme_label(page, FLEX_TYPE_TITLE, FLEX_GLASS_TXT, "Almacenamiento");
+    /* Con la microSD la composición pasa del alto de la pantalla: va en un
+     * cuerpo que se desplaza en vertical y termina FLEX_LIST_BOTTOM px antes
+     * del borde, como las listas, para que la esquina no muerda las filas. */
+    lv_obj_t *body = lv_obj_create(page);
+    lv_obj_remove_style_all(body);
+    lv_obj_set_size(body, FLEX_SCREEN_W, FLEX_SCREEN_H - FLEX_LIST_BOTTOM);
+    lv_obj_set_scroll_dir(body, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_add_flag(body, LV_OBJ_FLAG_CLICKABLE); /* LVGL solo desplaza desde un objeto pulsable */
+
+    lv_obj_t *title = watch_theme_label(body, FLEX_TYPE_TITLE, FLEX_GLASS_TXT, "Almacenamiento");
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 20);
 
     /* Dos medidas: etiqueta regular, valor en gris a la derecha y una barra
      * fina debajo (los valores alineados por su línea base) */
-    label_at(page, FLEX_TYPE_BODY, FLEX_GLASS_TXT, "Memoria interna", X0, SEC1_Y);
-    p->flash_val = value_right(page, X0 + BAR_W, SEC1_Y + lh_body - lh_cap - 1);
-    p->flash_bar = watch_theme_bar(page, BAR_W, BAR_H, FLEX_ST_FLASH, C_TRACK);
+    label_at(body, FLEX_TYPE_BODY, FLEX_GLASS_TXT, "Memoria interna", X0, SEC1_Y);
+    p->flash_val = value_right(body, X0 + BAR_W, SEC1_Y + lh_body - lh_cap - 1);
+    p->flash_bar = watch_theme_bar(body, BAR_W, BAR_H, FLEX_ST_FLASH, C_TRACK);
     lv_obj_set_pos(p->flash_bar, X0, SEC1_Y + BAR_DY);
 
-    label_at(page, FLEX_TYPE_BODY, FLEX_GLASS_TXT, "PSRAM", X0, SEC2_Y);
-    p->psram_val = value_right(page, X0 + BAR_W, SEC2_Y + lh_body - lh_cap - 1);
-    p->psram_bar = watch_theme_bar(page, BAR_W, BAR_H, C_PSRAM, C_TRACK);
+    label_at(body, FLEX_TYPE_BODY, FLEX_GLASS_TXT, "PSRAM", X0, SEC2_Y);
+    p->psram_val = value_right(body, X0 + BAR_W, SEC2_Y + lh_body - lh_cap - 1);
+    p->psram_bar = watch_theme_bar(body, BAR_W, BAR_H, C_PSRAM, C_TRACK);
     lv_obj_set_pos(p->psram_bar, X0, SEC2_Y + BAR_DY);
+
+    /* microSD: la misma medida, toda la franja abre su página (estado,
+     * expulsar, formatear y "Guardar en"). */
+    lv_obj_t *sd_row = flex_glass_panel(body, FLEX_GLASS_GHOST, X0 - 8, SEC3_Y - 6, BAR_W + 16, BAR_DY + BAR_H + 14, 14);
+    flex_glass_interactive(sd_row);
+    lv_obj_add_event_cb(sd_row, sd_open_cb, LV_EVENT_CLICKED, p);
+    label_at(sd_row, FLEX_TYPE_BODY, FLEX_GLASS_TXT, "microSD", 8, 6 - FLEX_GLASS_RIM_W);
+    p->sd_val = value_right(sd_row, BAR_W + 8, 6 - FLEX_GLASS_RIM_W + lh_body - lh_cap - 1);
+    p->sd_bar = watch_theme_bar(sd_row, BAR_W, BAR_H, C_SD, C_TRACK);
+    lv_obj_set_pos(p->sd_bar, 8, 6 - FLEX_GLASS_RIM_W + BAR_DY);
+    lv_obj_remove_flag(p->sd_bar, LV_OBJ_FLAG_CLICKABLE);
+    wm_sd_interest(true);
+    lv_obj_add_event_cb(body, sd_interest_off_cb, LV_EVENT_DELETE, NULL);
 
     /* Tarjeta de contenido (material discreto del motor): toda la tarjeta
      * abre los detalles; "Optimizar" es la acción principal (tintada). */
-    lv_obj_t *card = flex_glass_panel(page, FLEX_GLASS_CARD, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R);
+    lv_obj_t *card = flex_glass_panel(body, FLEX_GLASS_CARD, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R);
     flex_glass_interactive(card);
     lv_obj_add_event_cb(card, details_cb, LV_EVENT_CLICKED, p);
     /* Título de tarjeta en Medium 20 (como las notificaciones): deja aire
@@ -453,7 +513,7 @@ lv_obj_t *ui_storage_create(lv_obj_t *parent)
     for (int i = 0; i < LEG_N; i++) {
         const int32_t cy = LEG_Y0 + i * LEG_DY;
         /* Fila fantasma: se ilumina como vidrio solo mientras se toca */
-        lv_obj_t *row = flex_glass_panel(page, FLEX_GLASS_GHOST, X0 - 8, cy - LEG_DY / 2, BAR_W + 16, LEG_DY, 12);
+        lv_obj_t *row = flex_glass_panel(body, FLEX_GLASS_GHOST, X0 - 8, cy - LEG_DY / 2, BAR_W + 16, LEG_DY, 12);
         flex_glass_interactive(row);
         if (kLeg[i].dir) {
             lv_obj_add_event_cb(row, browse_main_cb, LV_EVENT_CLICKED, (void *)kLeg[i].dir);
@@ -473,6 +533,13 @@ lv_obj_t *ui_storage_create(lv_obj_t *parent)
         lv_obj_set_pos(n, 34, (LEG_DY - 2 - lh_body) / 2);
         p->leg_val[i] = value_right(row, BAR_W + 4, (LEG_DY - 2 - lh_cap) / 2);
     }
+
+    /* margen bajo la última fila */
+    lv_obj_t *pad = lv_obj_create(body);
+    lv_obj_remove_style_all(pad);
+    lv_obj_set_size(pad, 1, 1);
+    lv_obj_set_pos(pad, 0, LEG_Y0 + (LEG_N - 1) * LEG_DY + LEG_DY / 2 + 12);
+    lv_obj_remove_flag(pad, LV_OBJ_FLAG_CLICKABLE);
 
     main_refresh(p);
     lv_obj_add_event_cb(page, main_free_cb, LV_EVENT_DELETE, p);

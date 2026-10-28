@@ -5,6 +5,8 @@
  */
 #include "flex_glass_math.h"
 #include "flex_tokens.h"
+#include <stdlib.h>
+#include <string.h>
 #include "test_util.h"
 #include "ws_logic.h"
 
@@ -214,8 +216,91 @@ static void test_effective(void)
     CHECK(!ws_equal(&s, &t));
 }
 
+/* Desenfoque desde la fuente (§12): conserva el color medio, reparte un
+ * impulso de forma simétrica, no lee fuera y "cover" recorta centrado. */
+static uint16_t c565(int r, int g, int b)
+{
+    return (uint16_t)(r << 11 | g << 5 | b);
+}
+
+static void test_source_blur(void)
+{
+    enum { W = 40, H = 30 };
+    static uint16_t img[W * H];
+    uint8_t work[3 * W];
+    CHECK_EQ(flex_blur_work_bytes(W, H, 4), 3 * W);
+    /* Un color liso no cambia. */
+    for (int i = 0; i < W * H; i++) {
+        img[i] = c565(20, 40, 10);
+    }
+    CHECK(flex_blur_box565(img, W, H, 4, 3, work));
+    int same = 1;
+    for (int i = 0; i < W * H; i++) {
+        same &= img[i] == c565(20, 40, 10);
+    }
+    CHECK(same);
+    /* Un impulso blanco sobre negro: se reparte simétrico y se conserva la energía. */
+    memset(img, 0, sizeof(img));
+    img[15 * W + 20] = c565(31, 63, 31);
+    CHECK(flex_blur_box565(img, W, H, 2, 1, work));
+    const uint16_t l = img[15 * W + 18], r = img[15 * W + 22], u = img[13 * W + 20], d = img[17 * W + 20];
+    CHECK_EQ(l, r);
+    CHECK_EQ(u, d);
+    CHECK_EQ(img[15 * W + 23], 0); /* fuera del radio no llega nada */
+    /* Un borde: la mitad izquierda roja y la derecha azul se funden en la frontera. */
+    for (int y = 0; y < H; y++) {
+        for (int x = 0; x < W; x++) {
+            img[y * W + x] = x < W / 2 ? c565(31, 0, 0) : c565(0, 0, 31);
+        }
+    }
+    CHECK(flex_blur_box565(img, W, H, 3, 3, work));
+    CHECK_EQ(img[0], c565(31, 0, 0));          /* lejos del borde no cambia */
+    CHECK_EQ(img[W - 1], c565(0, 0, 31));
+    const uint16_t mid = img[10 * W + W / 2];
+    CHECK(((mid >> 11) & 31) > 0 && (mid & 31) > 0); /* mezcla en la frontera */
+    /* Argumentos que no valen: no toca nada. */
+    CHECK(!flex_blur_box565(NULL, W, H, 2, 1, work));
+    CHECK(!flex_blur_box565(img, 0, H, 2, 1, work));
+    CHECK(!flex_blur_box565(img, W, H, -1, 1, work));
+    CHECK(flex_blur_box565(img, W, H, 0, 3, work)); /* radio 0: igual */
+    /* Radio mayor que la imagen: los bordes repetidos, sin leer fuera (ASan). */
+    for (int i = 0; i < W * H; i++) {
+        img[i] = (uint16_t)(i * 7919u);
+    }
+    CHECK(flex_blur_box565(img, W, H, 60, 2, work));
+    /* "cover": 80x30 -> 20x20 usa el centro (30x30) y promedia celdas. */
+    static uint16_t src[80 * 30];
+    for (int y = 0; y < 30; y++) {
+        for (int x = 0; x < 80; x++) {
+            src[y * 80 + x] = (x >= 25 && x < 55) ? c565(0, 63, 0) : c565(31, 0, 0);
+        }
+    }
+    uint16_t dst[20 * 20];
+    flex_blur_fit565(src, 80, 30, 80, dst, 20, 20);
+    int green = 1;
+    for (int i = 0; i < 400; i++) {
+        green &= dst[i] == c565(0, 63, 0);
+    }
+    CHECK(green); /* lo rojo de los lados quedó fuera */
+    /* Ampliar (2x2 -> 6x6) y stride mayor que el ancho. */
+    const uint16_t tiny[2 * 3] = {c565(31, 0, 0), c565(0, 63, 0), 0xFFFF, c565(0, 0, 31), c565(31, 63, 31), 0xFFFF};
+    uint16_t big[36];
+    flex_blur_fit565(tiny, 2, 2, 3, big, 6, 6);
+    CHECK_EQ(big[0], c565(31, 0, 0));
+    CHECK_EQ(big[35], c565(31, 63, 31));
+    /* Tono: oscurecer y desaturar. */
+    uint16_t t[2] = {c565(31, 63, 31), c565(31, 0, 0)};
+    flex_blur_tone565(t, 2, 128, 0);
+    CHECK(((t[0] >> 5) & 63) >= 31 && ((t[0] >> 5) & 63) <= 32);
+    uint16_t gr = c565(31, 0, 0);
+    flex_blur_tone565(&gr, 1, 255, 255);
+    const int rr = (gr >> 11) & 31, gg = (gr >> 5) & 63, bb = gr & 31;
+    CHECK(abs(rr * 2 - gg) <= 2 && abs(bb * 2 - gg) <= 2); /* gris */
+}
+
 void test_glass_all(void)
 {
+    test_source_blur();
     test_contrast_formula();
     test_profiles();
     test_legibility();

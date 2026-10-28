@@ -122,6 +122,27 @@ bool flex_glass_auto_frame(flex_glass_auto_t *a, uint32_t ms, bool heavy);
 #define FLEX_GLASS_SETTING_COUNT 4
 flex_glass_profile_t flex_glass_effective(uint8_t setting, bool power_saving, const flex_glass_auto_t *a);
 
+/* ---- Desenfoque DESDE LA FUENTE (docs/LIQUID-GLASS.md §12) ----
+ * No se lee nunca la pantalla: se desenfoca una imagen conocida (portada,
+ * foto, fotograma) una vez por cambio, en un búfer pequeño propio, y se dibuja
+ * como cualquier imagen. Así no hay costuras entre franjas, ni parches al
+ * redibujar una zona, ni rastros de lo que había antes (§4.1). */
+
+/** Reduce src (sw x sh, stride en píxeles) a dst (dw x dh) llenándolo
+ * ("cover": recorta centrado lo que sobra) con la media de cada celda. */
+void flex_blur_fit565(const uint16_t *src, int sw, int sh, int sstride, uint16_t *dst, int dw, int dh);
+
+/** Bytes de trabajo que pide flex_blur_box565 para una imagen w x h. */
+int flex_blur_work_bytes(int w, int h, int radius);
+/** Desenfoque de caja separable (passes pasadas ~ gaussiano), en su sitio, con
+ * los bordes repetidos. work: flex_blur_work_bytes() bytes. false si los
+ * argumentos no valen (no toca la imagen). */
+bool flex_blur_box565(uint16_t *px, int w, int h, int radius, int passes, uint8_t *work);
+
+/** Oscurece (mul/255) y acerca al gris (desat/255): el fondo que deja leer
+ * texto blanco encima, como el material de Apple sobre una portada. */
+void flex_blur_tone565(uint16_t *px, int n, uint8_t mul, uint8_t desat);
+
 #ifdef __cplusplus
 }
 #endif

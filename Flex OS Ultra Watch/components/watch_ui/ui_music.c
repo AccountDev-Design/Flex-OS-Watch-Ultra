@@ -1,9 +1,10 @@
 /*
- * ui_music — app Música (IC_MUSICA de Flex OS Ultra) en el reloj (F9.10).
+ * ui_music — Música > En el teléfono (F9.10): el mando de lo que suena en el
+ * TELÉFONO. La app Música del reloj (ui_player.c) reproduce además su propia
+ * biblioteca por el altavoz; esta pantalla se conserva tal cual y se abre
+ * desde Música y desde Flex Phone.
  *
- * La referencia reproduce su propia biblioteca (AppMusic.h). El reloj no la
- * tiene (sin decisión sobre el altavoz, D13): aquí Música es el mando de lo
- * que suena en el TELÉFONO, con su pantalla "Reproduciendo"
+ * Su pantalla "Reproduciendo"
  * (AppMusic.h:603-700): título o "Nada sonando", artista, "Sonando" / "En
  * pausa" y los controles. Los datos son los de T_MEDIA_STATE y las órdenes
  * van por T_MEDIA_CMD (MediaBridge.kt). Sin teléfono, sin reproductor activo
@@ -136,13 +137,13 @@ static lv_obj_t *centered(lv_obj_t *col, const lv_font_t *font, uint32_t rgb, lv
     return l;
 }
 
-lv_obj_t *ui_music_create(lv_obj_t *parent)
+lv_obj_t *ui_phone_music_create(lv_obj_t *parent)
 {
     mus_page_t *p = lv_malloc_zeroed(sizeof(*p));
     LV_ASSERT_MALLOC(p);
     lv_obj_t *page = ui_page_new(parent);
     watch_theme_page(page);
-    watch_theme_header(page, "Música", back_cb, NULL);
+    watch_theme_header(page, "En el teléfono", back_cb, NULL);
     lv_obj_t *col = watch_theme_list(page);
     lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(col, 4, 0);

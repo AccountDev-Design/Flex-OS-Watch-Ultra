@@ -28,6 +28,7 @@ ICON_EXTERN(ajustes);
 ICON_EXTERN(sensores);
 ICON_EXTERN(galeria);
 ICON_EXTERN(bienestar);
+ICON_EXTERN(grabadora);
 
 #define ICON_DSC(n)                                                                                     \
     {                                                                                                   \
@@ -47,14 +48,14 @@ static const lv_image_dsc_t kIcons[FLEX_APP_COUNT_] = {
     ICON_DSC(reloj),   ICON_DSC(calend),  ICON_DSC(calc),    ICON_DSC(clima),     ICON_DSC(musica),
     ICON_DSC(notas),   ICON_DSC(flexphone), ICON_DSC(nav),   ICON_DSC(brujula),   ICON_DSC(devcare),
     ICON_DSC(almacen), ICON_DSC(paint),   ICON_DSC(flexstore), ICON_DSC(ajustes),   ICON_DSC(sensores),
-    ICON_DSC(galeria), ICON_DSC(bienestar),
+    ICON_DSC(galeria), ICON_DSC(bienestar), ICON_DSC(grabadora),
 };
 
 /* Nombres de APP[][0] (FlexOS_Ultra_Session.h:345), en el orden de flex_app_t. */
 static const char *const kNames[FLEX_APP_COUNT_] = {
     "Reloj",      "Calendario", "Calculadora",    "Clima",         "Música", "Notas",      "Flex Phone",
     "Navegador",  "Flex Compass", "Device Care",  "Almacenamiento", "Paint", "Flex Store", "Ajustes",
-    "Sensores",   "Galería",    "Bienestar",
+    "Sensores",   "Galería",    "Bienestar",      "Grabadora",
 };
 
 const lv_image_dsc_t *flex_app_icon(flex_app_t app)

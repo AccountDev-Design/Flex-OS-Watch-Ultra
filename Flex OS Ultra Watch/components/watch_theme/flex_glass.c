@@ -15,6 +15,7 @@
 #include <string.h>
 #include "core/lv_obj_private.h"       /* obj->styles: qué material o tinte lleva un objeto */
 #include "core/lv_obj_style_private.h"
+#include "misc/cache/lv_cache.h" /* lv_image_cache_drop (no está en lvgl.h) */
 #include "esp_log.h"
 #include "flex_tokens.h"
 #include "flex_wallpaper.h"
@@ -550,5 +551,114 @@ void flex_glass_face_plate_min_tint(lv_obj_t *plate, lv_opa_t min_mix)
     }
     if (min_mix > s_face_flat_mix) {
         lv_obj_set_style_bg_color(plate, lv_color_hex(flex_mix_rgb(FLEX_C_GLASS, FLEX_C_PAGE, min_mix)), 0);
+    }
+}
+
+/* ======================= Fondo desenfocado desde la fuente ======================= */
+
+/* La imagen a 1/4 se dibuja a escala EXACTA x4 (pivote 0,0). Con una escala
+ * no entera, LVGL calcula el paso del muestreo con el ancho de cada trozo que
+ * redibuja, y un mismo píxel sale distinto según el trozo: rastros. A x4 el
+ * paso es exacto en cualquier trozo. Además, LVGL acota el muestreo al último
+ * píxel de la fuente (4*(BD_W-1)): la imagen sobresale BD_M px por cada lado
+ * para que lo visible no llegue nunca a ese límite. */
+#define BD_M   2
+#define BD_W   ((BD_M + FLEX_SCREEN_W - 1 + 3) / 4 + 1)
+#define BD_H   ((BD_M + FLEX_SCREEN_H - 1 + 3) / 4 + 1)
+#define BD_R   3 /* radio de caja a 1/4: ~12 px a tamaño real */
+#define BD_PASSES 3
+#define BD_DESAT 70
+
+typedef struct {
+    lv_image_dsc_t dsc;
+    uint16_t *px;
+    bool has;
+} backdrop_t;
+
+size_t flex_glass_backdrop_bytes(void)
+{
+    return sizeof(backdrop_t) + (size_t)BD_W * BD_H * 2 + (size_t)flex_blur_work_bytes(BD_W, BD_H, BD_R);
+}
+
+static void backdrop_free_cb(lv_event_t *e)
+{
+    backdrop_t *b = lv_event_get_user_data(e);
+    if (b) {
+        lv_image_cache_drop(&b->dsc);
+        lv_free(b->px);
+        lv_free(b);
+    }
+}
+
+lv_obj_t *flex_glass_backdrop(lv_obj_t *parent)
+{
+    lv_obj_t *img = lv_image_create(parent);
+    lv_obj_remove_style_all(img);
+    lv_obj_set_pos(img, -BD_M, -BD_M);
+    lv_obj_set_size(img, BD_W * 4, BD_H * 4);
+    lv_obj_remove_flag(img, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(img, LV_OBJ_FLAG_FLOATING); /* ni se desplaza ni cuenta para el desplazamiento */
+    lv_obj_add_flag(img, LV_OBJ_FLAG_HIDDEN); /* vacío: la página negra */
+    backdrop_t *b = lv_malloc_zeroed(sizeof(*b));
+    if (!b) {
+        return img;
+    }
+    b->px = lv_malloc((size_t)BD_W * BD_H * 2);
+    if (!b->px) {
+        lv_free(b);
+        return img;
+    }
+    memset(b->px, 0, (size_t)BD_W * BD_H * 2);
+    b->dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+    b->dsc.header.cf = LV_COLOR_FORMAT_RGB565;
+    b->dsc.header.w = BD_W;
+    b->dsc.header.h = BD_H;
+    b->dsc.header.stride = BD_W * 2;
+    b->dsc.data_size = (uint32_t)BD_W * BD_H * 2;
+    b->dsc.data = (const uint8_t *)b->px;
+    lv_obj_set_user_data(img, b);
+    lv_obj_add_event_cb(img, backdrop_free_cb, LV_EVENT_DELETE, b);
+    lv_image_set_src(img, &b->dsc);
+    lv_image_set_inner_align(img, LV_IMAGE_ALIGN_STRETCH);
+    lv_image_set_antialias(img, true);
+    return img;
+}
+
+bool flex_glass_backdrop_set(lv_obj_t *bd, const uint16_t *src, int w, int h, int stride_px, uint8_t dim)
+{
+    backdrop_t *b = bd ? lv_obj_get_user_data(bd) : NULL;
+    if (!b || !src || w <= 0 || h <= 0) {
+        return false;
+    }
+    const int wb = flex_blur_work_bytes(BD_W, BD_H, BD_R);
+    uint8_t *work = lv_malloc((size_t)wb);
+    if (!work) {
+        return false;
+    }
+    flex_blur_fit565(src, w, h, stride_px, b->px, BD_W, BD_H);
+    flex_blur_box565(b->px, BD_W, BD_H, BD_R, BD_PASSES, work);
+    flex_blur_tone565(b->px, BD_W * BD_H, dim, BD_DESAT);
+    lv_free(work);
+    b->has = true;
+    lv_image_cache_drop(&b->dsc);
+    /* En Ligero no se dibuja: el escalado con filtro cuesta CPU en cada redibujo. */
+    if (s_profile == FLEX_GLASS_LITE) {
+        lv_obj_add_flag(bd, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_remove_flag(bd, LV_OBJ_FLAG_HIDDEN);
+    }
+    lv_obj_invalidate(bd);
+    return true;
+}
+
+void flex_glass_backdrop_clear(lv_obj_t *bd)
+{
+    backdrop_t *b = bd ? lv_obj_get_user_data(bd) : NULL;
+    if (!b) {
+        return;
+    }
+    if (b->has) {
+        b->has = false;
+        lv_obj_add_flag(bd, LV_OBJ_FLAG_HIDDEN);
     }
 }

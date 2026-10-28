@@ -249,3 +249,19 @@ void ui_upper_es(const char *in, char *out, size_t n)
     }
     out[o] = 0;
 }
+
+int ui_fmt_left_s(uint32_t seconds, char *buf, size_t n)
+{
+    if (seconds < 60) {
+        return snprintf(buf, n, "%u s", (unsigned)seconds);
+    }
+    const uint32_t m = seconds / 60;
+    if (m < 60) {
+        return snprintf(buf, n, "%u min", (unsigned)m);
+    }
+    const uint32_t h = m / 60, mm = m % 60;
+    if (h >= 10 || mm == 0) {
+        return snprintf(buf, n, "%u h", (unsigned)h);
+    }
+    return snprintf(buf, n, "%u h %u min", (unsigned)h, (unsigned)mm);
+}

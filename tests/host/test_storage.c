@@ -163,6 +163,20 @@ static void test_usage_text(void)
     CHECK(strcmp(b, "--") == 0);
     ui_fmt_usage(b, sizeof(b), 40ull << 20, 32ull << 20); /* nunca más del 100 % */
     CHECK(strcmp(b, "32/32 MB  (100%)") == 0);
+    ui_fmt_left_s(0, b, sizeof(b));
+    CHECK(strcmp(b, "0 s") == 0);
+    ui_fmt_left_s(59, b, sizeof(b));
+    CHECK(strcmp(b, "59 s") == 0);
+    ui_fmt_left_s(45 * 60 + 30, b, sizeof(b));
+    CHECK(strcmp(b, "45 min") == 0);
+    ui_fmt_left_s(3600 + 20 * 60, b, sizeof(b));
+    CHECK(strcmp(b, "1 h 20 min") == 0);
+    ui_fmt_left_s(2 * 3600, b, sizeof(b));
+    CHECK(strcmp(b, "2 h") == 0);
+    ui_fmt_left_s(24 * 3600 + 59 * 60, b, sizeof(b)); /* a partir de 10 h, sin minutos */
+    CHECK(strcmp(b, "24 h") == 0);
+    ui_fmt_left_s(0xFFFFFFFFu, b, sizeof(b));
+    CHECK(strcmp(b, "1193046 h") == 0);
     CHECK_EQ(ui_permille(1, 0), 0);
     CHECK_EQ(ui_permille(3, 2), 1000);
     CHECK_EQ(ui_permille(1, 4), 250);

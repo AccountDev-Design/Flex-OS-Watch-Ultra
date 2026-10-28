@@ -588,6 +588,7 @@ static int real_main(int argc, char **argv)
         {"relay", sim_suite_relay},
         {"ota", sim_suite_ota},
         {"galeria", sim_suite_gallery},
+        {"medios", sim_suite_media},
         {"bienestar", sim_suite_wellness},
         {"reposo", sim_suite_redraw},
         {"memoria", sim_suite_mem},

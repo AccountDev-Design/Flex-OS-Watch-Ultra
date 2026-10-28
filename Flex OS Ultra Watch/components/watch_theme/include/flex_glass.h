@@ -120,6 +120,23 @@ lv_obj_t *flex_glass_face_plate(lv_obj_t *parent, int32_t x, int32_t y, int32_t 
 void flex_glass_face_plate_min_tint(lv_obj_t *plate, lv_opa_t min_mix);
 #define FLEX_GLASS_MIN_MIX_LIGHT 200
 
+/**
+ * Fondo desenfocado DESDE LA FUENTE (docs/LIQUID-GLASS.md §12): una imagen a
+ * pantalla completa que muestra src (portada, foto, fotograma) desenfocada,
+ * oscurecida y algo desaturada, para poner vidrio y texto encima (la pantalla
+ * "Reproduciendo", el visor). Se calcula UNA vez por cambio en un búfer
+ * propio de 1/4 de resolución (103 x 126 px, 26 KB, que LVGL amplía con
+ * filtrado): nunca se lee la pantalla, así que no hay costuras, parches ni
+ * rastros. En el perfil Ligero no se dibuja (página negra).
+ * Se crea vacío (negro); flex_glass_backdrop_set lo rellena.
+ */
+lv_obj_t *flex_glass_backdrop(lv_obj_t *parent);
+/** dim: brillo que se conserva (0..255; ~110 deja leer texto blanco). */
+bool flex_glass_backdrop_set(lv_obj_t *bd, const uint16_t *src, int w, int h, int stride_px, uint8_t dim);
+void flex_glass_backdrop_clear(lv_obj_t *bd);
+/** Bytes que reserva un fondo (diagnóstico y presupuestos). */
+size_t flex_glass_backdrop_bytes(void);
+
 /** Estilos vivos del motor (diagnóstico y pruebas). */
 uint32_t flex_glass_style_count(void);
 

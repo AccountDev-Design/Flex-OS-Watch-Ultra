@@ -24,7 +24,7 @@ endif()
 # lee el plano RGB565 en palabras de 16 bits: una dirección impar haría saltar
 # LoadStoreAlignment en el Xtensa. Aquí cada icono empieza en un múltiplo de 4.
 set(_icon_dir "${CMAKE_CURRENT_LIST_DIR}/../../assets/icons")
-set(_icons reloj calend calc clima musica notas flexphone nav brujula devcare almacen paint flexstore ajustes sensores galeria bienestar)
+set(_icons reloj calend calc clima musica notas flexphone nav brujula devcare almacen paint flexstore ajustes sensores galeria bienestar grabadora)
 set(_asm "${CMAKE_CURRENT_BINARY_DIR}/flex_app_icons_data.S")
 set(_txt "/* GENERADO por components/watch_theme/CMakeLists.txt: no editar. */\n")
 string(APPEND _txt ".section .rodata.flex_app_icons, \"a\"\n")

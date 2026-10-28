@@ -380,7 +380,7 @@ static void end_cb(lv_event_t *e)
 {
     wk_t *w = lv_event_get_user_data(e);
     if (!w->confirm_at || lv_tick_elaps(w->confirm_at) > CONFIRM_MS) {
-        w->confirm_at = lv_tick_get() | 1u;
+        w->confirm_at = (lv_tick_get() - 1u) | 1u; /* nunca en el futuro: lv_tick_elaps lo leería como una vuelta */
         flex_glass_button_set(w->end_btn, "¿Terminar?", 0);
         return;
     }

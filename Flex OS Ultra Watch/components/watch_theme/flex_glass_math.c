@@ -4,6 +4,8 @@
 #include "flex_glass_math.h"
 #include "flex_tokens.h"
 
+#include <stddef.h>
+
 int flex_glass_luma565(uint16_t c)
 {
     const int r = (c >> 11) & 0x1F;
@@ -306,5 +308,132 @@ flex_glass_profile_t flex_glass_effective(uint8_t setting, bool power_saving, co
         return FLEX_GLASS_LITE;
     default:
         return a ? a->cap : FLEX_GLASS_PREMIUM;
+    }
+}
+
+/* ---------------- desenfoque desde la fuente ---------------- */
+
+static inline void unpack565(uint16_t c, int *r, int *g, int *b)
+{
+    *r = (c >> 11) & 0x1F;
+    *g = (c >> 5) & 0x3F;
+    *b = c & 0x1F;
+}
+
+void flex_blur_fit565(const uint16_t *src, int sw, int sh, int sstride, uint16_t *dst, int dw, int dh)
+{
+    if (!src || !dst || sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0 || sstride < sw) {
+        return;
+    }
+    /* Zona de la fuente que se usa: la mayor con la proporción de dst, centrada. */
+    int cw = sw, ch = sh;
+    if ((int64_t)sw * dh > (int64_t)sh * dw) {
+        cw = (int)((int64_t)sh * dw / dh);
+    } else {
+        ch = (int)((int64_t)sw * dh / dw);
+    }
+    if (cw < 1) {
+        cw = 1;
+    }
+    if (ch < 1) {
+        ch = 1;
+    }
+    const int ox = (sw - cw) / 2, oy = (sh - ch) / 2;
+    for (int y = 0; y < dh; y++) {
+        int y0 = oy + (int)((int64_t)y * ch / dh), y1 = oy + (int)((int64_t)(y + 1) * ch / dh);
+        if (y1 <= y0) {
+            y1 = y0 + 1;
+        }
+        for (int x = 0; x < dw; x++) {
+            int x0 = ox + (int)((int64_t)x * cw / dw), x1 = ox + (int)((int64_t)(x + 1) * cw / dw);
+            if (x1 <= x0) {
+                x1 = x0 + 1;
+            }
+            uint32_t sr = 0, sg = 0, sb = 0, n = 0;
+            for (int yy = y0; yy < y1; yy++) {
+                const uint16_t *row = src + (size_t)yy * sstride;
+                for (int xx = x0; xx < x1; xx++) {
+                    int r, g, b;
+                    unpack565(row[xx], &r, &g, &b);
+                    sr += (uint32_t)r;
+                    sg += (uint32_t)g;
+                    sb += (uint32_t)b;
+                    n++;
+                }
+            }
+            dst[(size_t)y * dw + x] = (uint16_t)(((sr + n / 2) / n) << 11 | ((sg + n / 2) / n) << 5 | ((sb + n / 2) / n));
+        }
+    }
+}
+
+int flex_blur_work_bytes(int w, int h, int radius)
+{
+    (void)radius;
+    const int m = w > h ? w : h;
+    return m > 0 ? m * 3 : 0;
+}
+
+/* Una pasada de caja sobre n muestras (separadas `step` en px), con los
+ * extremos repetidos. line: 3*n bytes (los canales desempaquetados). */
+static void box_line(uint16_t *px, int n, int step, int r, uint8_t *line)
+{
+    for (int i = 0; i < n; i++) {
+        int cr, cg, cb;
+        unpack565(px[(size_t)i * step], &cr, &cg, &cb);
+        line[3 * i] = (uint8_t)cr;
+        line[3 * i + 1] = (uint8_t)cg;
+        line[3 * i + 2] = (uint8_t)cb;
+    }
+    const int win = 2 * r + 1;
+    int sr = 0, sg = 0, sb = 0;
+    for (int k = -r; k <= r; k++) {
+        const int j = k < 0 ? 0 : (k >= n ? n - 1 : k);
+        sr += line[3 * j];
+        sg += line[3 * j + 1];
+        sb += line[3 * j + 2];
+    }
+    for (int i = 0; i < n; i++) {
+        const int vr = (sr + win / 2) / win, vg = (sg + win / 2) / win, vb = (sb + win / 2) / win;
+        px[(size_t)i * step] = (uint16_t)(vr << 11 | vg << 5 | vb);
+        const int out = i - r < 0 ? 0 : i - r;
+        const int in = i + r + 1 >= n ? n - 1 : i + r + 1;
+        sr += line[3 * in] - line[3 * out];
+        sg += line[3 * in + 1] - line[3 * out + 1];
+        sb += line[3 * in + 2] - line[3 * out + 2];
+    }
+}
+
+bool flex_blur_box565(uint16_t *px, int w, int h, int radius, int passes, uint8_t *work)
+{
+    if (!px || !work || w <= 0 || h <= 0 || radius < 0 || passes < 0 || radius > 255) {
+        return false;
+    }
+    if (radius == 0) {
+        return true;
+    }
+    for (int p = 0; p < passes; p++) {
+        for (int y = 0; y < h; y++) {
+            box_line(px + (size_t)y * w, w, 1, radius, work);
+        }
+        for (int x = 0; x < w; x++) {
+            box_line(px + x, h, w, radius, work);
+        }
+    }
+    return true;
+}
+
+void flex_blur_tone565(uint16_t *px, int n, uint8_t mul, uint8_t desat)
+{
+    for (int i = 0; i < n; i++) {
+        int r, g, b;
+        unpack565(px[i], &r, &g, &b);
+        /* luma en el mismo dominio de 6 bits */
+        const int r6 = r * 2, b6 = b * 2;
+        const int y6 = (r6 * 77 + g * 150 + b6 * 29) >> 8;
+        int nr = r6 + ((y6 - r6) * desat) / 255, ng = g + ((y6 - g) * desat) / 255, nb = b6 + ((y6 - b6) * desat) / 255;
+        nr = nr * mul / 255;
+        ng = ng * mul / 255;
+        nb = nb * mul / 255;
+        px[i] = (uint16_t)((nr >> 1) << 11 | ng << 5 | (nb >> 1));
     }
 }

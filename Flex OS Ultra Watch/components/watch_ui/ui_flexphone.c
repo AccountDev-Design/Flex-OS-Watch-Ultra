@@ -283,7 +283,7 @@ static void build(fp_page_t *p, const watch_phone_status_t *s)
     p->notif_row = watch_theme_list_row(p->dyn, FLEX_ICON_BELL, FLEX_C_CAT_BLUE, "Notificaciones", "", true);
     lv_obj_add_event_cb(p->notif_row, open_cb, LV_EVENT_CLICKED, (void *)ui_notifs_create);
     lv_obj_t *r = watch_theme_list_row(p->dyn, FLEX_ICON_PLAY, FLEX_C_CAT_SUN, "Música", NULL, true);
-    lv_obj_add_event_cb(r, open_cb, LV_EVENT_CLICKED, (void *)ui_music_create);
+    lv_obj_add_event_cb(r, open_cb, LV_EVENT_CLICKED, (void *)ui_phone_music_create);
     r = watch_theme_list_row(p->dyn, FLEX_ICON_INFO, FLEX_C_CAT_GREEN, "Estado del teléfono", NULL, true);
     lv_obj_add_event_cb(r, open_cb, LV_EVENT_CLICKED, (void *)ui_phone_state_create);
     r = watch_theme_list_row(p->dyn, FLEX_ICON_GLOBE, FLEX_C_CAT_BLUE, "Navegador del teléfono", NULL, true);

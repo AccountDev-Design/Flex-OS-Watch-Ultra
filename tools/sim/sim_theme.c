@@ -26,6 +26,7 @@ static const char *const ICON_NAMES[FLEX_ICON_COUNT_] = {
     "imagen", "esfera", "globo", "campana", "reloj_arena", "cronometro", "rejilla", "movimiento",
     "luna", "almacen", "mas", "menos", "reproducir", "pausa", "detener", "bandera",
     "actualizar", "reloj_macizo", "despertador", "luna_maciza", "bateria_hoja", "engranaje_macizo",
+    "microfono", "anterior", "siguiente", "volumen", "microsd", "qr", "video", "nota", "telefono", "papelera",
 };
 
 static void holder_draw_cb(lv_event_t *e)

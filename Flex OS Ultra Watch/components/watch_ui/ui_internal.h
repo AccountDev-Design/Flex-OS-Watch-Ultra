@@ -211,7 +211,27 @@ lv_obj_t *ui_phone_state_create(lv_obj_t *parent);  /**< Flex Phone > Estado del
 lv_obj_t *ui_notifs_create(lv_obj_t *parent);       /**< notificaciones del teléfono */
 lv_obj_t *ui_notif_detail_create(lv_obj_t *parent); /**< la elegida con ui_notif_open() */
 lv_obj_t *ui_notif_reply_create(lv_obj_t *parent);
-lv_obj_t *ui_music_create(lv_obj_t *parent);        /**< app Música: lo que suena en el teléfono */
+lv_obj_t *ui_music_create(lv_obj_t *parent);        /**< app Música: biblioteca local, Reproduciendo y el teléfono */
+lv_obj_t *ui_phone_music_create(lv_obj_t *parent);  /**< Música > En el teléfono (mando de lo que suena allí) */
+/* Multimedia (docs/MULTIMEDIA.md; ui_media.c, ui_player.c, ui_recorder.c) */
+lv_obj_t *ui_music_library_create(lv_obj_t *parent); /**< Música > Canciones (reloj y microSD) */
+lv_obj_t *ui_nowplaying_create(lv_obj_t *parent);    /**< Reproduciendo (servicio wa_player) */
+lv_obj_t *ui_recorder_create(lv_obj_t *parent);      /**< app Grabadora */
+lv_obj_t *ui_recordings_create(lv_obj_t *parent);    /**< Grabadora > Grabaciones */
+lv_obj_t *ui_dest_create(lv_obj_t *parent);          /**< Guardar en: Reloj o microSD */
+lv_obj_t *ui_sd_create(lv_obj_t *parent);            /**< Almacenamiento > microSD */
+lv_obj_t *ui_sd_format_create(lv_obj_t *parent);     /**< microSD > Formatear (doble confirmación) */
+/** Chip de vidrio "Reloj · 1,2 GB libres" que abre "Guardar en". */
+lv_obj_t *ui_dest_chip(lv_obj_t *parent, int32_t w, int32_t h);
+/** extra (NULL = el espacio libre) sustituye a lo que va tras el volumen. */
+void ui_dest_chip_refresh(lv_obj_t *chip, const char *extra);
+/** "1,2 GB libres", o por qué no está el volumen (wm_vol_t). */
+void ui_media_free_text(int vol, char *out, size_t n);
+/** Nombre para enseñar de un elemento de la biblioteca (FlexMlRec): el
+ * original sin la extensión, o el del archivo. */
+void ui_media_display_name(const void *rec, char *out, size_t n);
+/** Copia recortando sin partir un carácter UTF-8. */
+void ui_copy_utf8(char *dst, size_t cap, const char *src);
 /* Clima (F9.8; ui_weather.c) */
 lv_obj_t *ui_weather_create(lv_obj_t *parent);      /**< app Clima: Open-Meteo por Wi-Fi */
 lv_obj_t *ui_wx_locs_create(lv_obj_t *parent);      /**< Clima > Mis ubicaciones */

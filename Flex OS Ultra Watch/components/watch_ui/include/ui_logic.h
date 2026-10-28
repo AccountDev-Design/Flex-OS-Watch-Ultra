@@ -86,6 +86,8 @@ bool ui_brightness_should_apply(int value, int applied, uint32_t last_ms, uint32
 /** "16/32 MB  (50%)" con coma decimal por debajo de 10 MB ("4,5/8 MB  (56%)").
  * total 0: "--" (no se divide por cero). */
 int ui_fmt_usage(char *buf, size_t n, uint64_t used, uint64_t total);
+/** Tiempo que queda (grabadora): "12 h", "1 h 20 min", "45 min", "30 s". */
+int ui_fmt_left_s(uint32_t seconds, char *buf, size_t n);
 /** Uso en milésimas (0..1000), sin dividir por cero ni pasarse de 1000. */
 int32_t ui_permille(uint64_t used, uint64_t total);
 

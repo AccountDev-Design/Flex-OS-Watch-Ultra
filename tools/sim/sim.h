@@ -165,6 +165,7 @@ void sim_suite_browser(const char *out);
 void sim_suite_ota(const char *out);
 void sim_suite_wellness(const char *out);
 void sim_suite_gallery(const char *out);
+void sim_suite_media(const char *out);
 void sim_suite_grid(const char *out);
 void sim_suite_redesign(const char *out);
 /* OTA simulado (sim_ota.c): motor y firma reales, servidor y flash falsos */

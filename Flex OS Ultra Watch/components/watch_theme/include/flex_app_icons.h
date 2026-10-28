@@ -42,6 +42,7 @@ typedef enum {
     FLEX_APP_SENSORES, /**< solo en el reloj: icono nuevo con el lenguaje de la referencia */
     FLEX_APP_GALERIA,  /**< IC_GALERIA original (flor de 8 pétalos) */
     FLEX_APP_BIENESTAR, /**< solo en el reloj: los tres anillos de actividad */
+    FLEX_APP_GRABADORA, /**< solo en el reloj: micrófono (ES7210) */
     FLEX_APP_COUNT_
 } flex_app_t;
 

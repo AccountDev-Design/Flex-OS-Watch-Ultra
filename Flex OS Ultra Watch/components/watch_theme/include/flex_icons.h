@@ -47,6 +47,17 @@ typedef enum {
     FLEX_ICON_MOON_SOLID,   /**< luna creciente maciza */
     FLEX_ICON_BATT_LEAF,    /**< batería con hoja: ahorro de energía */
     FLEX_ICON_GEAR_SOLID,   /**< engranaje macizo (panel rápido) */
+    /* Multimedia (docs/MULTIMEDIA.md) */
+    FLEX_ICON_MIC,          /**< grabadora */
+    FLEX_ICON_PREV,         /**< pista anterior */
+    FLEX_ICON_NEXT,         /**< pista siguiente */
+    FLEX_ICON_VOLUME,       /**< altavoz con ondas */
+    FLEX_ICON_SDCARD,       /**< tarjeta microSD */
+    FLEX_ICON_QR,           /**< código QR (recibir desde el móvil) */
+    FLEX_ICON_VIDEO,        /**< cámara de vídeo */
+    FLEX_ICON_NOTE,         /**< nota musical */
+    FLEX_ICON_PHONE,        /**< teléfono */
+    FLEX_ICON_TRASH,        /**< papelera */
     FLEX_ICON_COUNT_
 } flex_icon_t;
 

@@ -58,6 +58,9 @@ void sim_suite_redraw(const char *out)
         {"clima", ui_weather_create, 0},
         {"flex phone", ui_flexphone_create, 0},
         {"musica", ui_music_create, 0},
+        {"grabadora", ui_recorder_create, 0},
+        {"guardar en", ui_dest_create, 0},
+        {"microsd", ui_sd_create, 0},
         {"almacenamiento", ui_storage_create, 0},
         {"galeria", ui_gallery_create, 0},
         {"diagnostico", ui_diag_create, FULL_PX / 2}, /* memoria y tiempo encendido en vivo */

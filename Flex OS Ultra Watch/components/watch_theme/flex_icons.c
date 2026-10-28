@@ -472,6 +472,92 @@ void flex_icon_draw2(lv_layer_t *layer, flex_icon_t icon, const lv_area_t *box, 
         /* Luna creciente maciza (disco menos disco desplazado arriba a la derecha). */
         crescent(&p, 46, 54, 44, 70, 34, 38);
         break;
+    case FLEX_ICON_MIC:
+        /* Cápsula, horquilla (media circunferencia de abajo), pie y base. */
+        box_fill(&p, 37, 4, 63, 58, 13);
+        arc(&p, 50, 40, 31, 8, 0, 180, true);
+        line(&p, 50, 72, 50, 86, 8);
+        line(&p, 32, 90, 68, 90, 8);
+        break;
+    case FLEX_ICON_PREV: {
+        line(&p, 18, 16, 18, 84, 12);
+        static const int32_t t[6] = {86, 12, 86, 88, 28, 50};
+        tri(&p, t);
+        break;
+    }
+    case FLEX_ICON_NEXT: {
+        line(&p, 82, 16, 82, 84, 12);
+        static const int32_t t[6] = {14, 12, 14, 88, 72, 50};
+        tri(&p, t);
+        break;
+    }
+    case FLEX_ICON_VOLUME: {
+        box_fill(&p, 8, 34, 30, 66, 3);
+        static const int32_t c1[6] = {26, 34, 52, 12, 52, 88};
+        static const int32_t c2[6] = {26, 34, 52, 88, 26, 66};
+        tri(&p, c1);
+        tri(&p, c2);
+        arc(&p, 52, 50, 24, 8, 305, 55, true);
+        arc(&p, 52, 50, 42, 8, 310, 50, true);
+        break;
+    }
+    case FLEX_ICON_SDCARD:
+        /* Tarjeta con la esquina cortada y tres contactos. */
+        line(&p, 24, 8, 64, 8, 8);
+        line(&p, 64, 8, 80, 24, 8);
+        line(&p, 80, 24, 80, 92, 8);
+        line(&p, 80, 92, 24, 92, 8);
+        line(&p, 24, 92, 24, 8, 8);
+        line(&p, 38, 20, 38, 34, 7);
+        line(&p, 50, 20, 50, 34, 7);
+        line(&p, 62, 20, 62, 34, 7);
+        break;
+    case FLEX_ICON_QR: {
+        /* Tres marcas de posición (marco y centro) y unos módulos. */
+        static const int32_t f[3][2] = {{8, 8}, {62, 8}, {8, 62}};
+        for (int i = 0; i < 3; i++) {
+            const int32_t x = f[i][0], y = f[i][1];
+            line(&p, x, y, x + 30, y, 7);
+            line(&p, x + 30, y, x + 30, y + 30, 7);
+            line(&p, x + 30, y + 30, x, y + 30, 7);
+            line(&p, x, y + 30, x, y, 7);
+            box_fill(&p, x + 10, y + 10, x + 20, y + 20, 0);
+        }
+        box_fill(&p, 62, 62, 72, 72, 0);
+        box_fill(&p, 82, 62, 92, 72, 0);
+        box_fill(&p, 62, 82, 72, 92, 0);
+        box_fill(&p, 82, 82, 92, 92, 0);
+        box_fill(&p, 72, 72, 82, 82, 0);
+        box_fill(&p, 45, 45, 55, 55, 0);
+        break;
+    }
+    case FLEX_ICON_VIDEO: {
+        box_fill(&p, 6, 24, 66, 76, 12);
+        static const int32_t t[6] = {70, 50, 94, 26, 94, 74};
+        tri(&p, t);
+        break;
+    }
+    case FLEX_ICON_NOTE:
+        disc(&p, 34, 76, 15);
+        line(&p, 46, 76, 46, 12, 9);
+        line(&p, 46, 12, 80, 24, 9);
+        break;
+    case FLEX_ICON_PHONE:
+        line(&p, 28, 6, 72, 6, 8);
+        line(&p, 72, 6, 72, 94, 8);
+        line(&p, 72, 94, 28, 94, 8);
+        line(&p, 28, 94, 28, 6, 8);
+        line(&p, 44, 82, 56, 82, 8);
+        break;
+    case FLEX_ICON_TRASH:
+        line(&p, 12, 22, 88, 22, 8);
+        line(&p, 38, 10, 62, 10, 8);
+        line(&p, 22, 30, 28, 90, 8);
+        line(&p, 28, 90, 72, 90, 8);
+        line(&p, 72, 90, 78, 30, 8);
+        line(&p, 42, 40, 42, 78, 6);
+        line(&p, 58, 40, 58, 78, 6);
+        break;
     case FLEX_ICON_GEAR_SOLID:
         /* Engranaje macizo con hueco de verdad (se ve el fondo): anillo grueso
          * y 8 dientes redondeados. */

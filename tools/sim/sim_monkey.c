@@ -254,6 +254,8 @@ void sim_suite_monkey(const char *out)
                     ui_weather_create,  ui_wx_locs_create,      ui_wx_search_create,    ui_browser_create,
                     ui_ota_create,      ui_ota_install_create,  ui_phone_relay_create,
                     ui_face_editor_create, ui_sensors_create,      ui_gallery_create,
+                    ui_phone_music_create, ui_music_library_create, ui_nowplaying_create, ui_recorder_create,
+                    ui_recordings_create, ui_dest_create,       ui_sd_create,           ui_sd_format_create,
                 };
                 ui_nav_push(pages[rnd(sizeof(pages) / sizeof(pages[0]))]);
             }

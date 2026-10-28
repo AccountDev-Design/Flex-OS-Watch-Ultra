@@ -220,7 +220,7 @@ void sim_suite_phone(const char *out)
     sim_run(300);
 
     /* Música: lo que suena en el teléfono y su mando */
-    ui_nav_push(ui_music_create);
+    ui_nav_push(ui_phone_music_create);
     sim_run(400);
     EXPECT(has("Bohemian Rhapsody") && has("Queen") && has("Sonando") && has("En el teléfono · Spotify"),
            "música: no enseña lo que suena");
