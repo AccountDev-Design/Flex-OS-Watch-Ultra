@@ -24,6 +24,7 @@
 
 #include "flex_glass.h"
 #include "sim.h"
+#include "wa_player.h"
 #include "ui_internal.h"
 #include "watch_theme.h"
 
@@ -254,6 +255,46 @@ static void scenarios(const char *tag)
     drag_checked(404, 250, 150, 250, 12, w);
     sim_release();
     run_checked(400, w);
+    ui_nav_home_instant();
+    run_checked(64, w);
+
+    /* Multimedia: Reproduciendo sobre el fondo desenfocado de la portada (el
+     * volumen se arrastra y la página se va siguiendo al dedo), la página del
+     * QR desplazándose y el vídeo con fotogramas nuevos y sus mandos. */
+    snprintf(w, sizeof(w), "%s: reproduciendo", tag);
+    wap_track_t tr;
+    memset(&tr, 0, sizeof(tr));
+    snprintf(tr.path, sizeof(tr.path), "/Musica/Clair de lune.mp3");
+    snprintf(tr.title, sizeof(tr.title), "Clair de lune");
+    snprintf(tr.artist, sizeof(tr.artist), "Debussy");
+    tr.dur_ms = 301000;
+    wap_play_list(&tr, 1, 0);
+    ui_nav_push(ui_nowplaying_create);
+    run_checked(500, w);
+    drag_checked(130, 472, 290, 472, 10, w);
+    sim_release();
+    run_checked(300, w);
+    drag_checked(405, 300, 120, 300, 14, w);
+    sim_release();
+    run_checked(400, w);
+    wap_stop();
+    ui_nav_home_instant();
+    run_checked(64, w);
+    snprintf(w, sizeof(w), "%s: desde el movil", tag);
+    ui_nav_push(ui_xfer_create);
+    run_checked(400, w);
+    drag_checked(205, 420, 205, 160, 12, w);
+    sim_release();
+    run_checked(600, w);
+    ui_nav_home_instant();
+    run_checked(64, w);
+    snprintf(w, sizeof(w), "%s: video", tag);
+    ui_video_open(0, "/Videos/clip.avi", "clip.avi");
+    run_checked(500, w);
+    sim_tap(205, 150); /* oculta los mandos */
+    run_checked(300, w);
+    sim_tap(205, 150); /* y vuelven */
+    run_checked(300, w);
     ui_nav_home_instant();
     run_checked(64, w);
 
