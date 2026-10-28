@@ -41,10 +41,11 @@ bool wweb_dest_json(char *out, size_t n, wm_vol_t v, bool ready, uint64_t free_b
 const char *wweb_media_json(void)
 {
     /* La pantalla es de 410 x 502: fotos con margen para el zoom x2 del
-     * visor, y vídeo MJPEG que el reloj decodifica a tiempo (TJpgDec). */
+     * visor, y vídeo MJPEG que cabe a 1:1 (lado largo <= 400 px: sin escalar
+     * en cada fotograma) y que el reloj decodifica a tiempo (TJpgDec). */
     return "\"photo\":{\"light\":{\"max\":1024},\"rec\":{\"max\":1280},\"high\":{\"max\":1600}},"
-           "\"video\":{\"light\":{\"long\":320,\"fps\":10},\"rec\":{\"long\":400,\"fps\":12},"
-           "\"high\":{\"long\":480,\"fps\":15}}";
+           "\"video\":{\"light\":{\"long\":320,\"fps\":10},\"rec\":{\"long\":360,\"fps\":12},"
+           "\"high\":{\"long\":400,\"fps\":15}}";
 }
 
 uint32_t wweb_code_left_s(uint32_t now_ms, uint32_t born_ms, uint32_t ttl_ms)

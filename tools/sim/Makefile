@@ -84,6 +84,7 @@ APP_SRC := $(wildcard sim_*.c) \
            $(FW)/components/watch_media/wm_path.c \
            $(FW)/components/watch_media/wm_text.c \
            $(FW)/components/watch_media/wm_web_logic.c \
+           $(FW)/components/watch_media/wm_video_logic.c \
            $(FW)/components/watch_audio/wa_logic.c \
            $(filter-out $(FW)/components/watch_activity/watch_activity.c,$(wildcard $(FW)/components/watch_activity/*.c))
 

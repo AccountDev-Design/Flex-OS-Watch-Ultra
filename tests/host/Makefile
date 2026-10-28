@@ -36,7 +36,7 @@ SRC := test_main.c test_ui.c test_power_alerts.c test_time.c test_gesture.c test
        test_storage.c $(FW)/components/watch_storage/stg_logic.c $(FW)/components/watch_storage/stg_usage.c \
        test_media.c $(FW)/components/watch_media/wm_sd_logic.c $(FW)/components/watch_media/wm_fsclass.c \
        $(FW)/components/watch_media/wm_path.c $(FW)/components/watch_media/wm_text.c \
-       $(FW)/components/watch_media/wm_web_logic.c \
+       $(FW)/components/watch_media/wm_web_logic.c $(FW)/components/watch_media/wm_video_logic.c \
        test_audio.c $(FW)/components/watch_audio/wa_logic.c \
        test_apps.c $(FW)/components/watch_ui/apps_logic.c \
        test_grid.c $(FW)/components/watch_ui/ui_grid_logic.c test_glass.c \

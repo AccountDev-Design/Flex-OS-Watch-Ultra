@@ -341,7 +341,7 @@ static void test_pick(void)
     CHECK_EQ(gal_fmt_from_mime("image/heic"), GAL_F_HEIC);
     CHECK_EQ(gal_fmt_from_ultra("JPEG progresivo"), GAL_F_JPEG_PROG);
     CHECK(!gal_fmt_viewable(GAL_F_PNG) && gal_fmt_viewable(GAL_F_JPEG));
-    CHECK(strstr(gal_fmt_why(GAL_F_VIDEO), "vídeo") != NULL);
+    CHECK(strstr(gal_fmt_why(GAL_F_VIDEO), "AVI MJPEG") != NULL); /* el reloj reproduce AVI MJPEG: lo dice */
     /* nombres seguros para LittleFS */
     char nm[64];
     gal_safe_name("../../etc/pass@wd.jpg", nm, sizeof(nm));

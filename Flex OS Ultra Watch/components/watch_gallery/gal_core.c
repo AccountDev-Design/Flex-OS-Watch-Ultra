@@ -45,7 +45,9 @@ static const struct {
     [GAL_F_WEBP] = {"WebP", GAL_K_PHOTO, "WebP: el reloj solo muestra JPEG"},
     [GAL_F_HEIC] = {"HEIC", GAL_K_PHOTO, "HEIC: el reloj solo muestra JPEG"},
     [GAL_F_AVIF] = {"AVIF", GAL_K_PHOTO, "AVIF: el reloj solo muestra JPEG"},
-    [GAL_F_VIDEO] = {"Vídeo", GAL_K_VIDEO, "Vídeo: el reloj no reproduce vídeo; ábrelo en Flex OS Ultra o en la web"},
+    [GAL_F_VIDEO] = {"Vídeo", GAL_K_VIDEO,
+                     "Vídeo: el reloj reproduce los AVI MJPEG de su memoria o de la microSD; envíalo desde el móvil "
+                     "(Galería › +) y se convierte"},
     [GAL_F_FXP] = {"Dibujo", GAL_K_DRAW, NULL},
 };
 

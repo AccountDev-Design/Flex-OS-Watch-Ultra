@@ -17,6 +17,7 @@
 #include "wm_fsclass.h"
 #include "wm_path.h"
 #include "wm_sd_logic.h"
+#include "wm_video.h"
 #include "wm_web.h"
 
 /* ---------------- recorridos a mano ---------------- */
@@ -684,6 +685,43 @@ static void test_web_logic(void)
     CHECK(!strcmp(u, "S3-A1B2C3D4E506"));
 }
 
+/* ---------------- wm_video: escala y ritmo ---------------- */
+
+static void test_video_logic(void)
+{
+    CHECK_EQ(wv_pick_scale(400, 225, WV_MAX_W, WV_MAX_H), 1);  /* el perfil del reloj: 1:1 */
+    CHECK_EQ(wv_pick_scale(410, 410, WV_MAX_W, WV_MAX_H), 1);
+    CHECK_EQ(wv_pick_scale(640, 360, WV_MAX_W, WV_MAX_H), 2);
+    CHECK_EQ(wv_pick_scale(1920, 1080, WV_MAX_W, WV_MAX_H), 8); /* 240 x 135 */
+    CHECK_EQ(wv_pick_scale(821, 400, WV_MAX_W, WV_MAX_H), 4);   /* 411 no cabe: TJpgDec redondea hacia arriba */
+    CHECK_EQ(wv_pick_scale(4000, 3000, WV_MAX_W, WV_MAX_H), 0); /* ni a 1/8 */
+    CHECK_EQ(wv_pick_scale(0, 10, WV_MAX_W, WV_MAX_H), 0);
+    uint32_t w = 0;
+    /* 12 fps = 83333 us por fotograma */
+    CHECK_EQ(wv_pace(0, 0, 83333, &w), WV_P_SHOW);
+    CHECK_EQ(wv_pace(1, 0, 83333, &w), WV_P_WAIT);
+    CHECK_EQ(w, 83333u);
+    CHECK_EQ(wv_pace(3, 200000, 83333, &w), WV_P_WAIT);
+    CHECK_EQ(w, 49999u);
+    CHECK_EQ(wv_pace(3, 249999, 83333, &w), WV_P_SHOW);
+    CHECK_EQ(wv_pace(3, 333331, 83333, &w), WV_P_SHOW); /* aún dentro de su hueco */
+    CHECK_EQ(wv_pace(3, 333332, 83333, &w), WV_P_SKIP); /* el 4 ya toca (4 x 83333): el 3 se salta */
+    CHECK_EQ(wv_pace(10, 0, 83333, &w), WV_P_WAIT);
+    CHECK_EQ(w, 833330u);
+    CHECK_EQ(wv_pace(100, 0, 83333, &w), WV_P_WAIT);
+    CHECK_EQ(w, 1000000u); /* la espera nunca pasa de 1 s: se mira si hay que parar */
+    CHECK_EQ(wv_pace(5, 0, 0, &w), WV_P_SHOW);
+    CHECK_EQ(wv_pace(4000000000u, 0, 83333, &w), WV_P_WAIT); /* sin desbordar en 64 bits */
+    CHECK_EQ(wv_frame_at(1000, 83333), 12u);
+    CHECK_EQ(wv_frame_at(0, 83333), 0u);
+    CHECK_EQ(wv_frame_at(5000, 0), 0u);
+    CHECK_EQ(wv_frame_at(3600000, 40000), 90000u); /* una hora a 25 fps */
+    for (int e = -7; e <= 0; e++) {
+        CHECK(wv_err_text(e) != NULL && wv_err_text(e)[0]);
+    }
+    CHECK(strstr(wv_err_text(-3), "MJPEG") != NULL);
+}
+
 void test_media_all(void)
 {
     test_paths();
@@ -698,4 +736,5 @@ void test_media_all(void)
     test_capacity();
     test_texts();
     test_web_logic();
+    test_video_logic();
 }

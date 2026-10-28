@@ -31,6 +31,7 @@
 #include "watch_audio.h"
 #include "watch_media.h"
 #include "wm_store.h"
+#include "wm_video.h"
 #include "wm_web.h"
 #include "misc/lv_area_private.h"
 
@@ -275,6 +276,110 @@ void wm_web_status(wm_web_status_t *out)
     }
     n.gen = s_web_gen;
     *out = n;
+}
+
+/* ---- reproductor de vídeo de mentira (wm_video): fotogramas sintéticos ---- */
+#define FV_W 160
+#define FV_H 90
+static bool s_wv_open, s_wv_fail;
+static int s_wv_opens, s_wv_closes;
+static wv_status_t s_wv;
+static uint32_t s_wv_t0, s_wv_base;
+static uint16_t s_wv_buf[2][FV_W * FV_H];
+static int s_wv_front = -1;
+static uint32_t s_wv_painted = 0xFFFFFFFFu;
+
+static uint32_t wv_pos(void)
+{
+    uint32_t pos = s_wv_base + (s_wv.state == WV_PLAYING ? lv_tick_elaps(s_wv_t0) : 0);
+    return pos > s_wv.dur_ms ? s_wv.dur_ms : pos;
+}
+
+bool wv_open(wm_vol_t vol, const char *rel, char *why, size_t n)
+{
+    (void)vol;
+    (void)rel;
+    if (s_wv_fail) {
+        snprintf(why, n, "%s", wv_err_text(-3));
+        return false;
+    }
+    s_wv_opens++;
+    memset(&s_wv, 0, sizeof(s_wv));
+    s_wv.state = WV_PLAYING;
+    s_wv.w = s_wv.src_w = FV_W;
+    s_wv.h = s_wv.src_h = FV_H;
+    s_wv.dur_ms = 6000;
+    s_wv.fps_x10 = 120;
+    s_wv.gen = 1;
+    s_wv_t0 = lv_tick_get();
+    s_wv_base = 0;
+    s_wv_front = -1;
+    s_wv_painted = 0xFFFFFFFFu;
+    s_wv_open = true;
+    return true;
+}
+void wv_toggle(void)
+{
+    if (s_wv.state == WV_PLAYING) {
+        s_wv_base = wv_pos();
+        s_wv.state = WV_PAUSED;
+    } else if (s_wv.state == WV_ENDED) {
+        s_wv_base = 0;
+        s_wv_t0 = lv_tick_get();
+        s_wv.state = WV_PLAYING;
+    } else if (s_wv.state == WV_PAUSED) {
+        s_wv_t0 = lv_tick_get();
+        s_wv.state = WV_PLAYING;
+    }
+    s_wv.gen++;
+}
+void wv_seek_ms(uint32_t ms)
+{
+    s_wv_base = ms;
+    s_wv_t0 = lv_tick_get();
+    s_wv.gen++;
+}
+void wv_close(void)
+{
+    s_wv_closes++;
+    s_wv_open = false;
+}
+void wv_status(wv_status_t *out)
+{
+    if (s_wv_open && s_wv.state == WV_PLAYING) {
+        s_wv.pos_ms = wv_pos();
+        if (s_wv.pos_ms >= s_wv.dur_ms) {
+            s_wv_base = s_wv.dur_ms;
+            s_wv.state = WV_ENDED;
+            s_wv.gen++;
+        }
+        s_wv.frame_gen = s_wv.pos_ms / 83u + 1u;
+    }
+    *out = s_wv;
+}
+const uint16_t *wv_frame_acquire(int *w, int *h, uint32_t *gen)
+{
+    if (!s_wv_open) {
+        return NULL;
+    }
+    wv_status_t st;
+    wv_status(&st);
+    if (st.frame_gen != s_wv_painted) {
+        /* pinta el fotograma en el lienzo que no está a la vista: una barra que avanza */
+        s_wv_front = s_wv_front == 0 ? 1 : 0;
+        const int bx = (int)(st.frame_gen * 4u % FV_W);
+        for (int y = 0; y < FV_H; y++) {
+            for (int x = 0; x < FV_W; x++) {
+                s_wv_buf[s_wv_front][y * FV_W + x] =
+                    (x >= bx && x < bx + 12) ? 0xFFFF : (uint16_t)(((y * 31 / FV_H) << 11) | ((x * 63 / FV_W) << 5) | 12);
+            }
+        }
+        s_wv_painted = st.frame_gen;
+    }
+    *w = FV_W;
+    *h = FV_H;
+    *gen = st.frame_gen;
+    return s_wv_buf[s_wv_front];
 }
 
 /* ======================= audio de mentira ======================= */
@@ -590,6 +695,32 @@ static bool qr_on_screen(void)
     return other == 0 && black > n / 5 && white > n / 5;
 }
 
+/* El texto está y se ve (ni él ni sus contenedores ocultos). */
+static bool shown(const char *t)
+{
+    lv_obj_t *l = sim_find_label(ui_nav_top(), t);
+    for (lv_obj_t *o = l; o; o = lv_obj_get_parent(o)) {
+        if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) {
+            return false;
+        }
+    }
+    return l != NULL;
+}
+
+/* El fotograma del vídeo a la vista (la única imagen RGB565 de la página). */
+static bool video_frame(lv_area_t *out)
+{
+    lv_obj_t *top = ui_nav_top();
+    for (uint32_t i = 0; i < lv_obj_get_child_count(top); i++) {
+        lv_obj_t *c = lv_obj_get_child(top, (int32_t)i);
+        if (lv_obj_check_type(c, &lv_image_class) && !lv_obj_has_flag(c, LV_OBJ_FLAG_HIDDEN) && lv_image_get_src(c)) {
+            lv_obj_get_coords(c, out);
+            return true;
+        }
+    }
+    return false;
+}
+
 /* Un redibujado completo da la misma imagen que la que dejaron los dibujos por
  * partes: el fondo desenfocado no arrastra nada. */
 static void same_as_full(const char *where)
@@ -763,6 +894,46 @@ void sim_suite_media(const char *out)
     ui_nav_back();
     sim_run(300);
     EXPECT(!s_web_wanted, "desde el móvil: al salir sigue pidiendo el servidor");
+
+    /* ---- Vídeo AVI MJPEG: fotogramas, mandos, pausa, final y cierre ---- */
+    ui_video_open(1, "/Videos/clip.avi", "clip.avi");
+    sim_run(500);
+    EXPECT(s_wv_opens == 1 && s_wv_open, "vídeo: no se abrió");
+    {
+        lv_area_t a;
+        EXPECT(video_frame(&a), "vídeo: no se ve el fotograma");
+        EXPECT(lv_area_get_width(&a) == FV_W && lv_area_get_height(&a) == FV_H, "vídeo: el fotograma no es 1:1");
+    }
+    const uint32_t fg0 = s_wv.frame_gen;
+    sim_run(400);
+    EXPECT(s_wv.frame_gen > fg0 + 2, "vídeo: no avanza");
+    page(out, "m_video");
+    same_as_full("vídeo");
+    sim_run(3200);
+    EXPECT(!shown("Vídeo"), "vídeo: los mandos no se ocultan solos reproduciendo");
+    sim_save(out, "m_video_sin_mandos");
+    wv_toggle(); /* la pausa (como el botón) */
+    sim_run(400);
+    EXPECT(s_wv.state == WV_PAUSED && shown("Vídeo"), "vídeo: en pausa los mandos no vuelven");
+    const uint32_t fp = s_wv.frame_gen;
+    sim_run(500);
+    EXPECT(s_wv.frame_gen == fp, "vídeo: en pausa sigue avanzando");
+    wv_toggle();
+    sim_run(6500);
+    EXPECT(s_wv.state == WV_ENDED && has("6:00") == false && has("0:06"), "vídeo: no llega al final");
+    page(out, "m_video_final");
+    ui_nav_back();
+    sim_run(300);
+    EXPECT(s_wv_closes == 1 && !s_wv_open, "vídeo: al salir no se cierra");
+    s_wv_fail = true; /* un AVI que no es MJPEG */
+    ui_video_open(0, "/Videos/otro.avi", "otro.avi");
+    sim_run(400);
+    EXPECT(sim_find_label_prefix(ui_nav_top(), "Este AVI no es MJPEG") != NULL, "vídeo: no dice por qué no se abre");
+    page(out, "m_video_error");
+    ui_nav_back();
+    sim_run(300);
+    EXPECT(s_wv_closes == 1, "vídeo: cierra lo que no llegó a abrir");
+    s_wv_fail = false;
     ui_nav_back();
     sim_run(400);
 

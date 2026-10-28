@@ -30,6 +30,7 @@
 #include "esp_heap_caps.h"
 #include "flex_safe.h"
 #include "misc/cache/instance/lv_image_cache.h"
+#include "FlexOS_MediaLib.h"
 #include "watch_gallery.h"
 #include "watch_media.h"
 #include "watch_theme.h"
@@ -223,6 +224,13 @@ static bool thumbable(const gal_item_t *it)
 static bool viewable(const gal_item_t *it)
 {
     return !(it->flags & GAL_I_LOCKED) && it->kind != GAL_K_DRAW && gal_fmt_viewable((gal_fmt_t)it->fmt);
+}
+
+/* Un vídeo del reloj o de la microSD que se puede reproducir (AVI MJPEG). */
+static bool playable_video(const gal_item_t *it)
+{
+    return it->src == GAL_SRC_LOCAL && it->kind == GAL_K_VIDEO && it->lfmt == FML_F_AVI_MJPEG &&
+           !(it->flags & GAL_I_LOCKED);
 }
 
 static void fmt_when(int64_t ms, char *b, size_t n)
@@ -1053,7 +1061,7 @@ static lv_obj_t *vw_page_create(lv_obj_t *parent)
 
 /* ======================= información y acciones ======================= */
 
-enum { IA_VIEW = 1, IA_PAINT, IA_DOWNLOAD, IA_UP_ULTRA, IA_UP_CLOUD, IA_UP_PHONE, IA_TRASH };
+enum { IA_VIEW = 1, IA_PAINT, IA_DOWNLOAD, IA_UP_ULTRA, IA_UP_CLOUD, IA_UP_PHONE, IA_TRASH, IA_PLAY };
 
 typedef struct {
     gal_item_t it;
@@ -1110,6 +1118,9 @@ static void if_act_cb(lv_event_t *e)
         return;
     case IA_PAINT:
         ui_paint_open(p->it.path);
+        return;
+    case IA_PLAY:
+        ui_video_open(p->it.vol, p->it.path, p->it.name);
         return;
     case IA_DOWNLOAD:
         id = gal_download(G->e, &p->it, why, sizeof(why));
@@ -1214,13 +1225,15 @@ static void info_build(if_t *p)
                                                 : (it->flags & GAL_I_DAMAGED) ? "Dañado en Flex OS Ultra"
                                                                               : "Comprobándose");
     }
-    if (it->kind != GAL_K_DRAW && !viewable(it)) {
+    if (it->kind != GAL_K_DRAW && !viewable(it) && !playable_video(it)) {
         lv_obj_t *l = list_label(p->list, FLEX_FONT_SMALL, FLEX_C_TXT2);
         set_text(l, (it->flags & GAL_I_LOCKED) ? "Contenido protegido: ábrelo en Flex OS Ultra"
                                                : gal_fmt_why((gal_fmt_t)it->fmt));
     }
     /* Solo lo que se puede hacer ahora */
-    if (it->kind == GAL_K_DRAW) {
+    if (playable_video(it)) {
+        if_button(p, "Reproducir", FLEX_C_PRIMARY, IA_PLAY);
+    } else if (it->kind == GAL_K_DRAW) {
         if_button(p, "Abrir en Paint", FLEX_C_PRIMARY, IA_PAINT);
     } else if (viewable(it) && !V) {
         if_button(p, "Ver", FLEX_C_PRIMARY, IA_VIEW);
@@ -1325,6 +1338,12 @@ static void open_item(int idx, bool info)
     G->sel = G->items[idx];
     if (info) {
         ui_nav_push(info_page_create);
+    } else if (G->sel.kind == GAL_K_VIDEO) {
+        if (playable_video(&G->sel)) {
+            ui_video_open(G->sel.vol, G->sel.path, G->sel.name);
+        } else {
+            ui_nav_push(info_page_create); /* dice por qué no y qué hacer */
+        }
     } else if (G->sel.kind == GAL_K_DRAW) {
         ui_paint_open(G->sel.path);
     } else {

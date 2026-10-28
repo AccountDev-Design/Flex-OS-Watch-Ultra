@@ -214,6 +214,9 @@ lv_obj_t *ui_notif_reply_create(lv_obj_t *parent);
 lv_obj_t *ui_music_create(lv_obj_t *parent);        /**< app Música: biblioteca local, Reproduciendo y el teléfono */
 lv_obj_t *ui_phone_music_create(lv_obj_t *parent);  /**< Música > En el teléfono (mando de lo que suena allí) */
 lv_obj_t *ui_xfer_create(lv_obj_t *parent);         /**< "Recibir desde el móvil": QR del Flex Web Server */
+lv_obj_t *ui_video_create(lv_obj_t *parent);        /**< vídeo AVI MJPEG (abrir con ui_video_open) */
+/** Abre el vídeo `rel` del volumen (0 reloj, 1 microSD). */
+void ui_video_open(int vol, const char *rel, const char *name);
 /* Multimedia (docs/MULTIMEDIA.md; ui_media.c, ui_player.c, ui_recorder.c) */
 lv_obj_t *ui_music_library_create(lv_obj_t *parent); /**< Música > Canciones (reloj y microSD) */
 lv_obj_t *ui_nowplaying_create(lv_obj_t *parent);    /**< Reproduciendo (servicio wa_player) */

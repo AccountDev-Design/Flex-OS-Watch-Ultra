@@ -13,7 +13,7 @@ const hint = src.slice(src.indexOf('FX.PROFILE_HINT = {'), src.indexOf('};', src
 const fn = src.slice(src.indexOf('function applyMedia'), src.indexOf('// RELOJ: nombre, identidad'));
 eval(prof + hint + fn + 'applyMedia(media); applyMedia({photo:{rec:{max:999999}}}); applyMedia("x"); applyMedia(null);');
 const P = FX.PROFILES;
-const ok = P.photo.rec.max === 1280 && P.video.rec.long === 400 && P.video.high.fps === 15 && P.audio.rec.rate === 22050 &&
+const ok = P.photo.rec.max === 1280 && P.video.rec.long === 360 && P.video.high.long === 400 && P.video.high.fps === 15 && P.audio.rec.rate === 22050 &&
   FX.PROFILE_HINT.rec.includes('Flex OS Watch Ultra') && FX.PROFILE_HINT.rec.includes('1280 px');
 console.log(ok ? 'perfil del reloj aplicado: OK' : 'FALLO ' + JSON.stringify(P) + FX.PROFILE_HINT.rec);
 process.exit(ok ? 0 : 1);
