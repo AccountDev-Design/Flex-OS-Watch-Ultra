@@ -20,6 +20,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "gal_wm.h"
+
 #include "flexfs.h"
 #include "gal_acct.h"
 #include "gal_core.h"
@@ -962,6 +964,7 @@ static void copy_fixture(const char *root, const char *name, const char *as)
 }
 
 static gal_engine_t *s_cur_engine;
+static const gal_local_io_t *s_rig_local; /* E/S local de la plataforma (NULL = LittleFS) */
 
 static bool r_abort_lan(void *ctx)
 {
@@ -997,7 +1000,8 @@ static void rig_init(rig_t *r, bool linked)
         snprintf(r->eco.bearer, sizeof(r->eco.bearer), "%s", tok);
     }
     r->env = (gal_env_t){.io_lan = &r->lan, .io_cloud = &r->cl, .store = &r->store, .alloc = m_alloc, .free = m_free,
-                         .ctx = r, .now = r_now, .fs_free = r_fs_free, .mem_ok = r_mem_ok, .mac_hex = "A1B2C3D4E5F6", .version = "t"};
+                         .ctx = r, .now = r_now, .fs_free = r_fs_free, .mem_ok = r_mem_ok, .mac_hex = "A1B2C3D4E5F6", .version = "t",
+                         .local = s_rig_local};
     r->e = gal_engine_new(&r->env);
     s_cur_engine = r->e;
     gal_engine_set_cloud(r->e, "cloud.test", 443, true, NULL, NULL);
@@ -1504,6 +1508,372 @@ static void test_engine_memory(void)
     free(r);
 }
 
+/* ======================= biblioteca del reloj -> Galería (gal_wm_map) ======================= */
+
+static void test_wm_map(void)
+{
+    FlexMlRec r;
+    memset(&r, 0, sizeof(r));
+    r.id = 7;
+    r.kind = FML_K_PHOTO;
+    r.fmt = FML_F_JPEG;
+    r.size = 123456;
+    r.created = 1700000000u;
+    r.added = 1760000000u;
+    r.w = 640;
+    r.h = 480;
+    r.flags = FML_R_THUMB | FML_R_PLAYABLE;
+    r.thumbVer = 3;
+    snprintf(r.path, sizeof(r.path), "/Imagenes/Playa n 1.jpg");
+    snprintf(r.name, sizeof(r.name), "Playa \xC3\xB1 1.jpg");
+    gal_item_t it;
+    CHECK(gal_wm_item(&r, 1, &it));
+    CHECK(it.src == GAL_SRC_LOCAL && it.vol == 1 && it.mid == 7 && it.kind == GAL_K_PHOTO && it.fmt == GAL_F_JPEG);
+    CHECK_STR(it.path, "/Imagenes/Playa n 1.jpg");
+    CHECK_STR(it.name, "Playa \xC3\xB1 1.jpg"); /* el nombre con el que llegó */
+    CHECK(it.when == 1700000000000LL && it.size == 123456 && it.w == 640 && it.h == 480);
+    CHECK((it.flags & GAL_I_THUMB) && !(it.flags & GAL_I_LOCKED) && it.origin_src == GAL_SRC_NONE);
+    const uint32_t tv = it.tver;
+    r.thumbVer = 4;
+    CHECK(gal_wm_item(&r, 1, &it) && it.tver != tv); /* miniatura nueva: otra clave */
+    /* vídeos: solo AVI con MJPEG se reproduce */
+    r.kind = FML_K_VIDEO;
+    r.fmt = FML_F_AVI_MJPEG;
+    r.durMs = 4200;
+    CHECK(gal_wm_item(&r, 0, &it) && it.kind == GAL_K_VIDEO && it.fmt == GAL_F_VIDEO && it.dur_ms == 4200);
+    CHECK(gal_wm_playable_video(&it));
+    r.fmt = FML_F_MP4;
+    CHECK(gal_wm_item(&r, 0, &it) && !gal_wm_playable_video(&it));
+    /* protegido, dibujos, sin fecha de origen, música fuera */
+    r.fmt = FML_F_AVI_MJPEG;
+    r.flags = FML_R_LOCKED;
+    CHECK(gal_wm_item(&r, 0, &it) && (it.flags & GAL_I_LOCKED) && !gal_wm_playable_video(&it));
+    r.kind = FML_K_DRAW;
+    r.fmt = FML_F_FXP;
+    r.flags = 0;
+    r.created = 0;
+    CHECK(gal_wm_item(&r, 0, &it) && it.kind == GAL_K_DRAW && it.fmt == GAL_F_FXP && it.when == 1760000000000LL);
+    r.kind = FML_K_AUDIO;
+    CHECK(!gal_wm_item(&r, 0, &it));
+    /* sin formato comprobado aún: la extensión como pista; sin nombre: el del disco */
+    r.kind = FML_K_PHOTO;
+    r.fmt = FML_F_UNKNOWN;
+    r.name[0] = 0;
+    snprintf(r.path, sizeof(r.path), "/DCIM/IMG_0001.png");
+    CHECK(gal_wm_item(&r, 1, &it) && it.fmt == GAL_F_PNG);
+    CHECK_STR(it.name, "IMG_0001.png");
+    CHECK(gal_wm_fmt(FML_F_HEIC) == GAL_F_HEIC && gal_wm_fmt(FML_F_WAV_PCM) == GAL_F_UNKNOWN);
+    /* orden: más reciente primero y estable */
+    gal_item_t v[4];
+    memset(v, 0, sizeof(v));
+    v[0].when = 10; v[0].mid = 1;
+    v[1].when = 30; v[1].mid = 2;
+    v[2].when = 10; v[2].mid = 3;
+    v[3].when = 20; v[3].mid = 4;
+    gal_wm_sort(v, 4);
+    CHECK(v[0].mid == 2 && v[1].mid == 4 && v[2].mid == 1 && v[3].mid == 3);
+}
+
+/* ======================= la biblioteca de la plataforma (reloj + microSD) ======================= */
+
+/* Una biblioteca de mentira con dos volúmenes en carpetas: vol0 (reloj) y
+ * vol1 (microSD). Comprueba que el motor SIEMPRE suelta lo que arrienda y que
+ * nunca guarda en otro sitio que el destino elegido. */
+typedef struct {
+    rig_t *r;
+    gal_item_t items[8];
+    int n;
+    uint32_t rev;
+    int leases, max_leases, acquires, thumbs, imports;
+    bool sd_in, dest_ok;
+    char trashed[GAL_PATH_MAX];
+} lib_t;
+static lib_t s_lib;
+
+static void lib_root(int vol, char *out, size_t n)
+{
+    snprintf(out, n, "%s/vol%d", s_lib.r->root, vol);
+}
+
+static int lio_list(void *ctx, gal_item_t *out, int cap)
+{
+    (void)ctx;
+    int k = 0;
+    for (int i = 0; i < s_lib.n && k < cap; i++) {
+        if (s_lib.items[i].vol == 1 && !s_lib.sd_in) {
+            continue; /* sin tarjeta, su catálogo no está */
+        }
+        out[k++] = s_lib.items[i];
+    }
+    return k;
+}
+
+static uint32_t lio_rev(void *ctx)
+{
+    (void)ctx;
+    return s_lib.rev;
+}
+
+static bool lio_acquire(void *ctx, const gal_item_t *it, char *real, size_t n)
+{
+    (void)ctx;
+    if (it->vol == 1 && !s_lib.sd_in) {
+        return false;
+    }
+    char root[300];
+    lib_root(it->vol, root, sizeof(root));
+    snprintf(real, n, "%s%s", root, it->path);
+    s_lib.acquires++;
+    if (it->vol == 1 && ++s_lib.leases > s_lib.max_leases) {
+        s_lib.max_leases = s_lib.leases;
+    }
+    return true;
+}
+
+static void lio_release(void *ctx, const gal_item_t *it)
+{
+    (void)ctx;
+    if (it->vol == 1) {
+        s_lib.leases--;
+    }
+}
+
+static bool lio_thumb(void *ctx, const gal_item_t *it, uint16_t *px)
+{
+    (void)ctx;
+    s_lib.thumbs++;
+    for (int i = 0; i < GAL_THUMB_SIDE * GAL_THUMB_SIDE; i++) {
+        px[i] = it->kind == GAL_K_VIDEO ? 0xF800 : 0x07E0;
+    }
+    return true;
+}
+
+static bool lio_trash(void *ctx, const gal_item_t *it, char *msg, size_t n)
+{
+    (void)ctx;
+    snprintf(s_lib.trashed, sizeof(s_lib.trashed), "%s", it->path);
+    snprintf(msg, n, "%s", it->vol == 1 ? "Borrada de la microSD" : "En la papelera del reloj");
+    for (int i = 0; i < s_lib.n; i++) {
+        if (s_lib.items[i].vol == it->vol && !strcmp(s_lib.items[i].path, it->path)) {
+            s_lib.items[i] = s_lib.items[--s_lib.n];
+            s_lib.rev++;
+            break;
+        }
+    }
+    return true;
+}
+
+static bool lio_dest_ready(void *ctx, char *why, size_t n)
+{
+    (void)ctx;
+    if (!s_lib.dest_ok) {
+        snprintf(why, n, "Has elegido guardar en la microSD y no hay tarjeta.");
+    }
+    return s_lib.dest_ok;
+}
+
+static bool lio_import(void *ctx, const char *tmp_real, const char *name, int kind, int src, char *final, size_t n,
+                       char *why, size_t wn)
+{
+    (void)ctx;
+    CHECK_EQ(src, GAL_SRC_ULTRA); /* de dónde viene, para el origen en la biblioteca */
+    char dst[600], root[300];
+    lib_root(1, root, sizeof(root));
+    snprintf(final, n, "/Imagenes/%s", name);
+    snprintf(dst, sizeof(dst), "%s%s", root, final);
+    if (rename(tmp_real, dst) != 0) {
+        snprintf(why, wn, "No se pudo guardar en la microSD");
+        return false;
+    }
+    gal_item_t *o = &s_lib.items[s_lib.n++];
+    memset(o, 0, sizeof(*o));
+    o->src = GAL_SRC_LOCAL;
+    o->vol = 1;
+    o->mid = 100 + (uint32_t)s_lib.n;
+    o->kind = (uint8_t)kind;
+    o->fmt = GAL_F_JPEG;
+    o->origin_src = GAL_SRC_NONE;
+    snprintf(o->path, sizeof(o->path), "%s", final);
+    snprintf(o->name, sizeof(o->name), "%s", name);
+    s_lib.rev++;
+    s_lib.imports++;
+    snprintf(why, wn, "Guardada en microSD");
+    return true;
+}
+
+static const gal_local_io_t kLio = {lio_list, lio_rev, lio_acquire, lio_release, lio_thumb,
+                                    lio_trash, lio_dest_ready, lio_import};
+
+static void lib_add(int vol, uint32_t mid, const char *path, int kind, int fmt, bool thumb, int64_t when)
+{
+    gal_item_t *o = &s_lib.items[s_lib.n++];
+    memset(o, 0, sizeof(*o));
+    o->src = GAL_SRC_LOCAL;
+    o->vol = (uint8_t)vol;
+    o->mid = mid;
+    o->kind = (uint8_t)kind;
+    o->fmt = (uint8_t)fmt;
+    o->flags = thumb ? GAL_I_THUMB : 0;
+    o->when = when;
+    o->tver = mid;
+    o->origin_src = GAL_SRC_NONE;
+    snprintf(o->path, sizeof(o->path), "%s", path);
+    const char *b = strrchr(path, '/');
+    snprintf(o->name, sizeof(o->name), "%s", b ? b + 1 : path);
+    s_lib.rev++;
+}
+
+static void put_file(int vol, const char *path, const char *fixture)
+{
+    char root[300], dst[700], cmd[1600];
+    lib_root(vol, root, sizeof(root));
+    snprintf(dst, sizeof(dst), "%s%s", root, path);
+    snprintf(cmd, sizeof(cmd), "mkdir -p \"$(dirname '%s')\" && cp '%s/%s' '%s'", dst, FIX, fixture, dst);
+    if (system(cmd) != 0) {
+        fprintf(stderr, "no se pudo copiar %s\n", fixture);
+    }
+}
+
+static int thumb_state(rig_t *r, const gal_item_t *it, uint16_t *first)
+{
+    gal_item_t c = *it;
+    gal_thumb_request(r->e, &c);
+    const uint16_t *px = NULL;
+    int st = 0, slot = -1;
+    SPIN(r, (slot = gal_thumb_acquire(r->e, &c, &px, &st)) >= 0 || st == GAL_TH_FAILED);
+    if (slot >= 0) {
+        *first = px[0];
+        gal_thumb_release(r->e, slot);
+        return GAL_TH_READY;
+    }
+    return st;
+}
+
+static void test_engine_local_io(void)
+{
+    rig_t *r = calloc(1, sizeof(*r));
+    memset(&s_lib, 0, sizeof(s_lib));
+    s_rig_local = &kLio;
+    rig_init(r, false);
+    s_rig_local = NULL;
+    s_lib.r = r;
+    s_lib.sd_in = true;
+    s_lib.dest_ok = true;
+    char cmd[1024];
+    snprintf(cmd, sizeof(cmd), "mkdir -p '%s/vol0/Imagenes' '%s/vol1/Imagenes' '%s/vol1/DCIM'", r->root, r->root, r->root);
+    CHECK(system(cmd) == 0);
+    lib_add(0, 1, "/Imagenes/cuadros.jpg", GAL_K_PHOTO, GAL_F_JPEG, false, 1000);
+    lib_add(1, 2, "/DCIM/sd_foto.jpg", GAL_K_PHOTO, GAL_F_JPEG, true, 3000);
+    lib_add(1, 3, "/Videos/clip.avi", GAL_K_VIDEO, GAL_F_VIDEO, true, 2000);
+    lib_add(1, 4, "/DCIM/sin_miniatura.jpg", GAL_K_PHOTO, GAL_F_JPEG, false, 500);
+    put_file(0, "/Imagenes/cuadros.jpg", "gal_quad_640x480.jpg");
+    put_file(1, "/DCIM/sd_foto.jpg", "gal_tiny_40x30.jpg");
+    CHECK(gal_engine_open(r->e));
+    SPIN(r, S(r).nl == 4);
+    CHECK_EQ(S(r).nl, 4);
+    const gal_item_t *sf = find_item(r, 0, "sd_foto.jpg");
+    CHECK(sf && sf->vol == 1 && sf->mid == 2 && (sf->flags & GAL_I_THUMB));
+    /* miniaturas: la de la biblioteca (también del vídeo), la del JPEG del reloj
+     * decodificada, y la de la microSD que aún no tiene: no se inventa */
+    uint16_t c0 = 0;
+    CHECK_EQ(thumb_state(r, sf, &c0), GAL_TH_READY);
+    CHECK_EQ(c0, 0x07E0);
+    CHECK_EQ(thumb_state(r, find_item(r, 0, "clip.avi"), &c0), GAL_TH_READY);
+    CHECK_EQ(c0, 0xF800);
+    CHECK_EQ(thumb_state(r, find_item(r, 0, "cuadros.jpg"), &c0), GAL_TH_READY);
+    CHECK_EQ(thumb_state(r, find_item(r, 0, "sin_miniatura.jpg"), &c0), GAL_TH_FAILED);
+    CHECK_EQ(s_lib.thumbs, 2);
+    CHECK_EQ(s_lib.leases, 0);
+    /* visor de una foto de la microSD: el arrendamiento dura lo que la lectura */
+    gal_item_t sfc = *sf;
+    CHECK(gal_view_open(r->e, &sfc));
+    gal_view_t v;
+    SPIN(r, (gal_view_get(r->e, &v), v.state != GAL_V_LOADING && v.state != GAL_V_IDLE));
+    CHECK_EQ(v.state, GAL_V_READY);
+    CHECK(v.src_w == 40 && v.src_h == 30);
+    gal_view_close(r->e);
+    SPIN(r, false);
+    CHECK_EQ(s_lib.leases, 0);
+    CHECK(s_lib.max_leases >= 1);
+    /* la microSD sale: su foto no se abre (sin colgarse) y su lista se va */
+    s_lib.sd_in = false;
+    s_lib.rev++;
+    CHECK(gal_view_open(r->e, &sfc));
+    SPIN(r, (gal_view_get(r->e, &v), v.state != GAL_V_LOADING && v.state != GAL_V_IDLE));
+    CHECK_EQ(v.state, GAL_V_ERROR);
+    gal_view_close(r->e);
+    SPIN(r, S(r).nl == 1);
+    CHECK_EQ(S(r).nl, 1);
+    CHECK_EQ(s_lib.leases, 0);
+    s_lib.sd_in = true;
+    s_lib.rev++;
+    SPIN(r, S(r).nl == 4);
+    CHECK_EQ(S(r).nl, 4);
+    /* borrar de la microSD: lo pide la persona y lo hace la biblioteca */
+    char why[96];
+    gal_item_t snc = *find_item(r, 0, "sin_miniatura.jpg");
+    const int tid = gal_trash(r->e, &snc, why, sizeof(why));
+    CHECK(tid > 0);
+    SPIN(r, xstate(r, tid, NULL) == GAL_XS_DONE);
+    char msg[96] = "";
+    CHECK_EQ(xstate(r, tid, msg), GAL_XS_DONE);
+    CHECK_STR(msg, "Borrada de la microSD");
+    CHECK_STR(s_lib.trashed, "/DCIM/sin_miniatura.jpg");
+    SPIN(r, S(r).nl == 3);
+    CHECK_EQ(S(r).nl, 3);
+    /* subir una foto de la microSD al P4: se lee con arrendamiento y se suelta */
+    size_t pn;
+    uint8_t *pic = fix_bytes("gal_tall_300x900.jpg", &pn);
+    eco_p4_add(&r->eco, "Atardecer.jpg", "photo", "JPEG", pic, pn, pic, pn, false);
+    gal_set_wifi(r->e, true);
+    CHECK(gal_set_ultra(r->e, "192.168.1.20", 8080));
+    SPIN(r, S(r).health[GAL_SRC_ULTRA].state == GAL_ST_PAIR);
+    CHECK(gal_ultra_pair(r->e, "123456"));
+    SPIN(r, S(r).health[GAL_SRC_ULTRA].state == GAL_ST_READY && S(r).nr == 1);
+    CHECK_EQ(S(r).nr, 1);
+    sfc = *find_item(r, 0, "sd_foto.jpg");
+    const int uid = gal_upload(r->e, &sfc, GAL_SRC_ULTRA, why, sizeof(why));
+    CHECK(uid > 0);
+    SPIN(r, xstate(r, uid, NULL) == GAL_XS_DONE);
+    CHECK_EQ(xstate(r, uid, NULL), GAL_XS_DONE);
+    CHECK_EQ(r->eco.p4_uploads, 1);
+    CHECK_EQ(s_lib.leases, 0);
+    /* descargar con el destino elegido SIN tarjeta: no se baja ni se guarda en el reloj */
+    s_lib.dest_ok = false;
+    gal_item_t atc = *find_item(r, 1, "Atardecer.jpg");
+    const int d1 = gal_download(r->e, &atc, why, sizeof(why));
+    CHECK(d1 > 0);
+    SPIN(r, xstate(r, d1, NULL) == GAL_XS_FAIL);
+    CHECK_EQ(xstate(r, d1, msg), GAL_XS_FAIL);
+    CHECK_STR(msg, "Has elegido guardar en la microSD y no hay tarjeta.");
+    CHECK_EQ(s_lib.imports, 0);
+    char lp[600];
+    snprintf(lp, sizeof(lp), "%s/Imagenes/Atardecer.jpg", r->root);
+    CHECK(access(lp, F_OK) != 0); /* nada en el LittleFS por detrás */
+    /* con el destino listo: a la biblioteca de la microSD, byte a byte */
+    s_lib.dest_ok = true;
+    gal_xfer_clear(r->e);
+    const int d2 = gal_download(r->e, &atc, why, sizeof(why));
+    CHECK(d2 > 0);
+    SPIN(r, xstate(r, d2, NULL) == GAL_XS_DONE);
+    CHECK_EQ(xstate(r, d2, msg), GAL_XS_DONE);
+    CHECK_STR(msg, "Guardada en microSD");
+    CHECK_EQ(s_lib.imports, 1);
+    snprintf(lp, sizeof(lp), "%s/vol1/Imagenes/Atardecer.jpg", r->root);
+    size_t ln;
+    uint8_t *ld = gf_read_file(lp, &ln);
+    CHECK(ld && ln == pn && !memcmp(ld, pic, pn));
+    free(ld);
+    snprintf(lp, sizeof(lp), "%s/Imagenes/Atardecer.jpg", r->root);
+    CHECK(access(lp, F_OK) != 0);
+    SPIN(r, S(r).nl == 4);
+    CHECK_EQ(S(r).nl, 4);
+    CHECK_EQ(s_lib.leases, 0);
+    free(pic);
+    rig_free(r);
+    free(r);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1) {
@@ -1520,6 +1890,8 @@ int main(int argc, char **argv)
     test_engine_cloud();
     test_engine_auto_phone();
     test_engine_memory();
+    test_engine_local_io();
+    test_wm_map();
     printf("Galería: %d comprobaciones, %d fallos\n", g_checks, g_fail);
     return g_fail ? 1 : 0;
 }

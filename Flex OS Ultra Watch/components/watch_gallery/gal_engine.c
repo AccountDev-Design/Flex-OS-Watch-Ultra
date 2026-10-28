@@ -522,7 +522,9 @@ void gal_more(gal_engine_t *e)
 static void thumb_key(const gal_item_t *it, char *out, size_t n)
 {
     if (it->src == GAL_SRC_LOCAL) {
-        snprintf(out, n, "0|%s|%llu|%lu", it->path, (unsigned long long)it->size, (unsigned long)it->tver);
+        /* con el volumen: la misma ruta en el reloj y en la microSD son dos fotos */
+        snprintf(out, n, "0|%u|%s|%llu|%lu", (unsigned)it->vol, it->path, (unsigned long long)it->size,
+                 (unsigned long)it->tver);
     } else {
         snprintf(out, n, "%d|%s|%lu", it->src, it->id, (unsigned long)it->tver);
     }
@@ -540,9 +542,12 @@ static int thumb_find(gal_engine_t *e, const char *key)
 
 void gal_thumb_request(gal_engine_t *e, const gal_item_t *it)
 {
-    if (!it || (it->flags & GAL_I_LOCKED) || it->kind == GAL_K_DRAW ||
+    /* Local: un JPEG (se decodifica) o lo que ya tiene miniatura en la
+     * biblioteca del reloj (también vídeos y dibujos); remoto: si el servidor la tiene. */
+    const bool lib_thumb = it && it->src == GAL_SRC_LOCAL && (it->flags & GAL_I_THUMB);
+    if (!it || (it->flags & GAL_I_LOCKED) || (it->kind == GAL_K_DRAW && !lib_thumb) ||
         (it->src != GAL_SRC_LOCAL && !(it->flags & GAL_I_THUMB)) ||
-        (it->src == GAL_SRC_LOCAL && it->fmt != GAL_F_JPEG)) {
+        (it->src == GAL_SRC_LOCAL && it->fmt != GAL_F_JPEG && !lib_thumb)) {
         return; /* sin miniatura posible: la celda dice por qué, sin imagen inventada */
     }
     char key[sizeof(e->thumbs[0].key)];
@@ -765,6 +770,9 @@ static bool can_op(gal_engine_t *e, int op, const gal_item_t *it, int dest, char
     }
     if (op == GAL_X_TRASH) {
         if (it->src == GAL_SRC_LOCAL) {
+            if (e->env.local && e->env.local->trash) {
+                return true; /* la biblioteca decide: papelera en el reloj, borrado en la microSD */
+            }
             return !strncmp(it->path, GAL_DIR_PHOTO "/", 10) || !strncmp(it->path, GAL_DIR_PAINT "/", 7);
         }
         const gal_health_t *h = &e->health[it->src];
@@ -1163,6 +1171,17 @@ uint32_t gal_engine_step(gal_engine_t *e)
     if (!e->view_req && e->view_state == GAL_V_IDLE && (e->view_fit || e->view_zoom)) {
         free_view(e); /* el visor se cerró: sus lienzos (hasta 2 MB) no esperan a otra foto */
     }
+    gal__unlock(e);
+    /* La biblioteca local cambió (algo nuevo, borrado, la microSD entra o sale): otra lista. */
+    if (open && e->env.local && e->env.local->rev && e->env.local->list) {
+        const uint32_t rev = e->env.local->rev(e->env.ctx);
+        gal__lock(e);
+        if (rev != e->local_rev && !e->scanning) {
+            e->scan_req = true;
+        }
+        gal__unlock(e);
+    }
+    gal__lock(e);
     const bool pair = e->pair_req, view = e->view_req, scan = e->scan_req && open;
     e->pair_req = false;
     if (scan) {

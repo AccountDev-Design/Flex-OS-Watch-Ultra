@@ -20,6 +20,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "nvs.h"
+#include "gal_wm.h"
 #include "watch_net.h"
 #include "watch_storage.h"
 
@@ -324,7 +325,8 @@ gal_engine_t *watch_gallery_open(void)
         s_store = (gal_store_t){.get = st_get, .set = st_set, .erase = st_erase, .random = st_random};
         s_env = (gal_env_t){.io_lan = &s_lan_io, .io_cloud = &s_cloud_io, .store = &s_store, .alloc = ps_alloc,
                             .free = ps_free, .lock = mx_lock, .unlock = mx_unlock, .kick = do_kick, .now = env_now,
-                            .fs_free = env_fs_free, .mem_ok = env_mem_ok, .mac_hex = s_mac, .version = s_ver};
+                            .fs_free = env_fs_free, .mem_ok = env_mem_ok, .mac_hex = s_mac, .version = s_ver,
+                            .local = gal_wm_io()}; /* reloj y microSD: la biblioteca de watch_media */
     }
     xSemaphoreTake(s_life, portMAX_DELAY);
     log_mem("Galería: antes de abrir");

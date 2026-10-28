@@ -50,6 +50,35 @@ extern "C" {
 #define GAL_CLOUD_POLL_MS 60000u
 #define GAL_AGENT        "FlexOS-Watch-Ultra/1.0 ESP32-S3"
 
+/**
+ * Lo local, si la plataforma tiene una biblioteca propia (en el reloj, la de
+ * watch_media: memoria del reloj Y microSD, fotos, dibujos y vídeos). Sin
+ * esto (NULL), el motor recorre /Imagenes y /Paint del LittleFS como siempre.
+ * Todas las llamadas son desde la tarea del motor, nunca con su cerrojo.
+ */
+typedef struct {
+    /** Los elementos locales (del más reciente al más antiguo o en cualquier orden). */
+    int (*list)(void *ctx, gal_item_t *out, int cap);
+    /** Cambia con cualquier cambio de lo anterior: el motor vuelve a pedir la lista. */
+    uint32_t (*rev)(void *ctx);
+    /** Ruta real para leer el elemento. Con la microSD toma su arrendamiento:
+     * cada true pide su release, y entre medias la tarjeta no se desmonta. */
+    bool (*acquire)(void *ctx, const gal_item_t *it, char *real, size_t n);
+    void (*release)(void *ctx, const gal_item_t *it);
+    /** Miniatura GAL_THUMB_SIDE x GAL_THUMB_SIDE ("cover") ya hecha por la
+     * biblioteca (elementos con GAL_I_THUMB). false = no hay. */
+    bool (*thumb)(void *ctx, const gal_item_t *it, uint16_t *px);
+    /** A la papelera (reloj) o borrado explícito (microSD, que no tiene). */
+    bool (*trash)(void *ctx, const gal_item_t *it, char *msg, size_t n);
+    /** ¿Está listo el destino elegido para guardar? (motivo en why si no). */
+    bool (*dest_ready)(void *ctx, char *why, size_t n);
+    /** Publica en el destino elegido una descarga terminada y comprobada
+     * (tmp_real en el LittleFS). Devuelve la ruta con que queda (final) o
+     * false con el motivo; nunca la guarda en otro volumen. */
+    bool (*import)(void *ctx, const char *tmp_real, const char *name, int kind, int src, char *final, size_t n,
+                   char *why, size_t wn);
+} gal_local_io_t;
+
 /** Lo que el motor necesita de su plataforma. */
 typedef struct {
     const gal_io_t *io_lan;   /**< conexión con el P4 (HTTP en la red local) */
@@ -68,6 +97,7 @@ typedef struct {
     bool (*mem_ok)(void *ctx, size_t n);
     const char *mac_hex;      /**< para el hardwareId de Flex Account */
     const char *version;
+    const gal_local_io_t *local; /**< NULL = /Imagenes y /Paint del LittleFS */
 } gal_env_t;
 
 typedef struct gal_engine gal_engine_t;

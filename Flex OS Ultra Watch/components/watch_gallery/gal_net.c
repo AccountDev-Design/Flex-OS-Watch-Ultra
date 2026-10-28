@@ -694,9 +694,18 @@ static void finish(gal_engine_t *e, gal_xfer_t *x, gal_err_t er, const char *ok_
         snprintf(x->msg, sizeof(x->msg), "%s. Reintento en %lu s", gal_err_text(er), (unsigned long)(w / 1000u));
     } else {
         x->state = GAL_XS_FAIL;
-        gal_copyz(x->msg, sizeof(x->msg), gal_err_text(er));
+        gal_copyz(x->msg, sizeof(x->msg), x->fail_why[0] ? x->fail_why : gal_err_text(er));
     }
+    x->fail_why[0] = 0;
     e->xfer_gen++;
+    gal__unlock(e);
+}
+
+/* El motivo concreto de un fallo, para la persona (lo enseña finish). */
+static void fail_why(gal_engine_t *e, gal_xfer_t *x, const char *why)
+{
+    gal__lock(e);
+    gal_copyz(x->fail_why, sizeof(x->fail_why), why);
     gal__unlock(e);
 }
 
@@ -730,9 +739,17 @@ static void down_done(gal_engine_t *e, gal_xfer_t *x, const char *final_vpath)
     gal__unlock(e);
 }
 
-static gal_err_t do_download(gal_engine_t *e, gal_xfer_t *x)
+static gal_err_t do_download(gal_engine_t *e, gal_xfer_t *x, char *saved, size_t saved_n)
 {
     const gal_item_t *it = &x->item;
+    const gal_local_io_t *io = e->env.local;
+    char why[96];
+    /* El destino lo eligió la persona: si no está listo, no se descarga (y
+     * nunca se guarda en el otro volumen por detrás). */
+    if (io && io->dest_ready && !io->dest_ready(e->env.ctx, why, sizeof(why))) {
+        fail_why(e, x, why);
+        return GAL_E_NOSPACE;
+    }
     char tmpv[GAL_PATH_MAX], tmpr[GAL_PATH_MAX + 32];
     snprintf(tmpv, sizeof(tmpv), GAL_DIR_TMP "/%d-%s.part", it->src, it->id);
     gal__mkdirs(GAL_DIR_TMP);
@@ -894,7 +911,18 @@ static gal_err_t do_download(gal_engine_t *e, gal_xfer_t *x)
     }
     char name[GAL_NAME_MAX], fv[GAL_PATH_MAX], fr[GAL_PATH_MAX + 32];
     gal_safe_name(it->name, name, sizeof(name));
-    if (!gal__unique_photo(name, fv, sizeof(fv)) || !gal__real(fv, fr, sizeof(fr)) || rename(tmpr, fr) != 0) {
+    if (io && io->import) {
+        /* a la biblioteca, en el destino elegido (reloj o microSD) */
+        why[0] = 0;
+        if (!io->import(e->env.ctx, tmpr, name, it->kind, it->src, fv, sizeof(fv), why, sizeof(why))) {
+            remove(tmpr); /* lo bajado no se queda ocupando el LittleFS */
+            if (why[0]) {
+                fail_why(e, x, why);
+            }
+            return GAL_E_FS;
+        }
+        gal_copyz(saved, saved_n, why[0] ? why : "Guardada");
+    } else if (!gal__unique_photo(name, fv, sizeof(fv)) || !gal__real(fv, fr, sizeof(fr)) || rename(tmpr, fr) != 0) {
         return GAL_E_FS;
     }
     down_done(e, x, fv);
@@ -959,12 +987,11 @@ static void cloud_cancel_upload(gal_engine_t *e, gal_xfer_t *x)
     x->up_id[0] = 0;
 }
 
-static gal_err_t do_upload_cloud(gal_engine_t *e, gal_xfer_t *x)
+static gal_err_t do_upload_cloud(gal_engine_t *e, gal_xfer_t *x, const char *real)
 {
     const gal_item_t *it = &x->item;
-    char real[GAL_PATH_MAX + 32];
     struct stat sb;
-    if (!gal__real(it->path, real, sizeof(real)) || stat(real, &sb) != 0 || sb.st_size <= 0 || !e->json) {
+    if (stat(real, &sb) != 0 || sb.st_size <= 0 || !e->json) {
         return GAL_E_FS;
     }
     const uint64_t size = (uint64_t)sb.st_size;
@@ -1130,12 +1157,11 @@ static gal_err_t do_upload_cloud(gal_engine_t *e, gal_xfer_t *x)
     return er;
 }
 
-static gal_err_t do_upload_ultra(gal_engine_t *e, gal_xfer_t *x)
+static gal_err_t do_upload_ultra(gal_engine_t *e, gal_xfer_t *x, const char *real)
 {
     const gal_item_t *it = &x->item;
-    char real[GAL_PATH_MAX + 32];
     struct stat sb;
-    if (!gal__real(it->path, real, sizeof(real)) || stat(real, &sb) != 0 || sb.st_size <= 0 || !e->json) {
+    if (stat(real, &sb) != 0 || sb.st_size <= 0 || !e->json) {
         return GAL_E_FS;
     }
     const uint64_t size = (uint64_t)sb.st_size;
@@ -1266,6 +1292,7 @@ void gal__net_xfer(gal_engine_t *e, gal_xfer_t *x)
 {
     gal_err_t er;
     const char *ok_text = "Hecho";
+    char saved[96] = "Guardada en el reloj";
     if (x->cancel && x->up_id[0]) {
         cloud_cancel_upload(e, x);
         finish(e, x, GAL_E_CANCEL, "");
@@ -1274,11 +1301,18 @@ void gal__net_xfer(gal_engine_t *e, gal_xfer_t *x)
     switch (x->op) {
     case GAL_X_DOWNLOAD:
         x_msg(e, x, "Descargando de %s", gal_src_name(x->item.src));
-        er = do_download(e, x);
-        ok_text = "Guardada en el reloj";
+        er = do_download(e, x, saved, sizeof(saved));
+        ok_text = saved;
         break;
-    case GAL_X_UPLOAD:
-        er = x->dest == GAL_SRC_ULTRA ? do_upload_ultra(e, x) : do_upload_cloud(e, x);
+    case GAL_X_UPLOAD: {
+        /* El archivo, mientras dura la subida: con la microSD, arrendado (no se desmonta). */
+        char real[GAL_PATH_MAX + 32];
+        if (!gal__local_acquire(e, &x->item, real, sizeof(real))) {
+            er = GAL_E_NOTFOUND;
+        } else {
+            er = x->dest == GAL_SRC_ULTRA ? do_upload_ultra(e, x, real) : do_upload_cloud(e, x, real);
+            gal__local_release(e, &x->item);
+        }
         ok_text = x->dest == GAL_SRC_ULTRA ? "Enviada a Flex OS Ultra"
                   : x->dest == GAL_SRC_PHONE ? "Subida al Flex Cloud del teléfono"
                                              : "Subida a Flex Cloud";
@@ -1291,6 +1325,7 @@ void gal__net_xfer(gal_engine_t *e, gal_xfer_t *x)
             return;
         }
         break;
+    }
     case GAL_X_TRASH:
         er = do_trash_remote(e, x);
         ok_text = x->item.src == GAL_SRC_ULTRA   ? "En la papelera de Flex OS Ultra"

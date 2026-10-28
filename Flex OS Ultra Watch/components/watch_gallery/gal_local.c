@@ -30,6 +30,23 @@ bool gal__real(const char *vpath, char *out, size_t n)
     return ffs_real_path(vpath, out, n);
 }
 
+bool gal__local_acquire(gal_engine_t *e, const gal_item_t *it, char *real, size_t n)
+{
+    const gal_local_io_t *io = e->env.local;
+    if (io && io->acquire) {
+        return io->acquire(e->env.ctx, it, real, n);
+    }
+    return it->vol == 0 && gal__real(it->path, real, n);
+}
+
+void gal__local_release(gal_engine_t *e, const gal_item_t *it)
+{
+    const gal_local_io_t *io = e->env.local;
+    if (io && io->release) {
+        io->release(e->env.ctx, it);
+    }
+}
+
 void gal__mkdirs(const char *vpath)
 {
     char p[GAL_PATH_MAX];
@@ -206,7 +223,14 @@ void gal__local_scan(gal_engine_t *e)
         return;
     }
     int n = 0;
-    if (ffs_ready()) {
+    const gal_local_io_t *io = e->env.local;
+    uint32_t rev = 0;
+    if (io && io->list) {
+        /* la biblioteca de la plataforma (memoria del reloj y microSD) */
+        rev = io->rev ? io->rev(e->env.ctx) : 0;
+        n = io->list(e->env.ctx, tmp, GAL_LIST_MAX);
+        n = n < 0 ? 0 : n > GAL_LIST_MAX ? GAL_LIST_MAX : n;
+    } else if (ffs_ready()) {
         n = scan_dir(GAL_DIR_PHOTO, tmp, n, GAL_LIST_MAX);
         n = scan_dir(GAL_DIR_PAINT, tmp, n, GAL_LIST_MAX);
     }
@@ -224,6 +248,7 @@ void gal__local_scan(gal_engine_t *e)
     gal_origin_apply(tmp, n, e->origins, e->norigins);
     memcpy(e->local, tmp, sizeof(gal_item_t) * (size_t)n);
     e->nl = n;
+    e->local_rev = rev;
     gal__mark_onwatch(e);
     e->local_gen++;
     e->remote_gen++; /* las marcas "ya en el reloj" de la remota cambian */
@@ -248,6 +273,7 @@ typedef struct {
     FILE *f;
     gal_engine_t *e;
     _Atomic uint32_t *done; /* progreso del visor (atómico: lo lee la interfaz) */
+    gal_item_t it;          /* visor: para soltar el arrendamiento al terminar */
 } file_src_t;
 
 static int fs_read(void *ud, uint8_t *buf, size_t n)
@@ -275,10 +301,17 @@ static uint16_t *thumb_dst(void *ud, int sw, int sh, int *dw, int *dh)
 
 bool gal__local_thumb(gal_engine_t *e, gal_thumb_t *t, uint16_t *px)
 {
+    const gal_local_io_t *io = e->env.local;
+    if (io && io->thumb && (t->item.flags & GAL_I_THUMB)) {
+        return io->thumb(e->env.ctx, &t->item, px); /* la de la biblioteca: ya hecha */
+    }
+    if (t->item.vol != 0 || t->item.fmt != GAL_F_JPEG) {
+        return false; /* la microSD no llena el LittleFS de miniaturas: espera a la de la biblioteca */
+    }
     const uint32_t key = fnv(t->key);
     char tv[GAL_PATH_MAX], tr[GAL_PATH_MAX + 32], src[GAL_PATH_MAX + 32];
     snprintf(tv, sizeof(tv), GAL_DIR_THUMB "/%08lx.th", (unsigned long)key);
-    if (!gal__real(tv, tr, sizeof(tr)) || !gal__real(t->item.path, src, sizeof(src))) {
+    if (!gal__real(tv, tr, sizeof(tr))) {
         return false;
     }
     /* ya hecha: cabecera {magic, lado, clave} y los píxeles */
@@ -293,14 +326,19 @@ bool gal__local_thumb(gal_engine_t *e, gal_thumb_t *t, uint16_t *px)
         }
         remove(tr); /* de otra versión o dañada */
     }
+    if (!gal__local_acquire(e, &t->item, src, sizeof(src))) {
+        return false;
+    }
     f = fopen(src, "rb");
     if (!f) {
+        gal__local_release(e, &t->item);
         return false;
     }
     file_src_t fs = {.f = f, .e = e};
     gal_jpeg_src_t js = {.read = fs_read, .ud = &fs, .cancel = fs_abort, .alloc = e->env.alloc, .free = e->env.free};
     const int jr = gal_jpeg_decode(&js, GAL_FIT_COVER, thumb_dst, px, 0, NULL);
     fclose(f);
+    gal__local_release(e, &t->item);
     if (jr != GAL_JPG_OK) {
         return false;
     }
@@ -325,18 +363,21 @@ int gal__local_view_stream(gal_engine_t *e, const gal_item_t *it, gal_jpeg_src_t
 {
     char real[GAL_PATH_MAX + 32];
     *ctx = NULL;
-    if (!gal__real(it->path, real, sizeof(real))) {
-        return GAL_E_ARG;
+    if (!gal__local_acquire(e, it, real, sizeof(real))) {
+        return GAL_E_NOTFOUND; /* p. ej. la microSD ya no está */
     }
     file_src_t *fs = gal__alloc(e, sizeof(*fs));
     if (!fs) {
+        gal__local_release(e, it);
         return GAL_E_NOMEM;
     }
     fs->f = fopen(real, "rb");
     if (!fs->f) {
         gal__free(e, fs);
+        gal__local_release(e, it);
         return GAL_E_NOTFOUND;
     }
+    fs->it = *it;
     fs->e = e;
     fs->done = &e->view_done;
     gal__lock(e);
@@ -356,6 +397,7 @@ void gal__local_view_end(gal_engine_t *e, void *ctx)
     file_src_t *fs = ctx;
     if (fs) {
         fclose(fs->f);
+        gal__local_release(e, &fs->it);
         gal__free(e, fs);
     }
 }
@@ -364,10 +406,22 @@ void gal__local_view_end(gal_engine_t *e, void *ctx)
 
 void gal__local_trash(gal_engine_t *e, gal_xfer_t *x)
 {
-    const bool ok = ffs_trash(x->item.path);
+    const gal_local_io_t *io = e->env.local;
+    char msg[96];
+    bool ok;
+    if (io && io->trash) {
+        msg[0] = 0;
+        ok = io->trash(e->env.ctx, &x->item, msg, sizeof(msg));
+        if (!msg[0]) {
+            gal_copyz(msg, sizeof(msg), ok ? "Borrado" : gal_err_text(GAL_E_FS));
+        }
+    } else {
+        ok = ffs_trash(x->item.path);
+        gal_copyz(msg, sizeof(msg), ok ? "En la papelera del reloj (Archivos › Papelera)" : gal_err_text(GAL_E_FS));
+    }
     gal__lock(e);
     x->state = ok ? GAL_XS_DONE : GAL_XS_FAIL;
-    gal_copyz(x->msg, sizeof(x->msg), ok ? "En la papelera del reloj (Archivos › Papelera)" : gal_err_text(GAL_E_FS));
+    gal_copyz(x->msg, sizeof(x->msg), msg);
     e->scan_req = true;
     e->xfer_gen++;
     gal__unlock(e);

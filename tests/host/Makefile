@@ -79,12 +79,12 @@ all: test $(if $(LVGL_DIR),gallery,gallery-skip) $(if $(LVGL_DIR),flexmedia,flex
 # LVGL (en el reloj, el de la ROM del S3). Sin LVGL_DIR se dice, no se da por pasada.
 #   make -C tests/host gallery LVGL_DIR=/ruta/a/lvgl-9.5.0
 GAL_DIR := $(FW)/components/watch_gallery
-GAL_CORE := $(filter-out $(GAL_DIR)/watch_gallery.c,$(wildcard $(GAL_DIR)/*.c)) # sin la capa de ESP-IDF
+GAL_CORE := $(filter-out $(GAL_DIR)/watch_gallery.c $(GAL_DIR)/gal_wm.c,$(wildcard $(GAL_DIR)/*.c)) # sin la capa de ESP-IDF
 GAL_SRC := test_gallery.c gal_fake.c gal_fake_eco.c $(GAL_CORE) \
            $(FW)/components/watch_files/files_logic.c $(FW)/components/watch_files/flexfs.c \
            $(FW)/components/watch_ota/ota_sig.c
 GAL_INC := -I. -I$(GAL_DIR)/include -I$(GAL_DIR) -I$(FW)/components/watch_files/include \
-           -I$(FW)/components/watch_ota/include
+           -I$(FW)/components/watch_ota/include -I$(FW)/components/flexmedia/include
 TJPGD_FLAGS = -DLV_CONF_SKIP -DLV_USE_TJPGD=1 -I$(LVGL_DIR) -I$(LVGL_DIR)/src
 include flexmedia.mk
 $(BUILD)/tjpgd.o: $(LVGL_DIR)/src/libs/tjpgd/tjpgd.c

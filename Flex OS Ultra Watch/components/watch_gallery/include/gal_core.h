@@ -32,7 +32,7 @@ extern "C" {
 
 #define GAL_ID_MAX     40   /* "fil_" + 24 (Flex Cloud) o un número (P4) */
 #define GAL_NAME_MAX   64   /* FML_NAME_MAX */
-#define GAL_PATH_MAX   96   /* FL_PATH_MAX */
+#define GAL_PATH_MAX   112  /* FML_PATH_MAX (biblioteca de medios); en el LittleFS, FL_PATH_MAX (96) */
 #define GAL_SHA_HEX    65
 #define GAL_LIST_MAX   200  /* FLEX_CLOUD_LIST_MAX del P4 */
 #define GAL_PAGE       60   /* elementos por página de Flex Cloud */
@@ -84,6 +84,7 @@ typedef enum {
 #define GAL_I_DAMAGED 0x08 /* el P4 dice que está dañado */
 #define GAL_I_ONWATCH 0x10 /* (remoto) ya hay copia en el reloj */
 #define GAL_I_REMOTE  0x20 /* (local) es la copia de uno remoto (origen.txt) */
+/* (local) GAL_I_THUMB: la biblioteca del reloj tiene su miniatura (gal_local_io_t) */
 
 typedef struct {
     char id[GAL_ID_MAX];      /**< P4 "17" · Flex Cloud "fil_..." · local "" */
@@ -96,6 +97,9 @@ typedef struct {
     uint16_t w, h;
     uint32_t dur_ms;
     uint8_t src, kind, fmt, flags;
+    uint8_t vol;              /**< local: 0 = memoria del reloj, 1 = microSD */
+    uint32_t mid;             /**< local: id en la biblioteca de medios (0 = sin biblioteca) */
+    uint8_t lfmt;             /**< local: formato real según la biblioteca (FML_F_*; 0 = no se sabe) */
     int8_t origin_src;        /**< local con GAL_I_REMOTE: de qué fuente vino */
     char origin_id[GAL_ID_MAX];
 } gal_item_t;

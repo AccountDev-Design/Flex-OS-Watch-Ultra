@@ -30,6 +30,7 @@ typedef struct {
     bool cancel;
     char msg[96];
     char up_id[GAL_ID_MAX]; /* subida a Flex Cloud en curso (para cancelarla en el servidor) */
+    char fail_why[96];      /* motivo concreto de un fallo (p. ej. el destino elegido no está) */
 } gal_xfer_t;
 
 struct gal_engine {
@@ -63,6 +64,7 @@ struct gal_engine {
     int nl;
     uint32_t local_gen;
     bool scan_req, scanning;
+    uint32_t local_rev;     /* la de gal_local_io_t.rev en el último recorrido */
     uint32_t scan_ms;       /* último recorrido (gal_refresh no lo repite enseguida) */
     gal_item_t remote[GAL_LIST_MAX];
     int nr;
@@ -139,6 +141,10 @@ void gal__local_view_end(gal_engine_t *e, void *ctx);
 void gal__local_trash(gal_engine_t *e, gal_xfer_t *x);
 void gal__origin_load(gal_engine_t *e);
 bool gal__origin_add(gal_engine_t *e, const gal_origin_t *o);
+/** Ruta real para leer un elemento local (con la microSD, con arrendamiento:
+ * cada true pide su gal__local_release). */
+bool gal__local_acquire(gal_engine_t *e, const gal_item_t *it, char *real, size_t n);
+void gal__local_release(gal_engine_t *e, const gal_item_t *it);
 /** Ruta real de una virtual ("/Imagenes/x.jpg"). */
 bool gal__real(const char *vpath, char *out, size_t n);
 /** Crea la carpeta (y sus padres) si falta. */

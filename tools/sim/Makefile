@@ -75,7 +75,7 @@ APP_SRC := $(wildcard sim_*.c) \
            $(FW)/components/watch_ota/ota_core.c \
            $(FW)/components/watch_ota/ota_sig.c \
            ../../tests/host/ota_fake.c \
-           $(filter-out $(FW)/components/watch_gallery/watch_gallery.c,$(wildcard $(FW)/components/watch_gallery/*.c)) \
+           $(filter-out $(FW)/components/watch_gallery/watch_gallery.c $(FW)/components/watch_gallery/gal_wm.c,$(wildcard $(FW)/components/watch_gallery/*.c)) \
            ../../tests/host/gal_fake.c \
            ../../tests/host/gal_fake_eco.c \
            $(FW)/components/watch_diag/flash_probe_logic.c \
