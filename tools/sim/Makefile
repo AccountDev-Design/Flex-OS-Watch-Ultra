@@ -83,10 +83,16 @@ APP_SRC := $(wildcard sim_*.c) \
            $(FW)/components/watch_media/wm_fsclass.c \
            $(FW)/components/watch_media/wm_path.c \
            $(FW)/components/watch_media/wm_text.c \
+           $(FW)/components/watch_media/wm_web_logic.c \
            $(FW)/components/watch_audio/wa_logic.c \
            $(filter-out $(FW)/components/watch_activity/watch_activity.c,$(wildcard $(FW)/components/watch_activity/*.c))
 
 LVGL_OBJ := $(patsubst $(LVGL_DIR)/%.c,$(BUILD)/lvgl/%.o,$(LVGL_SRC))
+
+# El codificador QR del Flex Web Server (C++ portable, sin biblioteca de C++):
+# el mismo que pinta el QR de "Recibir desde el móvil" en el reloj.
+CXX ?= c++
+QR_OBJ := $(BUILD)/flexmedia/FlexOS_QR.o
 
 # Iconos originales de las apps: el mismo .incbin alineado que genera
 # components/watch_theme/CMakeLists.txt para el firmware.
@@ -151,9 +157,14 @@ $(BR_ASM): $(BR_JPGS) Makefile
 	      $$n $$n "$(abspath $$f)" $$n $$n; \
 	  done; echo '.section .note.GNU-stack,"",@progbits'; } > $@
 
-$(BUILD)/sim: $(APP_SRC) $(APP_HDR) $(LVGL_OBJ) $(ICON_ASM) $(FACE_ASM) $(BR_ASM) $(MBT_LIB)
+$(QR_OBJ): $(FW)/components/flexmedia/FlexOS_QR.cpp $(FW)/components/flexmedia/include/FlexOS_QR.h
+	@mkdir -p $(dir $@)
+	@$(CXX) -std=gnu++17 -O1 -g -Wall -Werror $(SANFLAGS) -fno-exceptions -fno-rtti \
+	  -I$(FW)/components/flexmedia/include -c $< -o $@
+
+$(BUILD)/sim: $(APP_SRC) $(APP_HDR) $(LVGL_OBJ) $(ICON_ASM) $(FACE_ASM) $(BR_ASM) $(MBT_LIB) $(QR_OBJ)
 	@echo "LD $@"
-	@$(CC) $(CFLAGS) -Werror -pthread $(APP_SRC) $(ICON_ASM) $(FACE_ASM) $(BR_ASM) $(LVGL_OBJ) $(MBT_LIB) -lm -o $@
+	@$(CC) $(CFLAGS) -Werror -pthread $(APP_SRC) $(ICON_ASM) $(FACE_ASM) $(BR_ASM) $(LVGL_OBJ) $(QR_OBJ) $(MBT_LIB) -lm -o $@
 
 clean:
 	rm -rf build build-san out

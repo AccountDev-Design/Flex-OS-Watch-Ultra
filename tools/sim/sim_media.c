@@ -31,6 +31,8 @@
 #include "watch_audio.h"
 #include "watch_media.h"
 #include "wm_store.h"
+#include "wm_web.h"
+#include "misc/lv_area_private.h"
 
 /* ======================= watch_media de mentira ======================= */
 
@@ -222,6 +224,58 @@ bool wm_heavy_begin(uint32_t wait_ms) { (void)wait_ms; return true; }
 void wm_heavy_end(void) {}
 void *wm_alloc(size_t n) { return n ? malloc(n) : NULL; }
 void wm_free(void *p) { free(p); }
+
+/* ---- Flex Web Server de mentira (wm_web) ---- */
+static bool s_web_wanted, s_web_nowifi;
+static uint32_t s_web_born, s_web_gen;
+static int s_web_newcodes, s_web_drops, s_web_sessions;
+static char s_web_code[8] = "482913";
+static wm_web_status_t s_web_x; /* lo que se recibe: x_* */
+static wm_web_status_t s_web_last;
+
+void wm_web_keep(void)
+{
+    if (!s_web_wanted) {
+        s_web_born = lv_tick_get(); /* cada vez que se abre, código nuevo */
+    }
+    s_web_wanted = true;
+}
+void wm_web_release(void) { s_web_wanted = false; }
+void wm_web_new_code(void)
+{
+    s_web_newcodes++;
+    snprintf(s_web_code, sizeof(s_web_code), "%06d", 731205 + s_web_newcodes);
+    s_web_born = lv_tick_get();
+}
+void wm_web_drop_all(void)
+{
+    s_web_drops++;
+    s_web_sessions = 0;
+    wm_web_new_code();
+}
+void wm_web_status(wm_web_status_t *out)
+{
+    wm_web_status_t n = s_web_x;
+    n.gen = 0;
+    n.state = !s_web_wanted ? WWEB_OFF : s_web_nowifi ? WWEB_NO_WIFI : WWEB_READY;
+    if (n.state == WWEB_READY) {
+        snprintf(n.ip, sizeof(n.ip), "192.168.1.50");
+        n.port = WWEB_PORT;
+        snprintf(n.code, sizeof(n.code), "%s", s_web_code);
+        n.code_left_s = wweb_code_left_s(lv_tick_get(), s_web_born, WWEB_CODE_TTL_MS);
+        n.sessions = s_web_sessions;
+    }
+    wm_vol_t v = WM_VOL_WATCH;
+    n.dest_ok = wm_dest_get(&v) == WM_DEST_OK;
+    n.dest = v;
+    s_web_last.gen = 0;
+    if (memcmp(&n, &s_web_last, sizeof(n)) != 0) {
+        s_web_gen++;
+        s_web_last = n;
+    }
+    n.gen = s_web_gen;
+    *out = n;
+}
 
 /* ======================= audio de mentira ======================= */
 
@@ -487,6 +541,55 @@ static lv_obj_t *button_at(int32_t x, int32_t y)
     return best;
 }
 
+/* El QR se ve: una imagen cuadrada solo de negro y blanco puros (módulos
+ * enteros, sin escalado ni suavizado), con los dos colores presentes. */
+static bool qr_find(lv_obj_t *o, lv_area_t *out)
+{
+    if (lv_obj_has_flag(o, LV_OBJ_FLAG_HIDDEN)) {
+        return false;
+    }
+    if (lv_obj_check_type(o, &lv_image_class) && lv_obj_get_width(o) >= 120 &&
+        lv_obj_get_width(o) == lv_obj_get_height(o)) {
+        /* solo la parte que se ve: la recortan sus contenedores y la pantalla */
+        lv_obj_get_coords(o, out);
+        for (lv_obj_t *p = lv_obj_get_parent(o); p; p = lv_obj_get_parent(p)) {
+            lv_area_t pc;
+            lv_obj_get_coords(p, &pc);
+            if (!lv_area_intersect(out, out, &pc)) {
+                return false;
+            }
+        }
+        const lv_area_t scr = {0, 0, SIM_W - 1, SIM_H - 1};
+        return lv_area_intersect(out, out, &scr) && lv_area_get_height(out) >= 40;
+    }
+    for (uint32_t i = 0; i < lv_obj_get_child_count(o); i++) {
+        if (qr_find(lv_obj_get_child(o, (int32_t)i), out)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool qr_on_screen(void)
+{
+    lv_area_t a;
+    if (!qr_find(ui_nav_top(), &a)) {
+        return false;
+    }
+    lv_refr_now(NULL);
+    int black = 0, white = 0, other = 0;
+    for (int32_t y = a.y1; y <= a.y2; y++) {
+        for (int32_t x = a.x1; x <= a.x2; x++) {
+            const uint16_t c = sim_fb[y * SIM_W + x];
+            black += c == 0x0000;
+            white += c == 0xFFFF;
+            other += c != 0x0000 && c != 0xFFFF;
+        }
+    }
+    const int n = black + white + other;
+    return other == 0 && black > n / 5 && white > n / 5;
+}
+
 /* Un redibujado completo da la misma imagen que la que dejaron los dibujos por
  * partes: el fondo desenfocado no arrastra nada. */
 static void same_as_full(const char *where)
@@ -613,6 +716,53 @@ void sim_suite_media(const char *out)
     ui_nav_back();
     sim_run(300);
     page(out, "m_musica_sonando");
+
+    /* ---- Recibir desde el móvil: QR, código, caducidad, Wi-Fi y destino ---- */
+    click(tap_of("Añadir desde el móvil"));
+    sim_run(600);
+    EXPECT(s_web_wanted, "desde el móvil: no arranca el servidor");
+    EXPECT(has("482 913") && has("192.168.1.50:8080"), "desde el móvil: falta el código o la dirección");
+    EXPECT(has("Caduca en 10:00") || has("Caduca en 9:59"), "desde el móvil: falta la caducidad");
+    EXPECT(qr_on_screen(), "desde el móvil: no se ve el QR (o no es nítido)");
+    page(out, "m_desde_movil");
+    same_as_full("desde el móvil");
+    s_web_sessions = 1;
+    s_web_x.x_state = WWEB_X_RUN;
+    s_web_x.x_done = 450000;
+    s_web_x.x_total = 1000000;
+    snprintf(s_web_x.x_name, sizeof(s_web_x.x_name), "Playa.jpg");
+    sim_run(400);
+    EXPECT(has("Recibiendo · 45 %") && has("Playa.jpg"), "desde el móvil: no enseña lo que llega");
+    EXPECT(sim_find_label_prefix(ui_nav_top(), "1 móvil conectado") != NULL, "desde el móvil: no cuenta los móviles");
+    page(out, "m_desde_movil_recibiendo");
+    s_web_x.x_state = WWEB_X_DONE;
+    sim_run(400);
+    EXPECT(has("Guardado en Reloj"), "desde el móvil: no dice dónde se guardó");
+    s_web_born = lv_tick_get() - WWEB_CODE_TTL_MS; /* caduca */
+    sim_run(400);
+    EXPECT(has("El código ha caducado.") && !qr_on_screen(), "desde el móvil: enseña un QR caducado");
+    page(out, "m_desde_movil_caducado");
+    click(tap_of("Código nuevo"));
+    sim_run(400);
+    EXPECT(s_web_newcodes == 1 && has("731 206") && qr_on_screen(), "desde el móvil: el código nuevo no llega");
+    click(tap_of("Desconectar móviles"));
+    sim_run(400);
+    EXPECT(s_web_drops == 1 && s_web_sessions == 0, "desde el móvil: no desconecta");
+    s_web_nowifi = true;
+    sim_run(400);
+    EXPECT(sim_find_label_prefix(ui_nav_top(), "Conecta el reloj a una Wi-Fi") != NULL && !qr_on_screen(),
+           "desde el móvil: sin Wi-Fi no lo dice");
+    page(out, "m_desde_movil_sin_wifi");
+    s_web_nowifi = false;
+    s_dest = WM_VOL_SD; /* microSD elegida y sin tarjeta */
+    sim_run(400);
+    EXPECT(sim_find_label_prefix(ui_nav_top(), "Has elegido guardar en la microSD") != NULL,
+           "desde el móvil: no avisa del destino que no está");
+    s_dest = WM_VOL_WATCH;
+    s_web_x.x_state = WWEB_X_NONE;
+    ui_nav_back();
+    sim_run(300);
+    EXPECT(!s_web_wanted, "desde el móvil: al salir sigue pidiendo el servidor");
     ui_nav_back();
     sim_run(400);
 

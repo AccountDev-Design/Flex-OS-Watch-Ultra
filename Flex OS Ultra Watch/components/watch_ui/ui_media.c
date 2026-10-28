@@ -69,9 +69,29 @@ void ui_media_free_text(int vol, char *out, size_t n)
     wm_vol_info_t vi;
     if (!wm_vol_info(v, &vi)) {
         if (v == WM_VOL_SD) {
+            /* Corto: va en el valor de una fila. El motivo entero lo dicen la
+             * nota de "Guardar en" y la página de la microSD. */
             wm_sd_info_t i;
             wm_sd_info(&i);
-            wm_sd_describe(&i, out, n);
+            const char *t = "No disponible";
+            switch (i.state) {
+            case WSD_ABSENT:
+                t = i.ejected ? "Expulsada" : "Sin tarjeta";
+                break;
+            case WSD_DETECTING:
+            case WSD_MOUNTING:
+                t = "Preparando…";
+                break;
+            case WSD_BUSY:
+                t = "Ocupada";
+                break;
+            case WSD_REMOVING:
+                t = "Expulsando…";
+                break;
+            default:
+                break;
+            }
+            snprintf(out, n, "%s", t);
         } else {
             snprintf(out, n, "No disponible");
         }

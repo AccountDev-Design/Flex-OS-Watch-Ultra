@@ -17,6 +17,7 @@
 #include "wm_fsclass.h"
 #include "wm_path.h"
 #include "wm_sd_logic.h"
+#include "wm_web.h"
 
 /* ---------------- recorridos a mano ---------------- */
 
@@ -631,6 +632,58 @@ static void test_paths(void)
     CHECK(!wm_path_join("/sdcard", "/x", o, 0));
 }
 
+/* ---------------- wm_web: lo que no toca sockets ---------------- */
+
+static void test_web_logic(void)
+{
+    char u[64];
+    CHECK(wweb_url(u, sizeof(u), "192.168.1.50", 8080, "123456"));
+    CHECK(!strcmp(u, "http://192.168.1.50:8080/?k=123456"));
+    CHECK(!wweb_url(u, sizeof(u), "", 8080, "123456"));
+    CHECK_EQ(u[0], 0);
+    CHECK(!wweb_url(u, sizeof(u), "192.168.1.50", 8080, "12345")); /* sin código válido no hay QR */
+    CHECK(!wweb_url(u, sizeof(u), "192.168.1.50", 8080, NULL));
+    CHECK(!wweb_url(u, 20, "192.168.100.200", 8080, "123456")); /* no cabe: vacío, nunca cortado */
+    CHECK_EQ(u[0], 0);
+
+    char j[160];
+    CHECK(wweb_dest_json(j, sizeof(j), WM_VOL_SD, true, 5000000000ull));
+    CHECK(!strcmp(j, "\"vol\":\"sd\",\"name\":\"microSD\",\"ready\":1,\"free\":5000000000"));
+    CHECK(wweb_dest_json(j, sizeof(j), WM_VOL_WATCH, false, 123));
+    CHECK(!strcmp(j, "\"vol\":\"watch\",\"name\":\"Reloj\",\"ready\":0,\"free\":0"));
+    CHECK(!wweb_dest_json(j, 10, WM_VOL_SD, true, 1));
+    CHECK(strstr(wweb_media_json(), "\"video\"") != NULL && strstr(wweb_media_json(), "\"photo\"") != NULL);
+
+    /* caducidad: redondea hacia arriba y no se confunde con la vuelta del contador */
+    CHECK_EQ(wweb_code_left_s(1000, 1000, 600000), 600u);
+    CHECK_EQ(wweb_code_left_s(1001, 1000, 600000), 600u);
+    CHECK_EQ(wweb_code_left_s(600999, 1000, 600000), 1u);
+    CHECK_EQ(wweb_code_left_s(601000, 1000, 600000), 0u);
+    CHECK_EQ(wweb_code_left_s(5000, 0xFFFFF000u, 600000), 591u); /* 9096 ms de edad */
+    CHECK_EQ(wweb_code_left_s(5, 0, 0), UINT32_MAX);
+
+    /* vida del servidor */
+    wweb_life_t l = {.wanted = true, .since_keep = 0, .idle_ms = 0, .busy = false};
+    CHECK(!wweb_should_stop(&l));
+    l.since_keep = WWEB_KEEP_MS;
+    CHECK(wweb_should_stop(&l)); /* la pantalla ya no lo pide */
+    l.busy = true;
+    CHECK(!wweb_should_stop(&l)); /* lo que está en marcha termina */
+    l = (wweb_life_t){.wanted = false, .busy = false};
+    CHECK(wweb_should_stop(&l));
+    l = (wweb_life_t){.wanted = true, .since_keep = 100, .idle_ms = WWEB_IDLE_STOP_MS};
+    CHECK(wweb_should_stop(&l)); /* 15 min sin peticiones */
+    l.busy = true;
+    CHECK(!wweb_should_stop(&l));
+
+    for (int st = WWEB_OFF; st <= WWEB_ERROR; st++) {
+        CHECK(strcmp(wweb_state_text((wweb_state_t)st), "?") != 0);
+    }
+    const uint8_t mac[6] = {0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0x06};
+    wweb_dev_id(mac, u, sizeof(u));
+    CHECK(!strcmp(u, "S3-A1B2C3D4E506"));
+}
+
 void test_media_all(void)
 {
     test_paths();
@@ -644,4 +697,5 @@ void test_media_all(void)
     test_classify_sd();
     test_capacity();
     test_texts();
+    test_web_logic();
 }

@@ -537,6 +537,8 @@ lv_obj_t *ui_music_create(lv_obj_t *parent)
     lv_obj_add_event_cb(r, open_cb, LV_EVENT_CLICKED, (void *)ui_recordings_create);
     r = watch_theme_list_row(list, FLEX_ICON_PHONE, FLEX_C_CAT_BLUE, "En el teléfono", NULL, true);
     lv_obj_add_event_cb(r, open_cb, LV_EVENT_CLICKED, (void *)ui_phone_music_create);
+    r = watch_theme_list_row(list, FLEX_ICON_QR, FLEX_C_CAT_GREEN, "Añadir desde el móvil", NULL, true);
+    lv_obj_add_event_cb(r, open_cb, LV_EVENT_CLICKED, (void *)ui_xfer_create);
     r = watch_theme_list_row(list, FLEX_ICON_STORAGE, FLEX_C_CAT_SUN, "Guardar en", NULL, true);
     lv_obj_add_event_cb(r, open_cb, LV_EVENT_CLICKED, (void *)ui_dest_create);
 

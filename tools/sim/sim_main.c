@@ -540,6 +540,24 @@ static void *probe_thread(void *arg)
     return &rc;
 }
 
+/* ¿name está en la lista "a,b,c"? */
+static bool in_list(const char *list, const char *name)
+{
+    const size_t n = strlen(name);
+    for (const char *p = list; *p;) {
+        const char *e = strchr(p, ',');
+        const size_t k = e ? (size_t)(e - p) : strlen(p);
+        if (k == n && strncmp(p, name, n) == 0) {
+            return true;
+        }
+        if (!e) {
+            break;
+        }
+        p = e + 1;
+    }
+    return false;
+}
+
 int main(int argc, char **argv)
 {
     if (!getenv("SIM_STACK_PROBE")) {
@@ -572,8 +590,9 @@ static int real_main(int argc, char **argv)
     lv_indev_set_type(touch, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(touch, touch_read_cb);
 
-    /* SIM_ONLY=nombre: solo esa batería (tras el arranque, que crea la
-     * interfaz). Para repetir deprisa una prueba concreta. */
+    /* SIM_ONLY=nombre[,nombre...]: solo esas baterías, en su orden de
+     * siempre (tras el arranque, que crea la interfaz). Para repetir deprisa
+     * una prueba concreta, o dos que se afectan entre sí. */
     const char *only = getenv("SIM_ONLY");
     static const struct {
         const char *name;
@@ -595,7 +614,7 @@ static int real_main(int argc, char **argv)
         {"mono", sim_suite_monkey},      {"visual", sim_suite_visual}, {"rastros", sim_suite_ghost}, {"vidrio", sim_suite_glass}, {"banco", sim_suite_bench},
     };
     for (size_t i = 0; i < sizeof(suites) / sizeof(suites[0]); i++) {
-        if (!only || strcmp(only, suites[i].name) == 0 || strcmp(suites[i].name, "arranque") == 0) {
+        if (!only || in_list(only, suites[i].name) || strcmp(suites[i].name, "arranque") == 0) {
             const size_t before = stack_used();
             suites[i].run(out);
             if (s_stk && stack_used() > before) {
