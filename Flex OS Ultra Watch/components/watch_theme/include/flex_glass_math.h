@@ -128,20 +128,26 @@ flex_glass_profile_t flex_glass_effective(uint8_t setting, bool power_saving, co
  * como cualquier imagen. Así no hay costuras entre franjas, ni parches al
  * redibujar una zona, ni rastros de lo que había antes (§4.1). */
 
-/** Reduce src (sw x sh, stride en píxeles) a dst (dw x dh) llenándolo
- * ("cover": recorta centrado lo que sobra) con la media de cada celda. */
-void flex_blur_fit565(const uint16_t *src, int sw, int sh, int sstride, uint16_t *dst, int dw, int dh);
+/* Los pasos intermedios van en RGB888 (3 B por píxel) y solo el último pasa a
+ * RGB565, con tramado: así un degradado oscuro no se rompe en bloques. */
 
-/** Bytes de trabajo que pide flex_blur_box565 para una imagen w x h. */
+/** Reduce src (RGB565, sw x sh, stride en píxeles) a dst (RGB888, dw x dh)
+ * llenándolo ("cover": recorta centrado lo que sobra) con la media de cada celda. */
+void flex_blur_fit888(const uint16_t *src, int sw, int sh, int sstride, uint8_t *dst, int dw, int dh);
+
+/** Bytes de trabajo que pide flex_blur_box888 para una imagen w x h. */
 int flex_blur_work_bytes(int w, int h, int radius);
 /** Desenfoque de caja separable (passes pasadas ~ gaussiano), en su sitio, con
  * los bordes repetidos. work: flex_blur_work_bytes() bytes. false si los
  * argumentos no valen (no toca la imagen). */
-bool flex_blur_box565(uint16_t *px, int w, int h, int radius, int passes, uint8_t *work);
+bool flex_blur_box888(uint8_t *px, int w, int h, int radius, int passes, uint8_t *work);
 
 /** Oscurece (mul/255) y acerca al gris (desat/255): el fondo que deja leer
  * texto blanco encima, como el material de Apple sobre una portada. */
-void flex_blur_tone565(uint16_t *px, int n, uint8_t mul, uint8_t desat);
+void flex_blur_tone888(uint8_t *px, int n, uint8_t mul, uint8_t desat);
+
+/** RGB888 -> RGB565 con tramado ordenado (Bayer 4x4): conserva la media. */
+void flex_blur_pack565(const uint8_t *px, int w, int h, uint16_t *dst);
 
 #ifdef __cplusplus
 }

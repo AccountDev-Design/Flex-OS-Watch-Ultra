@@ -223,51 +223,62 @@ static uint16_t c565(int r, int g, int b)
     return (uint16_t)(r << 11 | g << 5 | b);
 }
 
+static void set888(uint8_t *p, int r, int g, int b)
+{
+    p[0] = (uint8_t)r;
+    p[1] = (uint8_t)g;
+    p[2] = (uint8_t)b;
+}
+
 static void test_source_blur(void)
 {
     enum { W = 40, H = 30 };
-    static uint16_t img[W * H];
+    static uint8_t img[W * H * 3];
     uint8_t work[3 * W];
     CHECK_EQ(flex_blur_work_bytes(W, H, 4), 3 * W);
     /* Un color liso no cambia. */
     for (int i = 0; i < W * H; i++) {
-        img[i] = c565(20, 40, 10);
+        set888(img + 3 * i, 160, 90, 40);
     }
-    CHECK(flex_blur_box565(img, W, H, 4, 3, work));
+    CHECK(flex_blur_box888(img, W, H, 4, 3, work));
     int same = 1;
     for (int i = 0; i < W * H; i++) {
-        same &= img[i] == c565(20, 40, 10);
+        same &= img[3 * i] == 160 && img[3 * i + 1] == 90 && img[3 * i + 2] == 40;
     }
     CHECK(same);
     /* Un impulso blanco sobre negro: se reparte simétrico y se conserva la energía. */
     memset(img, 0, sizeof(img));
-    img[15 * W + 20] = c565(31, 63, 31);
-    CHECK(flex_blur_box565(img, W, H, 2, 1, work));
-    const uint16_t l = img[15 * W + 18], r = img[15 * W + 22], u = img[13 * W + 20], d = img[17 * W + 20];
-    CHECK_EQ(l, r);
-    CHECK_EQ(u, d);
-    CHECK_EQ(img[15 * W + 23], 0); /* fuera del radio no llega nada */
+    set888(img + 3 * (15 * W + 20), 250, 250, 250);
+    CHECK(flex_blur_box888(img, W, H, 2, 1, work));
+    CHECK_EQ(img[3 * (15 * W + 18)], img[3 * (15 * W + 22)]);
+    CHECK_EQ(img[3 * (13 * W + 20)], img[3 * (17 * W + 20)]);
+    CHECK_EQ(img[3 * (15 * W + 23)], 0); /* fuera del radio no llega nada */
+    int sum = 0;
+    for (int i = 0; i < W * H; i++) {
+        sum += img[3 * i];
+    }
+    CHECK(sum >= 250 - 25 && sum <= 250 + 25); /* 25 celdas de 10: la energía se conserva */
     /* Un borde: la mitad izquierda roja y la derecha azul se funden en la frontera. */
     for (int y = 0; y < H; y++) {
         for (int x = 0; x < W; x++) {
-            img[y * W + x] = x < W / 2 ? c565(31, 0, 0) : c565(0, 0, 31);
+            set888(img + 3 * (y * W + x), x < W / 2 ? 255 : 0, 0, x < W / 2 ? 0 : 255);
         }
     }
-    CHECK(flex_blur_box565(img, W, H, 3, 3, work));
-    CHECK_EQ(img[0], c565(31, 0, 0));          /* lejos del borde no cambia */
-    CHECK_EQ(img[W - 1], c565(0, 0, 31));
-    const uint16_t mid = img[10 * W + W / 2];
-    CHECK(((mid >> 11) & 31) > 0 && (mid & 31) > 0); /* mezcla en la frontera */
+    CHECK(flex_blur_box888(img, W, H, 3, 3, work));
+    CHECK_EQ(img[0], 255); /* lejos del borde no cambia */
+    CHECK_EQ(img[3 * (W - 1) + 2], 255);
+    const uint8_t *mid = img + 3 * (10 * W + W / 2);
+    CHECK(mid[0] > 0 && mid[2] > 0); /* mezcla en la frontera */
     /* Argumentos que no valen: no toca nada. */
-    CHECK(!flex_blur_box565(NULL, W, H, 2, 1, work));
-    CHECK(!flex_blur_box565(img, 0, H, 2, 1, work));
-    CHECK(!flex_blur_box565(img, W, H, -1, 1, work));
-    CHECK(flex_blur_box565(img, W, H, 0, 3, work)); /* radio 0: igual */
+    CHECK(!flex_blur_box888(NULL, W, H, 2, 1, work));
+    CHECK(!flex_blur_box888(img, 0, H, 2, 1, work));
+    CHECK(!flex_blur_box888(img, W, H, -1, 1, work));
+    CHECK(flex_blur_box888(img, W, H, 0, 3, work)); /* radio 0: igual */
     /* Radio mayor que la imagen: los bordes repetidos, sin leer fuera (ASan). */
-    for (int i = 0; i < W * H; i++) {
-        img[i] = (uint16_t)(i * 7919u);
+    for (int i = 0; i < W * H * 3; i++) {
+        img[i] = (uint8_t)(i * 7919u);
     }
-    CHECK(flex_blur_box565(img, W, H, 60, 2, work));
+    CHECK(flex_blur_box888(img, W, H, 60, 2, work));
     /* "cover": 80x30 -> 20x20 usa el centro (30x30) y promedia celdas. */
     static uint16_t src[80 * 30];
     for (int y = 0; y < 30; y++) {
@@ -275,27 +286,55 @@ static void test_source_blur(void)
             src[y * 80 + x] = (x >= 25 && x < 55) ? c565(0, 63, 0) : c565(31, 0, 0);
         }
     }
-    uint16_t dst[20 * 20];
-    flex_blur_fit565(src, 80, 30, 80, dst, 20, 20);
+    uint8_t dst[20 * 20 * 3];
+    flex_blur_fit888(src, 80, 30, 80, dst, 20, 20);
     int green = 1;
     for (int i = 0; i < 400; i++) {
-        green &= dst[i] == c565(0, 63, 0);
+        green &= dst[3 * i] == 0 && dst[3 * i + 1] == 255 && dst[3 * i + 2] == 0;
     }
     CHECK(green); /* lo rojo de los lados quedó fuera */
     /* Ampliar (2x2 -> 6x6) y stride mayor que el ancho. */
     const uint16_t tiny[2 * 3] = {c565(31, 0, 0), c565(0, 63, 0), 0xFFFF, c565(0, 0, 31), c565(31, 63, 31), 0xFFFF};
-    uint16_t big[36];
-    flex_blur_fit565(tiny, 2, 2, 3, big, 6, 6);
-    CHECK_EQ(big[0], c565(31, 0, 0));
-    CHECK_EQ(big[35], c565(31, 63, 31));
+    uint8_t big[36 * 3];
+    flex_blur_fit888(tiny, 2, 2, 3, big, 6, 6);
+    CHECK(big[0] == 255 && big[1] == 0 && big[2] == 0);
+    CHECK(big[105] == 255 && big[106] == 255 && big[107] == 255);
     /* Tono: oscurecer y desaturar. */
-    uint16_t t[2] = {c565(31, 63, 31), c565(31, 0, 0)};
-    flex_blur_tone565(t, 2, 128, 0);
-    CHECK(((t[0] >> 5) & 63) >= 31 && ((t[0] >> 5) & 63) <= 32);
-    uint16_t gr = c565(31, 0, 0);
-    flex_blur_tone565(&gr, 1, 255, 255);
-    const int rr = (gr >> 11) & 31, gg = (gr >> 5) & 63, bb = gr & 31;
-    CHECK(abs(rr * 2 - gg) <= 2 && abs(bb * 2 - gg) <= 2); /* gris */
+    uint8_t t[6] = {255, 255, 255, 255, 0, 0};
+    flex_blur_tone888(t, 2, 128, 0);
+    CHECK_EQ(t[1], 128);
+    CHECK(t[3] == 128 && t[4] == 0);
+    uint8_t gr[3] = {255, 0, 0};
+    flex_blur_tone888(gr, 1, 255, 255);
+    CHECK(gr[0] == gr[1] && gr[1] == gr[2]); /* gris */
+    /* Empaquetar: los extremos exactos y, con tramado, la media de un tono
+     * intermedio se conserva (un degradado no se rompe en escalones). */
+    uint8_t ext[6] = {0, 0, 0, 255, 255, 255};
+    uint16_t pk[2];
+    flex_blur_pack565(ext, 2, 1, pk);
+    CHECK_EQ(pk[0], 0);
+    CHECK_EQ(pk[1], 0xFFFF);
+    static uint8_t flat[16 * 16 * 3];
+    static uint16_t flat565[16 * 16];
+    for (int v = 0; v < 256; v += 17) {
+        for (int i = 0; i < 16 * 16; i++) {
+            set888(flat + 3 * i, v, v, v);
+        }
+        flex_blur_pack565(flat, 16, 16, flat565);
+        int64_t sr = 0, sg = 0;
+        int lo = 99, hi = -1;
+        for (int i = 0; i < 16 * 16; i++) {
+            const int r5 = flat565[i] >> 11, g6 = (flat565[i] >> 5) & 63;
+            sr += r5;
+            sg += g6;
+            lo = r5 < lo ? r5 : lo;
+            hi = r5 > hi ? r5 : hi;
+        }
+        const double mr = (double)sr / 256 * 255 / 31, mg = (double)sg / 256 * 255 / 63;
+        CHECK(mr > v - 2.5 && mr < v + 2.5);
+        CHECK(mg > v - 2.5 && mg < v + 2.5);
+        CHECK(hi - lo <= 1); /* grano de 1 LSB como mucho */
+    }
 }
 
 void test_glass_all(void)

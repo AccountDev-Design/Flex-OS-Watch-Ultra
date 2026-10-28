@@ -5,6 +5,7 @@
 #include "flex_tokens.h"
 
 #include <stddef.h>
+#include <string.h>
 
 int flex_glass_luma565(uint16_t c)
 {
@@ -313,14 +314,21 @@ flex_glass_profile_t flex_glass_effective(uint8_t setting, bool power_saving, co
 
 /* ---------------- desenfoque desde la fuente ---------------- */
 
-static inline void unpack565(uint16_t c, int *r, int *g, int *b)
+/* Todo en 8 bits por canal y a RGB565 solo al final, con tramado: en 565 cada
+ * paso de la media y de la caja redondea, y en un degradado oscuro los
+ * escalones de 1 LSB se ven como bloques al ampliar x4. */
+
+static inline uint8_t ch5to8(int v)
 {
-    *r = (c >> 11) & 0x1F;
-    *g = (c >> 5) & 0x3F;
-    *b = c & 0x1F;
+    return (uint8_t)((v * 527 + 23) >> 6);
 }
 
-void flex_blur_fit565(const uint16_t *src, int sw, int sh, int sstride, uint16_t *dst, int dw, int dh)
+static inline uint8_t ch6to8(int v)
+{
+    return (uint8_t)((v * 259 + 33) >> 6);
+}
+
+void flex_blur_fit888(const uint16_t *src, int sw, int sh, int sstride, uint8_t *dst, int dw, int dh)
 {
     if (!src || !dst || sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0 || sstride < sw) {
         return;
@@ -353,15 +361,17 @@ void flex_blur_fit565(const uint16_t *src, int sw, int sh, int sstride, uint16_t
             for (int yy = y0; yy < y1; yy++) {
                 const uint16_t *row = src + (size_t)yy * sstride;
                 for (int xx = x0; xx < x1; xx++) {
-                    int r, g, b;
-                    unpack565(row[xx], &r, &g, &b);
-                    sr += (uint32_t)r;
-                    sg += (uint32_t)g;
-                    sb += (uint32_t)b;
+                    const uint16_t c = row[xx];
+                    sr += ch5to8((c >> 11) & 0x1F);
+                    sg += ch6to8((c >> 5) & 0x3F);
+                    sb += ch5to8(c & 0x1F);
                     n++;
                 }
             }
-            dst[(size_t)y * dw + x] = (uint16_t)(((sr + n / 2) / n) << 11 | ((sg + n / 2) / n) << 5 | ((sb + n / 2) / n));
+            uint8_t *o = dst + 3 * ((size_t)y * dw + x);
+            o[0] = (uint8_t)((sr + n / 2) / n);
+            o[1] = (uint8_t)((sg + n / 2) / n);
+            o[2] = (uint8_t)((sb + n / 2) / n);
         }
     }
 }
@@ -373,16 +383,12 @@ int flex_blur_work_bytes(int w, int h, int radius)
     return m > 0 ? m * 3 : 0;
 }
 
-/* Una pasada de caja sobre n muestras (separadas `step` en px), con los
- * extremos repetidos. line: 3*n bytes (los canales desempaquetados). */
-static void box_line(uint16_t *px, int n, int step, int r, uint8_t *line)
+/* Una pasada de caja sobre n muestras RGB888 (separadas `step` muestras),
+ * con los extremos repetidos. line: 3*n bytes (copia de la línea). */
+static void box_line(uint8_t *px, int n, int step, int r, uint8_t *line)
 {
     for (int i = 0; i < n; i++) {
-        int cr, cg, cb;
-        unpack565(px[(size_t)i * step], &cr, &cg, &cb);
-        line[3 * i] = (uint8_t)cr;
-        line[3 * i + 1] = (uint8_t)cg;
-        line[3 * i + 2] = (uint8_t)cb;
+        memcpy(line + 3 * i, px + 3 * (size_t)i * step, 3);
     }
     const int win = 2 * r + 1;
     int sr = 0, sg = 0, sb = 0;
@@ -393,8 +399,10 @@ static void box_line(uint16_t *px, int n, int step, int r, uint8_t *line)
         sb += line[3 * j + 2];
     }
     for (int i = 0; i < n; i++) {
-        const int vr = (sr + win / 2) / win, vg = (sg + win / 2) / win, vb = (sb + win / 2) / win;
-        px[(size_t)i * step] = (uint16_t)(vr << 11 | vg << 5 | vb);
+        uint8_t *o = px + 3 * (size_t)i * step;
+        o[0] = (uint8_t)((sr + win / 2) / win);
+        o[1] = (uint8_t)((sg + win / 2) / win);
+        o[2] = (uint8_t)((sb + win / 2) / win);
         const int out = i - r < 0 ? 0 : i - r;
         const int in = i + r + 1 >= n ? n - 1 : i + r + 1;
         sr += line[3 * in] - line[3 * out];
@@ -403,7 +411,7 @@ static void box_line(uint16_t *px, int n, int step, int r, uint8_t *line)
     }
 }
 
-bool flex_blur_box565(uint16_t *px, int w, int h, int radius, int passes, uint8_t *work)
+bool flex_blur_box888(uint8_t *px, int w, int h, int radius, int passes, uint8_t *work)
 {
     if (!px || !work || w <= 0 || h <= 0 || radius < 0 || passes < 0 || radius > 255) {
         return false;
@@ -413,27 +421,46 @@ bool flex_blur_box565(uint16_t *px, int w, int h, int radius, int passes, uint8_
     }
     for (int p = 0; p < passes; p++) {
         for (int y = 0; y < h; y++) {
-            box_line(px + (size_t)y * w, w, 1, radius, work);
+            box_line(px + 3 * (size_t)y * w, w, 1, radius, work);
         }
         for (int x = 0; x < w; x++) {
-            box_line(px + x, h, w, radius, work);
+            box_line(px + 3 * (size_t)x, h, w, radius, work);
         }
     }
     return true;
 }
 
-void flex_blur_tone565(uint16_t *px, int n, uint8_t mul, uint8_t desat)
+void flex_blur_tone888(uint8_t *px, int n, uint8_t mul, uint8_t desat)
 {
-    for (int i = 0; i < n; i++) {
-        int r, g, b;
-        unpack565(px[i], &r, &g, &b);
-        /* luma en el mismo dominio de 6 bits */
-        const int r6 = r * 2, b6 = b * 2;
-        const int y6 = (r6 * 77 + g * 150 + b6 * 29) >> 8;
-        int nr = r6 + ((y6 - r6) * desat) / 255, ng = g + ((y6 - g) * desat) / 255, nb = b6 + ((y6 - b6) * desat) / 255;
-        nr = nr * mul / 255;
-        ng = ng * mul / 255;
-        nb = nb * mul / 255;
-        px[i] = (uint16_t)((nr >> 1) << 11 | ng << 5 | (nb >> 1));
+    for (int i = 0; i < n; i++, px += 3) {
+        const int r = px[0], g = px[1], b = px[2];
+        const int y = (r * 77 + g * 150 + b * 29) >> 8;
+        const int nr = r + ((y - r) * desat) / 255, ng = g + ((y - g) * desat) / 255, nb = b + ((y - b) * desat) / 255;
+        px[0] = (uint8_t)(nr * mul / 255);
+        px[1] = (uint8_t)(ng * mul / 255);
+        px[2] = (uint8_t)(nb * mul / 255);
+    }
+}
+
+void flex_blur_pack565(const uint8_t *px, int w, int h, uint16_t *dst)
+{
+    /* Bayer 4x4 (0..15): el resto de cada canal decide, en un patrón fijo,
+     * si se redondea hacia arriba. La media se conserva y los escalones se
+     * deshacen en grano de 1 LSB en vez de bloques. */
+    static const uint8_t kBayer[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+    if (!px || !dst || w <= 0 || h <= 0) {
+        return;
+    }
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++, px += 3) {
+            const int t = kBayer[y & 3][x & 3];
+            int r = (px[0] * 31 * 16 + 255 * t + 255 * 8 / 16) / (255 * 16);
+            int g = (px[1] * 63 * 16 + 255 * t + 255 * 8 / 16) / (255 * 16);
+            int b = (px[2] * 31 * 16 + 255 * t + 255 * 8 / 16) / (255 * 16);
+            r = r > 31 ? 31 : r;
+            g = g > 63 ? 63 : g;
+            b = b > 31 ? 31 : b;
+            *dst++ = (uint16_t)(r << 11 | g << 5 | b);
+        }
     }
 }

@@ -577,7 +577,7 @@ typedef struct {
 
 size_t flex_glass_backdrop_bytes(void)
 {
-    return sizeof(backdrop_t) + (size_t)BD_W * BD_H * 2 + (size_t)flex_blur_work_bytes(BD_W, BD_H, BD_R);
+    return sizeof(backdrop_t) + (size_t)BD_W * BD_H * 2;
 }
 
 static void backdrop_free_cb(lv_event_t *e)
@@ -630,14 +630,16 @@ bool flex_glass_backdrop_set(lv_obj_t *bd, const uint16_t *src, int w, int h, in
     if (!b || !src || w <= 0 || h <= 0) {
         return false;
     }
-    const int wb = flex_blur_work_bytes(BD_W, BD_H, BD_R);
-    uint8_t *work = lv_malloc((size_t)wb);
+    /* Trabajo temporal (solo durante esta llamada): la imagen en RGB888 y una línea. */
+    const size_t n888 = (size_t)BD_W * BD_H * 3;
+    uint8_t *work = lv_malloc(n888 + (size_t)flex_blur_work_bytes(BD_W, BD_H, BD_R));
     if (!work) {
         return false;
     }
-    flex_blur_fit565(src, w, h, stride_px, b->px, BD_W, BD_H);
-    flex_blur_box565(b->px, BD_W, BD_H, BD_R, BD_PASSES, work);
-    flex_blur_tone565(b->px, BD_W * BD_H, dim, BD_DESAT);
+    flex_blur_fit888(src, w, h, stride_px, work, BD_W, BD_H);
+    flex_blur_box888(work, BD_W, BD_H, BD_R, BD_PASSES, work + n888);
+    flex_blur_tone888(work, BD_W * BD_H, dim, BD_DESAT);
+    flex_blur_pack565(work, BD_W, BD_H, b->px);
     lv_free(work);
     b->has = true;
     lv_image_cache_drop(&b->dsc);

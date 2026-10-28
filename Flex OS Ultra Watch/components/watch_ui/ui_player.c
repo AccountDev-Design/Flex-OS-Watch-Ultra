@@ -29,15 +29,15 @@
 #define LIB_MAX     WAP_LIST_MAX
 #define NP_TICK_MS  250
 #define HOME_TICK_MS 500
-#define COVER_Y     54
-#define TITLE_Y     266
+#define COVER_Y     44
+#define TITLE_Y     252
 #define BAR_Y       334
 #define BAR_W       300
-#define CTRL_Y      372
-#define CTRL_D      72
-#define PLAY_D      92
-#define VOL_Y       454
-#define VOL_W       216
+#define CTRL_Y      366
+#define CTRL_D      64
+#define PLAY_D      84
+#define VOL_Y       458
+#define VOL_W       200
 
 static void back_cb(lv_event_t *e)
 {
@@ -286,12 +286,12 @@ lv_obj_t *ui_nowplaying_create(lv_obj_t *parent)
     lv_label_set_long_mode(p->artist, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_size(p->artist, 330, lv_font_get_line_height(FLEX_TYPE_CAPTION));
     lv_obj_set_style_text_align(p->artist, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_pos(p->artist, (FLEX_SCREEN_W - 330) / 2, TITLE_Y + 32);
+    lv_obj_set_pos(p->artist, (FLEX_SCREEN_W - 330) / 2, TITLE_Y + 30);
     p->info = watch_theme_label(page, FLEX_TYPE_FOOTNOTE, FLEX_C_MUTE, "");
     lv_label_set_long_mode(p->info, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_size(p->info, 330, lv_font_get_line_height(FLEX_TYPE_FOOTNOTE));
     lv_obj_set_style_text_align(p->info, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_pos(p->info, (FLEX_SCREEN_W - 330) / 2, TITLE_Y + 56);
+    lv_obj_set_pos(p->info, (FLEX_SCREEN_W - 330) / 2, TITLE_Y + 54);
 
     p->bar = watch_theme_bar(page, BAR_W, 6, FLEX_GLASS_TXT, 0x4A4E58);
     lv_obj_set_pos(p->bar, (FLEX_SCREEN_W - BAR_W) / 2, BAR_Y);
