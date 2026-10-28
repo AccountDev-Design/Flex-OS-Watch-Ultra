@@ -27,7 +27,7 @@ void ws_defaults(ws_settings_t *s)
     s->glass = WS_GLASS_AUTO;
     s->media_dest = WS_DEST_WATCH;
     s->media_vol = WS_MEDIA_VOL_DEF;
-    s->rec_quality = WS_REC_STANDARD;
+    s->rec_quality = WS_REC_MONO;
 }
 
 int ws_dim_level(uint8_t dim, int user_percent)
@@ -116,7 +116,7 @@ bool ws_normalize(ws_settings_t *s)
         s->media_vol = 100;
     }
     if (s->rec_quality >= WS_REC_COUNT) {
-        s->rec_quality = WS_REC_STANDARD;
+        s->rec_quality = WS_REC_MONO;
     }
     return !ws_equal(&before, s);
 }

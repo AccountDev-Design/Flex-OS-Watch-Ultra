@@ -60,6 +60,8 @@ typedef struct {
 } vstore_t;
 
 static vstore_t s_st[WM_VOL_N];
+static portMUX_TYPE s_rec_mux = portMUX_INITIALIZER_UNLOCKED;
+static char s_rec_active[WM_VOL_N][FML_PATH_MAX]; /* parcial que se está grabando */
 static SemaphoreHandle_t s_heavy;
 static TaskHandle_t s_task;
 
@@ -491,6 +493,103 @@ static bool paint_thumb(void *ctx, const char *path, uint16_t *px, int *w, int *
     return ok;
 }
 
+/* ---------------- grabaciones interrumpidas ---------------- */
+
+void wm_rec_set_active(wm_vol_t v, const char *rel)
+{
+    if (v >= WM_VOL_N) {
+        return;
+    }
+    portENTER_CRITICAL(&s_rec_mux);
+    snprintf(s_rec_active[v], sizeof(s_rec_active[v]), "%s", rel ? rel : "");
+    portEXIT_CRITICAL(&s_rec_mux);
+}
+
+static bool rec_is_active(wm_vol_t v, const char *rel)
+{
+    portENTER_CRITICAL(&s_rec_mux);
+    const bool a = s_rec_active[v][0] && !strcmp(s_rec_active[v], rel);
+    portEXIT_CRITICAL(&s_rec_mux);
+    return a;
+}
+
+static void put32le(uint8_t *p, uint32_t v)
+{
+    p[0] = (uint8_t)v;
+    p[1] = (uint8_t)(v >> 8);
+    p[2] = (uint8_t)(v >> 16);
+    p[3] = (uint8_t)(v >> 24);
+}
+
+/* Una grabación cortada: su cabecera dice menos (o "en flujo") de lo que hay.
+ * En la microSD (FAT) se corrige en su sitio, sin coste; en el LittleFS
+ * interno corregir el principio de un archivo lo reescribe entero, así que
+ * se deja la cabecera "en flujo" (los lectores la recortan al archivo). */
+static void recover_recordings(vstore_t *st)
+{
+    FlexMsEntry e[8];
+    int done = 0;
+    for (int skip = 0, guard = 0; guard < 4; guard++) {
+        const int n = fs_list(st, FML_DIR_RECPART, e, 8, skip);
+        if (n <= 0) {
+            break;
+        }
+        int moved = 0;
+        for (int i = 0; i < n && done < 16; i++) {
+            char rel[FML_PATH_MAX];
+            if (e[i].dir || snprintf(rel, sizeof(rel), FML_DIR_RECPART "/%s", e[i].name) >= (int)sizeof(rel) ||
+                rec_is_active(st->vol, rel)) {
+                continue;
+            }
+            char rp[WM_PATH_MAX];
+            if (!real(st, rel, rp)) {
+                continue;
+            }
+            const int fd = open(rp, st->vol == WM_VOL_SD ? O_RDWR : O_RDONLY);
+            uint8_t h[44];
+            const bool hdr = fd >= 0 && read(fd, h, 44) == 44 && !memcmp(h, "RIFF", 4) && !memcmp(h + 8, "WAVEfmt ", 8) &&
+                             !memcmp(h + 36, "data", 4);
+            uint32_t data = e[i].size > 44 ? e[i].size - 44 : 0;
+            data &= ~3u; /* muestras enteras (estéreo de 16 bits) */
+            if (hdr && data && st->vol == WM_VOL_SD) {
+                uint32_t had = h[40] | h[41] << 8 | h[42] << 16 | (uint32_t)h[43] << 24;
+                if (had != data) {
+                    put32le(h + 4, data + 36);
+                    put32le(h + 40, data);
+                    if (lseek(fd, 4, SEEK_SET) == 4) {
+                        write(fd, h + 4, 4);
+                    }
+                    if (lseek(fd, 40, SEEK_SET) == 40) {
+                        write(fd, h + 40, 4);
+                    }
+                    fsync(fd);
+                }
+            }
+            if (fd >= 0) {
+                close(fd);
+            }
+            if (!hdr) {
+                continue; /* no es nuestro: se deja donde está */
+            }
+            if (!data) {
+                fs_remove(st, rel); /* sin una sola muestra: nada que guardar */
+                moved++;
+                continue;
+            }
+            char why[64] = "";
+            const uint32_t id = flexMsAddFileTo(&st->ms, rel, FML_DIR_REC, FML_K_AUDIO, "Grabación recuperada.wav",
+                                                FML_O_REC, 0, why, sizeof(why));
+            ESP_LOGW(TAG, "%s: grabación interrumpida %s (%u B)%s%s", wm_vol_name(st->vol),
+                     id ? "recuperada" : "no publicada", (unsigned)data, id ? "" : ": ", id ? "" : why);
+            if (id) {
+                moved++;
+                done++;
+            }
+        }
+        skip += n - moved; /* lo que se movió ya no está en la carpeta */
+    }
+}
+
 /* ---------------- ciclo de vida de cada catálogo ---------------- */
 
 static bool enter(vstore_t *st)
@@ -563,6 +662,7 @@ static void store_open(vstore_t *st)
     flexMsMakeDirs(&st->ms);
     const int from = flexMsLoad(&st->ms); /* el bueno, su .bak o su .tmp */
     flexMsCleanTmp(&st->ms);              /* subidas y guardados que no terminaron */
+    recover_recordings(st);               /* grabaciones cortadas: se reparan y se publican */
     ESP_LOGI(TAG, "%s: catálogo de %u elementos (%s)", wm_vol_name(st->vol), (unsigned)st->ms.lib.n,
              from == 1 ? "archivo" : from ? "copia de respaldo" : "nuevo");
     st->scan_req = true; /* el disco manda: se reconcilia siempre al montar */

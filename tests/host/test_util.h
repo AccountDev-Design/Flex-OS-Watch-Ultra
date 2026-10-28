@@ -34,3 +34,4 @@ void test_grid_all(void);
 void test_glass_all(void);
 void test_activity_all(void);
 void test_media_all(void);
+void test_audio_all(void);

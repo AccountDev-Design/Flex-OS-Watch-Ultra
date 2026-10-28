@@ -883,8 +883,56 @@ static void testConcurrency(){
   lockRules("concurrencia");
 }
 
+// RELOJ: un MP3 con etiqueta ID3v2.3 (titulo, artista, album y portada JPEG)
+// entra en el catalogo con sus textos y con la portada como miniatura; uno con
+// la portada rota sigue siendo reproducible, sin miniatura.
+static void ss32(std::vector<uint8_t>& v, size_t at, uint32_t x){
+  v[at] = (x >> 21) & 0x7F; v[at + 1] = (x >> 14) & 0x7F; v[at + 2] = (x >> 7) & 0x7F; v[at + 3] = x & 0x7F;
+}
+static void id3frame(std::vector<uint8_t>& t, const char* id, const std::vector<uint8_t>& d){
+  for(int i = 0; i < 4; i++) t.push_back((uint8_t)id[i]);
+  uint32_t n = (uint32_t)d.size();
+  t.push_back(n >> 24); t.push_back(n >> 16); t.push_back(n >> 8); t.push_back(n); t.push_back(0); t.push_back(0);
+  t.insert(t.end(), d.begin(), d.end());
+}
+static std::vector<uint8_t> makeMp3(const std::vector<uint8_t>& cover){
+  std::vector<uint8_t> t = {'I','D','3',3,0,0,0,0,0,0};
+  auto text = [](const char* s){ std::vector<uint8_t> v{3}; while(*s) v.push_back((uint8_t)*s++); return v; };
+  id3frame(t, "TIT2", text("Tema del reloj"));
+  id3frame(t, "TPE1", text("Flex"));
+  id3frame(t, "TALB", text("Ultra"));
+  std::vector<uint8_t> ap{0}; for(char c : std::string("image/jpeg")) ap.push_back((uint8_t)c);
+  ap.push_back(0); ap.push_back(3); ap.push_back(0);
+  ap.insert(ap.end(), cover.begin(), cover.end());
+  id3frame(t, "APIC", ap);
+  ss32(t, 6, (uint32_t)(t.size() - 10));
+  for(int k = 0; k < 12; k++){ size_t at = t.size(); t.resize(at + 418, 0); t[at] = 0xFF; t[at + 1] = 0xFB; t[at + 2] = 0x92; t[at + 3] = 0x64; }
+  return t;
+}
+static void testMp3Tags(){
+  std::printf("-- RELOJ: MP3 con etiquetas y portada --\n");
+  fresh();
+  put("/Musica/tema.mp3", makeMp3(makeJpeg(300, 300, 3)));
+  std::vector<uint8_t> broken = makeJpeg(200, 200, 1); broken.resize(broken.size() / 3);
+  put("/Musica/rota.mp3", makeMp3(broken));
+  flexMsScan(&g_ms, nullptr, nullptr);
+  runAll();
+  const FlexMlRec* r = recAt("/Musica/tema.mp3");
+  CHECK(r && r->fmt == FML_F_MP3 && (r->flags & FML_R_PLAYABLE), "MP3 reproducible");
+  CHECK(r && !std::strcmp(r->title, "Tema del reloj") && !std::strcmp(r->artist, "Flex") && !std::strcmp(r->album, "Ultra"),
+        "textos de la etiqueta: '%s' / '%s' / '%s'", r ? r->title : "", r ? r->artist : "", r ? r->album : "");
+  CHECK(r && (r->flags & FML_R_THUMB) && has(thumbOf(r->id)) && jpegDecodes(get(thumbOf(r->id))), "portada como miniatura");
+  CHECK(r && r->w == 0 && r->h == 0, "el audio no hereda las medidas de la portada");
+  CHECK(r && r->durMs > 0, "duracion");
+  const FlexMlRec* b = recAt("/Musica/rota.mp3");
+  CHECK(b && (b->flags & FML_R_PLAYABLE) && !(b->flags & FML_R_THUMB) && b->state == FML_S_READY,
+        "portada rota: el audio sigue siendo bueno, sin miniatura");
+  CHECK(g_live == 0, "sin fugas (%ld)", (long)g_live);
+}
+
 int main(){
   std::printf("=== FlexOS_MediaStore ===\n");
+  testMp3Tags();
   testPersistence();
   testCleanTmp();
   testScan();

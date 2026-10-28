@@ -35,7 +35,9 @@ typedef struct {
     uint16_t kbps;         /**< tasa de la primera trama */
     bool vbr;              /**< había cabecera Xing/VBRI con número de tramas */
     uint32_t frames;       /**< tramas (0 = no se sabe) */
-    uint32_t dataStart;    /**< primera trama de audio */
+    uint32_t dataStart;    /**< primera trama */
+    uint32_t audioStart;   /**< primera trama CON audio: si la primera es la cabecera
+                                Xing/Info/VBRI (silencio), la siguiente */
     uint32_t durMs;        /**< duración (estimada sin cabecera VBR) */
 } FlexMp3Info;
 

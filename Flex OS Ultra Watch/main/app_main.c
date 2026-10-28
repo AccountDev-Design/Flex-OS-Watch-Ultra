@@ -29,7 +29,10 @@
 #include "watch_diag.h"
 #include "watch_display.h"
 #include "watch_imu.h"
+#include "watch_audio.h"
 #include "watch_media.h"
+#include "wa_player.h"
+#include "wa_rec.h"
 #include "wm_store.h"
 #include "watch_net.h"
 #include "watch_phone.h"
@@ -240,6 +243,20 @@ void app_main(void)
     err = wm_lib_start();
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "biblioteca de medios no disponible: %s", esp_err_to_name(err));
+    }
+
+    /* Audio: solo guarda el bus I2C (ES8311 y ES7210 comparten el de la
+     * pantalla táctil); el hardware se enciende con la primera canción o
+     * grabación y se apaga al terminar. */
+    err = watch_audio_start(bsp_i2c_get_handle());
+    if (err == ESP_OK) {
+        err = wap_init();
+    }
+    if (err == ESP_OK) {
+        err = wr_init();
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "audio no disponible: %s", esp_err_to_name(err));
     }
 
     /* Bienestar: después del IMU, la hora y el almacenamiento (restaura el día

@@ -12,6 +12,7 @@
 #include "FlexOS_Media.h"
 #include "FlexOS_JPEGEnc.h"
 #include "flex_mp3.h"
+#include "flex_id3.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -264,6 +265,22 @@ static int msSeqRead(void* c, uint8_t* buf, size_t n){
   if(f->ms->yield) f->ms->yield(f->ms->yieldCtx);
   return f->ms->fs.read(f->ms->fs.ctx, f->h, buf, n);
 }
+// RELOJ: lectura secuencial de un TRAMO del archivo (la portada de un MP3).
+struct MsSub { FlexMediaStore* ms; void* h; uint32_t left; };
+static int msSubRead(void* c, uint8_t* buf, size_t n){
+  MsSub* f = (MsSub*)c;
+  if(f->ms->yield) f->ms->yield(f->ms->yieldCtx);
+  if(n > f->left) n = f->left;
+  if(n == 0) return 0;
+  int r = f->ms->fs.read(f->ms->fs.ctx, f->h, buf, n);
+  if(r > 0) f->left -= (uint32_t)r;
+  return r;
+}
+static void copyText(char* dst, size_t cap, const char* src){
+  size_t n = strlen(src);
+  if(n >= cap){ n = cap - 1; while(n > 0 && ((uint8_t)src[n] & 0xC0) == 0x80) n--; }
+  memcpy(dst, src, n); dst[n] = 0;
+}
 // Lo que puede llegar a pedir una miniatura por flujo (ventana, estado del
 // decodificador, filas de MCU de una foto de 4096 px, recorte a 1/8 y
 // codificador), redondeado hacia arriba. NO depende del tamano del archivo.
@@ -294,7 +311,9 @@ bool flexMsNextJob(FlexMediaStore* ms, uint32_t afterId, FlexMsJob* job){
   return found;
 }
 
-struct MsProbe { int fmt, rc; uint16_t w, h; uint32_t dur; bool playable, thumb, retry; };
+struct MsProbe { int fmt, rc; uint16_t w, h; uint32_t dur; bool playable, thumb, retry;
+                 // RELOJ: etiquetas ID3 de un MP3 (vacias si no hay).
+                 char title[FML_TITLE_MAX], artist[FML_ARTIST_MAX], album[FML_ALBUM_MAX]; };
 
 static MsProbe probeFile(FlexMediaStore* ms, const FlexMsJob* job, const char* tmp, uint32_t memFree, uint32_t memReserve){
   MsProbe pr; memset(&pr, 0, sizeof(pr));
@@ -367,6 +386,39 @@ static MsProbe probeFile(FlexMediaStore* ms, const FlexMsJob* job, const char* t
     if(mr == FLEXMP3_OK) pr.dur = mi.durMs;
     else { pr.playable = false; pr.rc = FLEXTH_ERR_DECODE; return pr; }
     pr.rc = FLEXTH_ERR_UNSUP;
+    // RELOJ: titulo, artista y album de la etiqueta ID3, y la portada JPEG
+    // como miniatura (decodificada por trozos, como una foto).
+    MsIo g = { ms, ms->fs.open(ms->fs.ctx, job->path, false), 0, job->size };
+    FlexId3Info id3;
+    int ir = FLEXID3_NONE;
+    if(g.h){
+      FlexMediaIO io; io.read = msioRead; io.seek = msioSeek; io.size = msioSize; io.ctx = &g;
+      ir = flexId3Read(&io, &id3);
+      ms->fs.close(ms->fs.ctx, g.h);
+    }
+    if(ir == FLEXID3_OK){
+      copyText(pr.title, sizeof(pr.title), id3.title);
+      copyText(pr.artist, sizeof(pr.artist), id3.artist);
+      copyText(pr.album, sizeof(pr.album), id3.album);
+      if(id3.picKind == FLEXID3_PIC_JPEG && id3.picBytes > 0 && id3.picBytes <= FML_LIMIT_PHOTO &&
+         memFree >= MS_THUMB_WORK_BYTES && memFree - MS_THUMB_WORK_BYTES >= memReserve){
+        if(ms->heavyBegin && !ms->heavyBegin(ms->heavyCtx)){ pr.retry = true; return pr; }
+        MsSub s = { ms, ms->fs.open(ms->fs.ctx, job->path, false), id3.picBytes };
+        MsOut o = { ms, s.h ? ms->fs.open(ms->fs.ctx, tmp, true) : NULL, true };
+        int tr = FLEXTH_ERR_IO;
+        if(s.h && o.h && ms->fs.seek(ms->fs.ctx, s.h, id3.picOffset)){
+          tr = flexThumbFromJpegStream(msSubRead, &s, FLEXTH_SIDE, FLEXTH_QUALITY, msOutWrite, &o, &ow, &oh,
+                                       ms->alloc, ms->free);
+          if(tr == FLEXTH_OK && !o.ok) tr = FLEXTH_ERR_WRITE;
+        }
+        if(o.h) ms->fs.close(ms->fs.ctx, o.h);
+        if(s.h) ms->fs.close(ms->fs.ctx, s.h);
+        if(ms->heavyEnd) ms->heavyEnd(ms->heavyCtx);
+        if(tr == FLEXTH_ERR_MEMORY){ pr.retry = true; return pr; }
+        // Una portada rota no hace "danado" al audio: solo no hay miniatura.
+        if(tr == FLEXTH_OK){ pr.rc = FLEXTH_OK; ow = oh = 0; }
+      }
+    }
   } else if(pr.fmt == FML_F_FXP && job->kind == FML_K_DRAW){
     pr.rc = FLEXTH_ERR_UNSUP;
     pr.playable = true;
@@ -416,6 +468,10 @@ int flexMsRunJob(FlexMediaStore* ms, const FlexMsJob* job, uint32_t memFree, uin
   if(pr.fmt != FML_F_UNKNOWN) r->fmt = (uint8_t)pr.fmt;
   if(pr.w){ r->w = pr.w; r->h = pr.h; }
   if(pr.dur) r->durMs = pr.dur;
+  // RELOJ: lo que dicen las etiquetas, sin pisar lo que ya puso el movil.
+  if(pr.title[0] && !r->title[0]) copyText(r->title, sizeof(r->title), pr.title);
+  if(pr.artist[0] && !r->artist[0]) copyText(r->artist, sizeof(r->artist), pr.artist);
+  if(pr.album[0] && !r->album[0]) copyText(r->album, sizeof(r->album), pr.album);
   r->flags &= (uint16_t)~(FML_R_NEED_THUMB | FML_R_PLAYABLE);
   if(pr.playable) r->flags |= FML_R_PLAYABLE;
   r->err = pr.playable ? FML_E_NONE : FML_E_UNSUPPORTED;

@@ -5,7 +5,7 @@
 idf_component_register(
     SRCS "FlexOS_MediaLib.cpp" "FlexOS_Media.cpp" "FlexOS_MediaStore.cpp" "FlexOS_MediaThumb.cpp"
          "FlexOS_JPEGEnc.cpp" "FlexOS_QR.cpp" "FlexOS_HttpShare.cpp" "FlexOS_MediaWeb.cpp"
-         "flex_jpeg_tjpgd.c" "flex_mp3.c"
+         "flex_jpeg_tjpgd.c" "flex_mp3.c" "flex_id3.c"
     INCLUDE_DIRS "include"
     PRIV_REQUIRES esp_rom
 )

@@ -18,7 +18,7 @@ FM_HTTP  := $(FM_DIR)/FlexOS_HttpShare.cpp
 FM_WEB   := $(FM_DIR)/FlexOS_MediaWeb.cpp
 FM_QR    := $(FM_DIR)/FlexOS_QR.cpp
 FM_HDRS  := $(wildcard $(FM_DIR)/include/*.h) $(FM_DIR)/FlexOS_WebUI.h
-FM_JPEG_O := $(FM_BUILD)/flex_jpeg_tjpgd.o $(FM_BUILD)/tjpgd.o $(FM_BUILD)/flex_mp3.o
+FM_JPEG_O := $(FM_BUILD)/flex_jpeg_tjpgd.o $(FM_BUILD)/tjpgd.o $(FM_BUILD)/flex_mp3.o $(FM_BUILD)/flex_id3.o
 FM_CJSON := $(FM_BUILD)/cJSON.o
 
 $(FM_BUILD):
@@ -28,6 +28,8 @@ $(FM_BUILD)/tjpgd.o: $(LVGL_DIR)/src/libs/tjpgd/tjpgd.c | $(FM_BUILD)
 $(FM_BUILD)/flex_jpeg_tjpgd.o: $(FM_DIR)/flex_jpeg_tjpgd.c $(FM_DIR)/include/FlexOS_JPEG.h | $(FM_BUILD)
 	$(CC) $(CFLAGS) $(TJPGD_FLAGS) -I$(FM_DIR)/include -c $< -o $@
 $(FM_BUILD)/flex_mp3.o: $(FM_DIR)/flex_mp3.c $(FM_DIR)/include/flex_mp3.h | $(FM_BUILD)
+	$(CC) $(CFLAGS) -I$(FM_DIR)/include -c $< -o $@
+$(FM_BUILD)/flex_id3.o: $(FM_DIR)/flex_id3.c $(FM_DIR)/include/flex_id3.h | $(FM_BUILD)
 	$(CC) $(CFLAGS) -I$(FM_DIR)/include -c $< -o $@
 $(FM_BUILD)/cJSON.o: $(IDF_PATH)/components/json/cJSON/cJSON.c | $(FM_BUILD)
 	$(CC) -std=c11 -O1 -g -w -fsanitize=address,undefined -c $< -o $@
@@ -54,7 +56,10 @@ $(FM_BUILD)/test_mediaweb: flexmedia/test_mediaweb.cpp $(FM_WEB) $(FM_LIB) $(FM_
 $(FM_BUILD)/test_mp3: flexmedia/test_mp3.cpp $(FM_BUILD)/flex_mp3.o $(FM_HDRS) | $(FM_BUILD)
 	$(CXX) $(FM_CXX) $(FM_INC) -o $@ flexmedia/test_mp3.cpp $(FM_BUILD)/flex_mp3.o
 
-FM_TESTS := test_mp3 test_qr test_httpshare test_media test_medialib test_jpegenc test_mediathumb test_mediastore test_mediaweb
+$(FM_BUILD)/test_id3: flexmedia/test_id3.cpp $(FM_BUILD)/flex_id3.o $(FM_HDRS) | $(FM_BUILD)
+	$(CXX) $(FM_CXX) $(FM_INC) -o $@ flexmedia/test_id3.cpp $(FM_BUILD)/flex_id3.o
+
+FM_TESTS := test_mp3 test_id3 test_qr test_httpshare test_media test_medialib test_jpegenc test_mediathumb test_mediastore test_mediaweb
 .PHONY: flexmedia flexmedia-skip
 flexmedia: $(addprefix $(FM_BUILD)/,$(FM_TESTS))
 	@set -e; for t in $(FM_TESTS); do echo "=== $$t"; ./$(FM_BUILD)/$$t; done

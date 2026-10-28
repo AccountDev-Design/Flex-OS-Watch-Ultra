@@ -119,6 +119,7 @@ int flexMp3Probe(const FlexMediaIO *io, FlexMp3Info *out)
             out->version = fh.version;
             out->kbps = fh.kbps;
             out->dataStart = off;
+            out->audioStart = off;
             /* Xing / Info (tras la información lateral) o VBRI (a 32 bytes). */
             const uint32_t side = fh.version == 1 ? (fh.channels == 1 ? 17 : 32) : (fh.channels == 1 ? 9 : 17);
             uint8_t x[18];
@@ -126,9 +127,11 @@ int flexMp3Probe(const FlexMediaIO *io, FlexMp3Info *out)
                 (!memcmp(x, "Xing", 4) || !memcmp(x, "Info", 4)) && (be32(x + 4) & 1)) {
                 out->frames = be32(x + 8);
                 out->vbr = !memcmp(x, "Xing", 4);
+                out->audioStart = off + fh.frameBytes; /* la trama de la cabecera no suena */
             } else if (off + 4 + 32 + 18 <= size && read_at(io, off + 4 + 32, x, 18) && !memcmp(x, "VBRI", 4)) {
                 out->frames = be32(x + 14); /* VBRI: versión(2) retardo(2) calidad(2) bytes(4) tramas(4) */
                 out->vbr = true;
+                out->audioStart = off + fh.frameBytes;
             }
             if (out->frames) {
                 out->durMs = (uint32_t)((uint64_t)out->frames * fh.samples * 1000u / fh.sampleRate);

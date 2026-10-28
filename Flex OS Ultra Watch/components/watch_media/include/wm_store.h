@@ -64,6 +64,13 @@ void wm_lib_rescan(wm_vol_t v);
 FlexMediaStore *wm_lib_acquire(wm_vol_t v);
 void wm_lib_release(wm_vol_t v);
 
+/** La grabadora avisa del archivo parcial que está escribiendo (NULL al
+ * terminar): la recuperación de grabaciones interrumpidas no lo toca.
+ * Al abrir cada catálogo, lo que quedó en FML_DIR_RECPART de una grabación
+ * cortada (batería, tarjeta retirada) se repara y se publica en
+ * FML_DIR_REC como "Grabación recuperada". Nunca se borra nada con datos. */
+void wm_rec_set_active(wm_vol_t v, const char *rel);
+
 /** Trabajo pesado (decodificar una foto entera) de uno en uno en TODO el
  * reloj: miniaturas, visor, validación de subidas. Nunca desde LVGL. */
 bool wm_heavy_begin(uint32_t wait_ms);

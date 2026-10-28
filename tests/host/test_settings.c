@@ -168,11 +168,11 @@ static void test_media_fields(void)
     ws_defaults(&s);
     CHECK_EQ(s.media_dest, WS_DEST_WATCH); /* lo seguro: la memoria del reloj */
     CHECK_EQ(s.media_vol, WS_MEDIA_VOL_DEF);
-    CHECK_EQ(s.rec_quality, WS_REC_STANDARD);
+    CHECK_EQ(s.rec_quality, WS_REC_MONO); /* la mitad de espacio: voz */
     CHECK(!ws_normalize(&s));
     s.media_dest = WS_DEST_SD;
     s.media_vol = 0;
-    s.rec_quality = WS_REC_VOICE;
+    s.rec_quality = WS_REC_STEREO;
     CHECK(!ws_normalize(&s)); /* valores válidos: no se tocan */
     CHECK_EQ(s.media_dest, WS_DEST_SD);
     s.media_dest = 9;
@@ -181,7 +181,7 @@ static void test_media_fields(void)
     CHECK(ws_normalize(&s));
     CHECK_EQ(s.media_dest, WS_DEST_WATCH);
     CHECK_EQ(s.media_vol, 100);
-    CHECK_EQ(s.rec_quality, WS_REC_STANDARD);
+    CHECK_EQ(s.rec_quality, WS_REC_MONO);
     ws_settings_t t = s;
     t.media_dest = WS_DEST_SD;
     CHECK(!ws_equal(&s, &t));
@@ -189,7 +189,7 @@ static void test_media_fields(void)
     t.media_vol = 1;
     CHECK(!ws_equal(&s, &t));
     t = s;
-    t.rec_quality = WS_REC_VOICE;
+    t.rec_quality = WS_REC_STEREO;
     CHECK(!ws_equal(&s, &t));
 }
 

@@ -17,6 +17,9 @@
 | Mapa de registros del AXP2101 | consultado (no se copia código) | XPowersLib: MIT, © 2022 Lewis He | ejemplo oficial `01_AXP2101` |
 | Tokens de diseño de Flex OS Ultra | transcritos | proyecto propio del autor (repositorio de referencia sin archivo de licencia) | accountdev-design/Flex-OS-Ecosistema @ 5dbc949 |
 | `lv_font_conv` 1.5.3 | herramienta (no se distribuye) | MIT | lvgl/lv_font_conv |
+| minimp3 (`components/minimp3`) | incluido: decodificador de MP3 del reproductor. Un cambio, marcado "FLEX OS WATCH ULTRA": el área de trabajo de ~16 KB la pone el llamante en vez de ir en la pila (`MINIMP3_EXTERNAL_SCRATCH`) | CC0 1.0 (`components/minimp3/LICENSE`) | https://github.com/lieff/minimp3, commit ea99364; SHA-256 del `minimp3.h` original `57e437c5c1f0e8b243885d3929c8973b5e6c778451e0100ab4251d19915cb3ad` |
+| Pila de medios y Flex Web Server de Flex OS Ultra (`components/flexmedia`) | copiada y adaptada (cambios marcados "RELOJ:") | proyecto propio del autor (repositorio de referencia sin archivo de licencia) | accountdev-design/Flex-OS-Ecosistema @ 5dbc949, huellas en `docs/MULTIMEDIA.md` §14 |
+| TJpgDec (ROM del ESP32-S3; en el PC, el de LVGL) | usado, no copiado | licencia de ChaN (BSD de una cláusula) | ROM del chip / lvgl/lvgl |
 
 Rediseño 2026-10: la imagen de referencia del cajón en panal que envió el usuario
 (de otro fabricante) se usó solo como referencia de COMPORTAMIENTO (lente,

@@ -586,6 +586,7 @@ int main(void)
     test_br_backend_all();
     test_activity_all();
     test_media_all();
+    test_audio_all();
     printf("%d comprobaciones, %d fallos\n", g_checks, g_fail);
     return g_fail ? 1 : 0;
 }

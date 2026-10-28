@@ -86,7 +86,7 @@ static void testCbr(){
   FlexMp3Info inf;
   Mem m;
   for(int k = 0; k < 100; k++) frame(m.b, 0xFB, 0x92, 0x64, 418);
-  CHECK(probe(m, &inf) == FLEXMP3_OK && inf.dataStart == 0 && !inf.vbr && inf.frames == 0 &&
+  CHECK(probe(m, &inf) == FLEXMP3_OK && inf.dataStart == 0 && inf.audioStart == 0 && !inf.vbr && inf.frames == 0 &&
         inf.sampleRate == 44100 && inf.channels == 2 && inf.kbps == 128, "CBR desnudo");
   // 41 800 B * 8 / 128 kb/s = 2612 ms
   CHECK(inf.durMs == 2612, "duracion por tasa (%u)", inf.durMs);
@@ -132,6 +132,7 @@ static void testVbr(){
   std::memcpy(&x.b[4 + 32], "Xing", 4); be32(&x.b[4 + 32 + 4], 1); be32(&x.b[4 + 32 + 8], 2000);
   for(int k = 0; k < 10; k++) frame(x.b, 0xFB, 0x92, 0x64, 418);
   CHECK(probe(x, &inf) == FLEXMP3_OK && inf.vbr && inf.frames == 2000, "Xing: tramas");
+  CHECK(inf.dataStart == 0 && inf.audioStart == 418, "Xing: el audio empieza en la trama siguiente (%u)", inf.audioStart);
   // 2000 * 1152 / 44100 s = 52 244 ms
   CHECK(inf.durMs == 52244, "Xing: duracion por tramas (%u)", inf.durMs);
 
