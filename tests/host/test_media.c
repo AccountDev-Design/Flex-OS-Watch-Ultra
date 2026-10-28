@@ -14,6 +14,9 @@
 #include <string.h>
 
 #include "test_util.h"
+#include "FlexOS_MediaLib.h"
+#include "mem_logic.h"
+#include "watch_media.h"
 #include "wm_fsclass.h"
 #include "wm_path.h"
 #include "wm_sd_logic.h"
@@ -722,8 +725,63 @@ static void test_video_logic(void)
     CHECK(strstr(wv_err_text(-3), "MJPEG") != NULL);
 }
 
+/* Pilas y textos de memoria (watch_diag/mem_logic.c): la RAM interna, que es
+ * la que se acaba, solo se usa si sobra; el texto da cifras, no consejos. */
+static void test_mem_logic(void)
+{
+    /* sobra RAM interna: la pila va ahí; justa o sin bloque: a PSRAM */
+    CHECK(mem_stack_internal_first(false, 8192, 8192 + MEM_INTERNAL_KEEP, 9000));
+    CHECK(!mem_stack_internal_first(false, 8192, 8192 + MEM_INTERNAL_KEEP - 1, 60000));
+    CHECK(!mem_stack_internal_first(false, 8192, 200000, 8191));
+    CHECK(!mem_stack_internal_first(true, 8192, 200000, 200000)); /* pedida en PSRAM */
+    char t[112];
+    mem_fmt_size(512u * 1024u, t, sizeof(t));
+    CHECK_STR(t, "512 KB");
+    mem_fmt_size(6u * 1024u * 1024u + 200u * 1024u, t, sizeof(t));
+    CHECK_STR(t, "6,1 MB");
+    mem_fmt_size(1023, t, sizeof(t));
+    CHECK_STR(t, "0 KB");
+    mem_why_text(t, sizeof(t), 12288, false, 9u * 1024u, 6u << 20);
+    CHECK_STR(t, "Faltan 12 KB de RAM interna (hay 9 KB). PSRAM libre: 6,0 MB.");
+    mem_why_text(t, sizeof(t), 0, true, 40u * 1024u, 120u * 1024u);
+    CHECK_STR(t, "Sin PSRAM suficiente (hay 120 KB). RAM interna libre: 40 KB.");
+    CHECK(!strstr(t, "otra app"));
+    char small[8];
+    mem_why_text(small, sizeof(small), 1, true, 1, 1); /* recorta sin salirse */
+    CHECK(strlen(small) == 7);
+}
+
+/* "Liberar espacio": los más grandes primero, sin pasarse del tope. */
+static void test_big_list(void)
+{
+    wm_big_t l[4];
+    int n = 0;
+    const uint32_t sizes[] = {5, 9, 1, 9, 7, 3, 12, 2};
+    for (int i = 0; i < 8; i++) {
+        wm_big_t b = {.id = (uint32_t)i + 1, .size = sizes[i]};
+        n = wm_big_add(l, n, 4, &b);
+    }
+    CHECK_EQ(n, 4);
+    CHECK(l[0].size == 12 && l[1].size == 9 && l[2].size == 9 && l[3].size == 7);
+    CHECK(l[1].id == 2 && l[2].id == 4); /* iguales: el primero que llegó va antes */
+    wm_big_t tiny = {.id = 99, .size = 1};
+    CHECK_EQ(wm_big_add(l, n, 4, &tiny), 4);
+    CHECK(l[3].id != 99);
+    CHECK_EQ(wm_big_add(l, 0, 0, &tiny), 0); /* sin sitio: nada */
+    wm_big_t r = {.kind = FML_K_AUDIO, .rec = true};
+    CHECK_STR(wm_big_kind_text(&r), "Grabación");
+    r.rec = false;
+    CHECK_STR(wm_big_kind_text(&r), "Música");
+    r.kind = FML_K_VIDEO;
+    CHECK_STR(wm_big_kind_text(&r), "Vídeo");
+    r.kind = FML_K_PHOTO;
+    CHECK_STR(wm_big_kind_text(&r), "Foto");
+}
+
 void test_media_all(void)
 {
+    test_mem_logic();
+    test_big_list();
     test_paths();
     test_boot_and_mount();
     test_surprise_removal_waits_for_leases();

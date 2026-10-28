@@ -225,6 +225,7 @@ lv_obj_t *ui_recordings_create(lv_obj_t *parent);    /**< Grabadora > Grabacione
 lv_obj_t *ui_dest_create(lv_obj_t *parent);          /**< Guardar en: Reloj o microSD */
 lv_obj_t *ui_sd_create(lv_obj_t *parent);            /**< Almacenamiento > microSD */
 lv_obj_t *ui_sd_format_create(lv_obj_t *parent);     /**< microSD > Formatear (doble confirmación) */
+lv_obj_t *ui_media_clean_create(lv_obj_t *parent);   /**< Liberar espacio: borrar multimedia (dos toques) */
 /** Chip de vidrio "Reloj · 1,2 GB libres" que abre "Guardar en". */
 lv_obj_t *ui_dest_chip(lv_obj_t *parent, int32_t w, int32_t h);
 /** extra (NULL = el espacio libre) sustituye a lo que va tras el volumen. */

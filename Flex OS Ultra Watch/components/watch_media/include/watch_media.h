@@ -118,6 +118,27 @@ const char *wm_dest_text(wm_dest_status_t st);
 /** Lo cambia la persona (Ajustes o el selector de las apps). */
 void wm_dest_set(wm_vol_t vol);
 
+/* ---- "Liberar espacio" (wm_text.c, sin hardware; tests/host) ---- */
+
+/** Un archivo multimedia candidato a borrarse (lo elige la persona, nunca solo). */
+typedef struct {
+    uint32_t id;      /**< en la biblioteca de su volumen */
+    uint32_t size;
+    uint8_t vol;      /**< wm_vol_t */
+    uint8_t kind;     /**< FML_K_* */
+    bool rec;         /**< audio de /Grabaciones (una grabación, no música) */
+    char name[48];    /**< para enseñar */
+} wm_big_t;
+
+/**
+ * Mete `it` en `list` (n elementos, de mayor a menor tamaño) si está entre
+ * los `cap` más grandes. Con el mismo tamaño, el que ya estaba va antes
+ * (orden estable). Devuelve el nuevo n.
+ */
+int wm_big_add(wm_big_t *list, int n, int cap, const wm_big_t *it);
+/** "Música", "Grabación", "Vídeo", "Foto", "Dibujo". */
+const char *wm_big_kind_text(const wm_big_t *b);
+
 #ifdef __cplusplus
 }
 #endif

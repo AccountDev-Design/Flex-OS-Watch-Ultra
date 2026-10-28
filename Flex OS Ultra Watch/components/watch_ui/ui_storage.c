@@ -213,6 +213,8 @@ lv_obj_t *ui_storage_details_create(lv_obj_t *parent)
 #define SEC2_Y       142         /* "PSRAM" */
 #define SEC3_Y       210         /* "microSD" (abre su página) */
 #define BAR_DY       36          /* de la etiqueta a su barra */
+#define BODY_Y       64          /* el cuerpo desplazable empieza bajo el título */
+#define BY(y)        ((y) - BODY_Y)
 #define CARD_X       30
 #define CARD_Y       282
 #define CARD_W       350
@@ -369,6 +371,12 @@ static void sd_open_cb(lv_event_t *e)
     ui_nav_push(ui_sd_create);
 }
 
+static void clean_open_cb(lv_event_t *e)
+{
+    (void)e;
+    ui_nav_push(ui_media_clean_create);
+}
+
 static void sd_interest_off_cb(lv_event_t *e)
 {
     (void)e;
@@ -437,33 +445,36 @@ lv_obj_t *ui_storage_create(lv_obj_t *parent)
     const int32_t lh_cap = lv_font_get_line_height(FLEX_TYPE_CAPTION);
 
     /* Con la microSD la composición pasa del alto de la pantalla: va en un
-     * cuerpo que se desplaza en vertical y termina FLEX_LIST_BOTTOM px antes
-     * del borde, como las listas, para que la esquina no muerda las filas. */
+     * cuerpo que se desplaza en vertical, bajo el título fijo (BODY_Y) y hasta
+     * FLEX_LIST_BOTTOM px antes del borde, como las listas, para que las
+     * esquinas no muerdan lo que se desplaza. Las coordenadas de abajo son de
+     * la pantalla; BY() las pasa al cuerpo. */
     lv_obj_t *body = lv_obj_create(page);
     lv_obj_remove_style_all(body);
-    lv_obj_set_size(body, FLEX_SCREEN_W, FLEX_SCREEN_H - FLEX_LIST_BOTTOM);
+    lv_obj_set_pos(body, 0, BODY_Y);
+    lv_obj_set_size(body, FLEX_SCREEN_W, FLEX_SCREEN_H - BODY_Y - FLEX_LIST_BOTTOM);
     lv_obj_set_scroll_dir(body, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_OFF);
     lv_obj_add_flag(body, LV_OBJ_FLAG_CLICKABLE); /* LVGL solo desplaza desde un objeto pulsable */
 
-    lv_obj_t *title = watch_theme_label(body, FLEX_TYPE_TITLE, FLEX_GLASS_TXT, "Almacenamiento");
+    lv_obj_t *title = watch_theme_label(page, FLEX_TYPE_TITLE, FLEX_GLASS_TXT, "Almacenamiento");
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 20);
 
     /* Dos medidas: etiqueta regular, valor en gris a la derecha y una barra
      * fina debajo (los valores alineados por su línea base) */
-    label_at(body, FLEX_TYPE_BODY, FLEX_GLASS_TXT, "Memoria interna", X0, SEC1_Y);
-    p->flash_val = value_right(body, X0 + BAR_W, SEC1_Y + lh_body - lh_cap - 1);
+    label_at(body, FLEX_TYPE_BODY, FLEX_GLASS_TXT, "Memoria interna", X0, BY(SEC1_Y));
+    p->flash_val = value_right(body, X0 + BAR_W, BY(SEC1_Y) + lh_body - lh_cap - 1);
     p->flash_bar = watch_theme_bar(body, BAR_W, BAR_H, FLEX_ST_FLASH, C_TRACK);
-    lv_obj_set_pos(p->flash_bar, X0, SEC1_Y + BAR_DY);
+    lv_obj_set_pos(p->flash_bar, X0, BY(SEC1_Y) + BAR_DY);
 
-    label_at(body, FLEX_TYPE_BODY, FLEX_GLASS_TXT, "PSRAM", X0, SEC2_Y);
-    p->psram_val = value_right(body, X0 + BAR_W, SEC2_Y + lh_body - lh_cap - 1);
+    label_at(body, FLEX_TYPE_BODY, FLEX_GLASS_TXT, "PSRAM", X0, BY(SEC2_Y));
+    p->psram_val = value_right(body, X0 + BAR_W, BY(SEC2_Y) + lh_body - lh_cap - 1);
     p->psram_bar = watch_theme_bar(body, BAR_W, BAR_H, C_PSRAM, C_TRACK);
-    lv_obj_set_pos(p->psram_bar, X0, SEC2_Y + BAR_DY);
+    lv_obj_set_pos(p->psram_bar, X0, BY(SEC2_Y) + BAR_DY);
 
     /* microSD: la misma medida, toda la franja abre su página (estado,
      * expulsar, formatear y "Guardar en"). */
-    lv_obj_t *sd_row = flex_glass_panel(body, FLEX_GLASS_GHOST, X0 - 8, SEC3_Y - 6, BAR_W + 16, BAR_DY + BAR_H + 14, 14);
+    lv_obj_t *sd_row = flex_glass_panel(body, FLEX_GLASS_GHOST, X0 - 8, BY(SEC3_Y) - 6, BAR_W + 16, BAR_DY + BAR_H + 14, 14);
     flex_glass_interactive(sd_row);
     lv_obj_add_event_cb(sd_row, sd_open_cb, LV_EVENT_CLICKED, p);
     label_at(sd_row, FLEX_TYPE_BODY, FLEX_GLASS_TXT, "microSD", 8, 6 - FLEX_GLASS_RIM_W);
@@ -476,7 +487,7 @@ lv_obj_t *ui_storage_create(lv_obj_t *parent)
 
     /* Tarjeta de contenido (material discreto del motor): toda la tarjeta
      * abre los detalles; "Optimizar" es la acción principal (tintada). */
-    lv_obj_t *card = flex_glass_panel(body, FLEX_GLASS_CARD, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R);
+    lv_obj_t *card = flex_glass_panel(body, FLEX_GLASS_CARD, CARD_X, BY(CARD_Y), CARD_W, CARD_H, CARD_R);
     flex_glass_interactive(card);
     lv_obj_add_event_cb(card, details_cb, LV_EVENT_CLICKED, p);
     /* Título de tarjeta en Medium 20 (como las notificaciones): deja aire
@@ -513,7 +524,7 @@ lv_obj_t *ui_storage_create(lv_obj_t *parent)
     for (int i = 0; i < LEG_N; i++) {
         const int32_t cy = LEG_Y0 + i * LEG_DY;
         /* Fila fantasma: se ilumina como vidrio solo mientras se toca */
-        lv_obj_t *row = flex_glass_panel(body, FLEX_GLASS_GHOST, X0 - 8, cy - LEG_DY / 2, BAR_W + 16, LEG_DY, 12);
+        lv_obj_t *row = flex_glass_panel(body, FLEX_GLASS_GHOST, X0 - 8, BY(cy) - LEG_DY / 2, BAR_W + 16, LEG_DY, 12);
         flex_glass_interactive(row);
         if (kLeg[i].dir) {
             lv_obj_add_event_cb(row, browse_main_cb, LV_EVENT_CLICKED, (void *)kLeg[i].dir);
@@ -534,11 +545,24 @@ lv_obj_t *ui_storage_create(lv_obj_t *parent)
         p->leg_val[i] = value_right(row, BAR_W + 4, (LEG_DY - 2 - lh_cap) / 2);
     }
 
+    /* Liberar espacio: los archivos multimedia más grandes del reloj y de la
+     * microSD, que la persona borra con dos toques (ui_media_clean_create). */
+    const int32_t cy = LEG_Y0 + LEG_N * LEG_DY + 8;
+    lv_obj_t *clean = flex_glass_panel(body, FLEX_GLASS_GHOST, X0 - 8, BY(cy) - LEG_DY / 2, BAR_W + 16, LEG_DY, 12);
+    flex_glass_interactive(clean);
+    lv_obj_add_event_cb(clean, clean_open_cb, LV_EVENT_CLICKED, p);
+    lv_obj_t *ci = flex_icon_create(clean, FLEX_ICON_TRASH, 18, FLEX_C_ERR);
+    lv_obj_set_pos(ci, 7, (LEG_DY - 2 - 18) / 2);
+    lv_obj_t *cn = watch_theme_label(clean, FLEX_TYPE_BODY, FLEX_GLASS_TXT, "Liberar espacio");
+    lv_obj_set_pos(cn, 34, (LEG_DY - 2 - lh_body) / 2);
+    lv_obj_t *cv = value_right(clean, BAR_W + 4, (LEG_DY - 2 - lh_cap) / 2);
+    lv_label_set_text(cv, "Multimedia");
+
     /* margen bajo la última fila */
     lv_obj_t *pad = lv_obj_create(body);
     lv_obj_remove_style_all(pad);
     lv_obj_set_size(pad, 1, 1);
-    lv_obj_set_pos(pad, 0, LEG_Y0 + (LEG_N - 1) * LEG_DY + LEG_DY / 2 + 12);
+    lv_obj_set_pos(pad, 0, BY(cy) + LEG_DY / 2 + 12);
     lv_obj_remove_flag(pad, LV_OBJ_FLAG_CLICKABLE);
 
     main_refresh(p);

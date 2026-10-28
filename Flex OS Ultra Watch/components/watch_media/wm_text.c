@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "FlexOS_MediaLib.h"
 #include "watch_storage.h"
 #include "wm_path.h"
 
@@ -69,5 +70,34 @@ void wm_sd_describe(const wm_sd_info_t *i, char *out, size_t n)
     default:
         snprintf(out, n, "%s…", wsd_state_name(i->state));
         break;
+    }
+}
+
+int wm_big_add(wm_big_t *list, int n, int cap, const wm_big_t *it)
+{
+    if (!list || !it || cap <= 0) {
+        return n;
+    }
+    int at = n;
+    while (at > 0 && list[at - 1].size < it->size) {
+        at--; /* los iguales se quedan delante: orden estable */
+    }
+    if (at >= cap) {
+        return n; /* más pequeño que todos los que caben */
+    }
+    const int last = n < cap ? n : cap - 1; /* el último que se conserva tras mover */
+    memmove(&list[at + 1], &list[at], (size_t)(last - at) * sizeof(*list));
+    list[at] = *it;
+    return n < cap ? n + 1 : cap;
+}
+
+const char *wm_big_kind_text(const wm_big_t *b)
+{
+    switch (b->kind) {
+    case FML_K_AUDIO: return b->rec ? "Grabación" : "Música";
+    case FML_K_VIDEO: return "Vídeo";
+    case FML_K_PHOTO: return "Foto";
+    case FML_K_DRAW:  return "Dibujo";
+    default:          return "Archivo";
     }
 }

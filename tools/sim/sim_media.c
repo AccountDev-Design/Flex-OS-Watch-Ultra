@@ -967,9 +967,28 @@ void sim_suite_media(const char *out)
     sim_run(1200);
     EXPECT(has("microSD"), "almacenamiento: falta la microSD");
     page(out, "m_almacenamiento");
+    /* "Liberar espacio" al final de la página (se desplaza hasta ella) */
+    lv_obj_t *lib = sim_find_label(ui_nav_top(), "Liberar espacio");
+    EXPECT(lib != NULL, "almacenamiento: falta Liberar espacio");
+    if (lib) {
+        lv_obj_scroll_to_view_recursive(lib, LV_ANIM_OFF);
+        sim_run(300);
+        page(out, "m_almacenamiento_abajo");
+        click(tap_of("Liberar espacio"));
+        sim_run(600);
+        EXPECT(sim_find_label_prefix(ui_nav_top(), "Lo más grande primero") != NULL,
+               "almacenamiento: Liberar espacio no abre su página");
+        ui_nav_back();
+        sim_run(400);
+        lv_obj_t *mid = sim_find_label(ui_nav_top(), "microSD");
+        if (mid) {
+            lv_obj_scroll_to_view_recursive(mid, LV_ANIM_OFF);
+            sim_run(300);
+        }
+    }
     click(tap_of("microSD"));
     sim_run(500);
-    EXPECT(has("Expulsar") && has("Formatear en FAT32"), "microSD: faltan acciones");
+    EXPECT(has("Expulsar") && has("Formatear en FAT32") && has("Liberar espacio"), "microSD: faltan acciones");
     page(out, "m_microsd");
     click(tap_of("Guardar en"));
     sim_run(400);
@@ -1006,6 +1025,65 @@ void sim_suite_media(const char *out)
     ui_nav_back();
     sim_run(500);
     s_dest = WM_VOL_WATCH;
+
+    /* ---- Liberar espacio: lo más grande primero, dos toques, nunca solo ---- */
+    sd_set(WSD_READY, WSD_E_NONE, 32ull << 30, 31ull << 30, 20ull << 30);
+    s_lib_n[WM_VOL_SD] = 0;
+    for (int i = 0; i < s_lib_n[WM_VOL_WATCH]; i++) {
+        s_lib[WM_VOL_WATCH][i].size = (uint32_t)(i + 1) << 20; /* 1, 2 y 3 MB */
+    }
+    lib_add(WM_VOL_WATCH, "/Musica/Grande.mp3", "", "", 600000, 1760000300)->size = 6u << 20;
+    FlexMlRec *vid = lib_add(WM_VOL_SD, "/Videos/Viaje.avi", NULL, NULL, 90000, 1760000400);
+    vid->kind = FML_K_VIDEO;
+    vid->size = 48u << 20;
+    FlexMlRec *lk = lib_add(WM_VOL_SD, "/Videos/Secreto.avi", NULL, NULL, 9000, 1760000500);
+    lk->kind = FML_K_VIDEO;
+    lk->size = 90u << 20;
+    lk->flags |= FML_R_LOCKED; /* protegido: no se ofrece */
+    const int sd_n0 = s_lib_n[WM_VOL_SD], w_n0 = s_lib_n[WM_VOL_WATCH];
+    ui_nav_push(ui_media_clean_create);
+    sim_run(900);
+    page(out, "m_liberar_espacio");
+    EXPECT(has("Liberar espacio") && has("Viaje") && has("Grande") && has("Clair de lune"),
+           "liberar espacio: faltan archivos");
+    EXPECT(!has("Secreto"), "liberar espacio: ofrece un archivo protegido");
+    EXPECT(sim_find_label_prefix(ui_nav_top(), "Reloj ·") && sim_find_label_prefix(ui_nav_top(), "microSD ·"),
+           "liberar espacio: no dice el espacio libre de cada volumen");
+    lv_obj_t *lg = sim_find_label(ui_nav_top(), "Grande"), *lc = sim_find_label(ui_nav_top(), "Clair de lune");
+    EXPECT(lg && lc && lv_obj_get_y(lv_obj_get_parent(lg)) < lv_obj_get_y(lv_obj_get_parent(lc)),
+           "liberar espacio: no va de mayor a menor");
+    click(tap_of("Viaje"));
+    sim_run(200);
+    EXPECT(s_lib_n[WM_VOL_SD] == sd_n0 && has("Toca para borrar"), "liberar espacio: un toque borra o no avisa");
+    sim_save(out, "m_liberar_confirmar");
+    sim_run(5600); /* la confirmación caduca: nada se borra solo */
+    EXPECT(s_lib_n[WM_VOL_SD] == sd_n0 && !has("Toca para borrar"), "liberar espacio: la confirmación no caduca");
+    click(tap_of("Viaje"));
+    sim_run(200);
+    click(tap_of("Viaje"));
+    sim_run(900);
+    EXPECT(s_lib_n[WM_VOL_SD] == sd_n0 - 1 && !has("Viaje"), "liberar espacio: dos toques no borran el vídeo");
+    /* Lo que suena no se borra (primero se para). */
+    s_ps.state = WAP_PLAYING;
+    s_ps.track.vol = WM_VOL_WATCH;
+    s_ps.track.id = s_lib[WM_VOL_WATCH][w_n0 - 1].id; /* "Grande" */
+    sim_run(1000);
+    click(tap_of("Grande"));
+    sim_run(200);
+    click(tap_of("Grande"));
+    sim_run(900);
+    EXPECT(s_lib_n[WM_VOL_WATCH] == w_n0, "liberar espacio: borró la canción que sonaba");
+    s_ps.state = WAP_IDLE;
+    ui_nav_back();
+    sim_run(400);
+    /* microSD sin tarjeta: solo el reloj, y la sección dice por qué */
+    sd_set(WSD_ABSENT, WSD_E_NONE, 0, 0, 0);
+    ui_nav_push(ui_media_clean_create);
+    sim_run(900);
+    EXPECT(sim_find_label_prefix(ui_nav_top(), "microSD · Sin tarjeta") != NULL, "liberar espacio: no dice sin tarjeta");
+    page(out, "m_liberar_sin_sd");
+    ui_nav_back();
+    sim_run(4000); /* los avisos se van solos */
 
     /* Sin fugas: las páginas sueltan su memoria y sus temporizadores. */
     EXPECT(sim_timer_count() == timers0, "multimedia: quedan %d temporizadores", sim_timer_count() - timers0);

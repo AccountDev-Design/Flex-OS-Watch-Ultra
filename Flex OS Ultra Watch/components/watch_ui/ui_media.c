@@ -8,17 +8,24 @@
  *    espacio en 64 bits, expulsar, volver a montar y formatear en FAT32 con
  *    DOBLE confirmación (pantalla propia y segundo toque) y un ticket de un
  *    solo uso del servicio;
- *  - el chip de destino que enseñan la grabadora y la Galería.
- * Nada de esto hace E/S: lee el estado de los servicios y les pide cosas.
+ *  - el chip de destino que enseñan la grabadora y la Galería;
+ *  - Liberar espacio: los archivos multimedia más grandes de cada volumen,
+ *    que la persona borra con DOS toques (nunca se borra nada solo).
+ * Salvo el borrado que pide la persona, nada de esto hace E/S: lee el
+ * estado de los servicios y les pide cosas.
  */
 #include "ui_internal.h"
 
 #include <stdio.h>
 #include <string.h>
+#include "esp_heap_caps.h"
 #include "ui_logic.h"
 #include "FlexOS_MediaLib.h"
+#include "mem_logic.h"
+#include "wa_player.h"
 #include "watch_media.h"
 #include "watch_theme.h"
+#include "wm_store.h"
 
 #define TICK_MS        400
 #define CONFIRM_MS     5000
@@ -351,6 +358,12 @@ static void dest_open_cb(lv_event_t *e)
     ui_nav_push(ui_dest_create);
 }
 
+static void clean_open_cb(lv_event_t *e)
+{
+    (void)e;
+    ui_nav_push(ui_media_clean_create);
+}
+
 lv_obj_t *ui_sd_create(lv_obj_t *parent)
 {
     sd_page_t *p = lv_malloc_zeroed(sizeof(*p));
@@ -372,6 +385,8 @@ lv_obj_t *ui_sd_create(lv_obj_t *parent)
     watch_theme_section(list, "Uso");
     p->b_dest = watch_theme_list_row(list, FLEX_ICON_STORAGE, FLEX_C_CAT_BLUE, "Guardar en", "", true);
     lv_obj_add_event_cb(p->b_dest, dest_open_cb, LV_EVENT_CLICKED, p);
+    lv_obj_t *clean = watch_theme_list_row(list, FLEX_ICON_TRASH, FLEX_C_ERR, "Liberar espacio", NULL, true);
+    lv_obj_add_event_cb(clean, clean_open_cb, LV_EVENT_CLICKED, p);
     watch_theme_section(list, "Acciones");
     p->b_eject = watch_theme_list_row(list, FLEX_ICON_SDCARD, FLEX_C_CAT_SUN, "Expulsar", NULL, false);
     lv_obj_add_event_cb(p->b_eject, eject_cb, LV_EVENT_CLICKED, p);
@@ -474,5 +489,246 @@ lv_obj_t *ui_sd_format_create(lv_obj_t *parent)
     fmt_refresh(p);
     lv_obj_add_event_cb(page, free_cb, LV_EVENT_DELETE, p);
     ui_page_timer(page, fmt_tick_cb, TICK_MS, p);
+    return page;
+}
+
+/* ======================= Liberar espacio ======================= */
+
+#define BIG_MAX    20   /* por volumen: los más grandes */
+#define DYN_MAX    (WM_VOL_N * (BIG_MAX + 2))
+#define ROW_VALUE  2    /* hijo de la fila con el valor (watch_theme_list_row) */
+#define RETRY_MS   3000
+
+typedef struct {
+    lv_obj_t *list, *note;
+    lv_obj_t *sec[WM_VOL_N];
+    lv_obj_t *dyn[DYN_MAX]; /* lo que se rehace al cambiar la biblioteca */
+    int ndyn;
+    wm_big_t big[WM_VOL_N][BIG_MAX];
+    lv_obj_t *row[WM_VOL_N][BIG_MAX];
+    int n[WM_VOL_N];
+    int armed_vol, armed_i;  /* primer toque (-1 = ninguno) */
+    uint32_t armed_ms;
+    uint32_t rev[WM_VOL_N];
+    bool ready[WM_VOL_N];
+    bool nomem;
+    uint32_t nomem_ms;
+} clean_page_t;
+
+static bool big_playing(const wm_big_t *b)
+{
+    wap_status_t s;
+    wap_status(&s);
+    return (s.state == WAP_LOADING || s.state == WAP_PLAYING || s.state == WAP_PAUSED) && s.track.vol == b->vol &&
+           s.track.id == b->id;
+}
+
+static void big_value(clean_page_t *p, int v, int i)
+{
+    const wm_big_t *b = &p->big[v][i];
+    const bool armed = p->armed_vol == v && p->armed_i == i;
+    char t[32];
+    if (armed) {
+        snprintf(t, sizeof(t), "Toca para borrar");
+    } else if (big_playing(b)) {
+        snprintf(t, sizeof(t), "Sonando");
+    } else {
+        wm_fmt_bytes(b->size, t, sizeof(t));
+    }
+    watch_theme_row_set_value(p->row[v][i], t);
+    watch_theme_set_text_color(lv_obj_get_child(p->row[v][i], ROW_VALUE), armed ? FLEX_C_ERR : FLEX_C_TXT2);
+}
+
+static void disarm(clean_page_t *p)
+{
+    const int v = p->armed_vol, i = p->armed_i;
+    p->armed_vol = p->armed_i = -1;
+    p->armed_ms = 0;
+    if (v >= 0 && i >= 0 && i < p->n[v]) {
+        big_value(p, v, i);
+    }
+}
+
+static void big_cb(lv_event_t *e)
+{
+    clean_page_t *p = lv_event_get_user_data(e);
+    const uintptr_t k = (uintptr_t)lv_obj_get_user_data(lv_event_get_current_target_obj(e));
+    const int v = (int)(k / BIG_MAX), i = (int)(k % BIG_MAX);
+    if (v >= WM_VOL_N || i >= p->n[v]) {
+        return;
+    }
+    const wm_big_t b = p->big[v][i];
+    if (big_playing(&b)) {
+        ui_banner_show_info("Está sonando", "Párala para borrarla");
+        return;
+    }
+    if (p->armed_vol != v || p->armed_i != i || lv_tick_elaps(p->armed_ms) > CONFIRM_MS) {
+        disarm(p);
+        p->armed_vol = v;
+        p->armed_i = i;
+        p->armed_ms = (lv_tick_get() - 1u) | 1u; /* distinto de 0 y nunca en el futuro (lv_tick_elaps) */
+        big_value(p, v, i);
+        return;
+    }
+    /* Segundo toque: borrado explícito y definitivo (el espacio vuelve ya). */
+    disarm(p);
+    char sz[16], t[48];
+    wm_fmt_bytes(b.size, sz, sizeof(sz));
+    if (wm_lib_delete((wm_vol_t)b.vol, b.id)) {
+        snprintf(t, sizeof(t), "%s liberados", sz);
+        ui_banner_show_info(wm_big_kind_text(&b), t); /* "Vídeo" · "48 MB liberados" */
+        watch_theme_row_set_value(p->row[v][i], "Borrado");
+        lv_obj_add_state(p->row[v][i], LV_STATE_DISABLED);
+    } else {
+        ui_banner_show_info("No se pudo borrar", b.vol == WM_VOL_SD ? "¿En uso o sin microSD?" : "Puede estar en uso");
+    }
+    /* La lista se rehace en el próximo tick: esta fila no se borra dentro de su propio evento. */
+    p->rev[v] = 0;
+}
+
+static flex_icon_t big_icon(const wm_big_t *b)
+{
+    switch (b->kind) {
+    case FML_K_AUDIO: return b->rec ? FLEX_ICON_MIC : FLEX_ICON_NOTE;
+    case FML_K_VIDEO: return FLEX_ICON_VIDEO;
+    default:          return FLEX_ICON_IMAGE;
+    }
+}
+
+static void sec_text(clean_page_t *p, int v)
+{
+    char f[64], t[96];
+    ui_media_free_text(v, f, sizeof(f));
+    snprintf(t, sizeof(t), "%s · %s", wm_vol_name((wm_vol_t)v), f);
+    set_text(p->sec[v], t);
+}
+
+/* Lee las dos bibliotecas y se queda con los BIG_MAX más grandes de cada una.
+ * La copia de un catálogo (~126 KB en PSRAM) solo vive durante la lectura. */
+static bool clean_scan(clean_page_t *p)
+{
+    FlexMlRec *tmp = wm_alloc(sizeof(FlexMlRec) * FML_CAP);
+    if (!tmp) {
+        return false;
+    }
+    for (int v = 0; v < WM_VOL_N; v++) {
+        p->n[v] = 0;
+        p->ready[v] = wm_lib_ready((wm_vol_t)v);
+        p->rev[v] = wm_lib_rev((wm_vol_t)v);
+        if (!p->ready[v]) {
+            continue;
+        }
+        const int n = wm_lib_snapshot((wm_vol_t)v, FML_MASK_ALL, tmp, FML_CAP, NULL);
+        const size_t rl = strlen(FML_DIR_REC);
+        for (int k = 0; k < n; k++) {
+            const FlexMlRec *r = &tmp[k];
+            if ((r->flags & FML_R_LOCKED) || r->state == FML_S_PROCESSING || !r->size) {
+                continue; /* protegido o aún entrando: no se ofrece */
+            }
+            wm_big_t b = {.id = r->id, .size = r->size, .vol = (uint8_t)v, .kind = r->kind,
+                          .rec = !strncmp(r->path, FML_DIR_REC, rl) && r->path[rl] == '/'};
+            ui_media_display_name(r, b.name, sizeof(b.name));
+            p->n[v] = wm_big_add(p->big[v], p->n[v], BIG_MAX, &b);
+        }
+    }
+    wm_free(tmp);
+    return true;
+}
+
+static void clean_rebuild(clean_page_t *p)
+{
+    for (int k = 0; k < p->ndyn; k++) {
+        lv_obj_delete(p->dyn[k]);
+    }
+    p->ndyn = 0;
+    memset(p->row, 0, sizeof(p->row));
+    p->armed_vol = p->armed_i = -1;
+    p->nomem = !clean_scan(p);
+    if (p->nomem) {
+        char why[112], t[200];
+        mem_why_text(why, sizeof(why), sizeof(FlexMlRec) * FML_CAP, true, heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                     heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+        snprintf(t, sizeof(t), "No se puede revisar ahora. %s Se vuelve a intentar sola.", why);
+        set_text(p->note, t);
+        p->nomem_ms = lv_tick_get();
+        for (int v = 0; v < WM_VOL_N; v++) {
+            p->n[v] = 0;
+            p->rev[v] = 0;
+        }
+        return;
+    }
+    set_text(p->note, "Lo más grande primero. Toca un archivo y otra vez para borrarlo del todo (no pasa por la "
+                      "Papelera). Nada se borra solo.");
+    for (int v = 0; v < WM_VOL_N; v++) {
+        sec_text(p, v);
+        if (!p->ready[v]) {
+            continue; /* la sección ya dice por qué (sin tarjeta, no montada...) */
+        }
+        if (!p->n[v]) {
+            lv_obj_t *l = watch_theme_label(p->list, FLEX_FONT_SMALL, FLEX_C_MUTE, "Sin fotos, vídeos ni audio");
+            lv_obj_set_style_pad_left(l, 16, 0);
+            lv_obj_move_to_index(l, lv_obj_get_index(p->sec[v]) + 1);
+            p->dyn[p->ndyn++] = l;
+            continue;
+        }
+        for (int i = 0; i < p->n[v]; i++) {
+            const wm_big_t *b = &p->big[v][i];
+            lv_obj_t *r = watch_theme_list_row(p->list, big_icon(b), FLEX_C_CAT_BLUE, b->name, "", false);
+            lv_obj_set_user_data(r, (void *)(uintptr_t)(v * BIG_MAX + i));
+            lv_obj_add_event_cb(r, big_cb, LV_EVENT_CLICKED, p);
+            lv_obj_move_to_index(r, lv_obj_get_index(p->sec[v]) + 1 + i);
+            p->row[v][i] = r;
+            p->dyn[p->ndyn++] = r;
+            big_value(p, v, i);
+        }
+    }
+}
+
+static void clean_tick_cb(lv_timer_t *t)
+{
+    clean_page_t *p = lv_timer_get_user_data(t);
+    if (p->nomem) {
+        if (lv_tick_elaps(p->nomem_ms) >= RETRY_MS) {
+            clean_rebuild(p);
+        }
+        return;
+    }
+    bool changed = false;
+    for (int v = 0; v < WM_VOL_N; v++) {
+        changed = changed || wm_lib_ready((wm_vol_t)v) != p->ready[v] || wm_lib_rev((wm_vol_t)v) != p->rev[v];
+    }
+    if (changed) {
+        clean_rebuild(p);
+        return;
+    }
+    for (int v = 0; v < WM_VOL_N; v++) {
+        sec_text(p, v);
+    }
+    if (p->armed_ms && lv_tick_elaps(p->armed_ms) > CONFIRM_MS) {
+        disarm(p);
+    }
+}
+
+lv_obj_t *ui_media_clean_create(lv_obj_t *parent)
+{
+    clean_page_t *p = lv_malloc_zeroed(sizeof(*p));
+    LV_ASSERT_MALLOC(p);
+    p->armed_vol = p->armed_i = -1;
+    lv_obj_t *page = ui_page_new(parent);
+    watch_theme_page(page);
+    watch_theme_header(page, "Liberar espacio", back_cb, NULL);
+    p->list = watch_theme_list(page);
+    p->note = watch_theme_label(p->list, FLEX_FONT_SMALL, FLEX_C_MUTE, "");
+    lv_label_set_long_mode(p->note, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_width(p->note, LV_PCT(100));
+    lv_obj_set_style_pad_left(p->note, 16, 0);
+    lv_obj_set_style_pad_right(p->note, 16, 0);
+    for (int v = 0; v < WM_VOL_N; v++) {
+        p->sec[v] = watch_theme_section(p->list, "");
+    }
+    want_interest(page);
+    clean_rebuild(p);
+    lv_obj_add_event_cb(page, free_cb, LV_EVENT_DELETE, p);
+    ui_page_timer(page, clean_tick_cb, TICK_MS * 2, p);
     return page;
 }
